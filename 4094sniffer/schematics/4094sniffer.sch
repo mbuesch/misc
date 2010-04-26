@@ -1,0 +1,250 @@
+EESchema Schematic File Version 1
+LIBS:power,./crystalosc,./atmega8,device,conn,linear,regul,74xx,cmos4000,adc-dac,memory,xilinx,special,microcontrollers,dsp,microchip,analog_switches,motorola,texas,intel,audio,interface,digital-audio,philips,display,cypress,siliconi,contrib,valves
+EELAYER 43  0
+EELAYER END
+$Descr A4 11700 8267
+Sheet 1 1
+Title "74HC4094 sniffer"
+Date "26 jan 2010"
+Rev "1"
+Comp "(C) 2010 Michael Buesch"
+Comment1 ""
+Comment2 ""
+Comment3 ""
+Comment4 ""
+$EndDescr
+Wire Wire Line
+	4750 3250 4750 2950
+Wire Wire Line
+	4750 2950 3800 2950
+Wire Wire Line
+	2200 2950 2100 2950
+Wire Wire Line
+	2100 2950 2100 4450
+Wire Wire Line
+	2100 4450 4800 4450
+Wire Wire Line
+	2200 2150 1700 2150
+Wire Wire Line
+	1700 1650 2200 1650
+Connection ~ 4100 2250
+Wire Wire Line
+	4100 2300 4100 2250
+Connection ~ 4500 2150
+Wire Wire Line
+	4300 1650 4500 1650
+Wire Wire Line
+	4500 1650 4500 2250
+Wire Wire Line
+	3800 2550 4700 2550
+Wire Wire Line
+	8950 5100 8950 4750
+Wire Wire Line
+	8950 4750 7100 4750
+Wire Wire Line
+	2650 5150 2750 5150
+Wire Wire Line
+	4650 5050 4800 5050
+Wire Wire Line
+	4150 5150 4800 5150
+Wire Wire Line
+	4700 4950 4800 4950
+Wire Wire Line
+	4150 5450 4250 5450
+Wire Wire Line
+	7100 4850 8300 4850
+Wire Wire Line
+	8300 4850 8300 5100
+Wire Wire Line
+	9600 5100 9600 4650
+Wire Wire Line
+	9600 4650 7100 4650
+Wire Wire Line
+	4500 2250 3800 2250
+Wire Wire Line
+	4500 2150 4700 2150
+Wire Wire Line
+	4300 2050 3800 2050
+Wire Wire Line
+	3800 1650 3900 1650
+Wire Wire Line
+	1700 2050 2200 2050
+Wire Wire Line
+	1700 2550 2200 2550
+Wire Wire Line
+	4800 4550 2000 4550
+Wire Wire Line
+	2000 4550 2000 2750
+Wire Wire Line
+	2000 2750 2200 2750
+Wire Wire Line
+	5250 3250 5250 2750
+Wire Wire Line
+	5250 2750 3800 2750
+$Comp
+L TST P1
+U 1 1 4B5F010A
+P 4750 3250
+F 0 "P1" H 4750 3550 40  0000 C C
+F 1 "RS232 RX" H 4750 3500 30  0000 C C
+	1    4750 3250
+	-1   0    0    1   
+$EndComp
+$Comp
+L TST P2
+U 1 1 4B5F00F7
+P 5250 3250
+F 0 "P2" H 5250 3550 40  0000 C C
+F 1 "RS232 TX" H 5250 3500 30  0000 C C
+	1    5250 3250
+	-1   0    0    1   
+$EndComp
+NoConn ~ 3800 3050
+NoConn ~ 3800 2850
+NoConn ~ 2200 3050
+NoConn ~ 2200 2850
+$Comp
+L +5V #PWR2
+U 1 1 4B5F00CD
+P 3900 1650
+F 0 "#PWR2" H 3900 1740 20  0001 C C
+F 1 "+5V" H 3900 1740 30  0000 C C
+	1    3900 1650
+	0    1    1    0   
+$EndComp
+$Comp
+L GND #PWR3
+U 1 1 4B5F00C4
+P 4100 2300
+F 0 "#PWR3" H 4100 2300 30  0001 C C
+F 1 "GND" H 4100 2230 30  0001 C C
+	1    4100 2300
+	1    0    0    -1  
+$EndComp
+$Comp
+L C C4
+U 1 1 4B5F00AB
+P 4700 2350
+F 0 "C4" H 4750 2450 50  0000 L C
+F 1 "C" H 4750 2250 50  0000 L C
+	1    4700 2350
+	1    0    0    -1  
+$EndComp
+$Comp
+L C C3
+U 1 1 4B5F00A0
+P 4300 1850
+F 0 "C3" H 4350 1950 50  0000 L C
+F 1 "C" H 4350 1750 50  0000 L C
+	1    4300 1850
+	1    0    0    -1  
+$EndComp
+$Comp
+L C C2
+U 1 1 4B5F009A
+P 1700 2350
+F 0 "C2" H 1750 2450 50  0000 L C
+F 1 "C" H 1750 2250 50  0000 L C
+	1    1700 2350
+	1    0    0    -1  
+$EndComp
+$Comp
+L C C1
+U 1 1 4B5F0094
+P 1700 1850
+F 0 "C1" H 1750 1950 50  0000 L C
+F 1 "C" H 1750 1750 50  0000 L C
+	1    1700 1850
+	1    0    0    -1  
+$EndComp
+$Comp
+L MAX232 U1
+U 1 1 4B5F0087
+P 3000 2350
+F 0 "U1" H 3000 3200 70  0000 C C
+F 1 "MAX232" H 3000 1500 70  0000 C C
+	1    3000 2350
+	1    0    0    -1  
+$EndComp
+$Comp
+L TST P5
+U 1 1 4B5F0044
+P 9600 5100
+F 0 "P5" H 9600 5400 40  0000 C C
+F 1 "4094 STROBE" H 9600 5350 30  0000 C C
+	1    9600 5100
+	-1   0    0    1   
+$EndComp
+$Comp
+L TST P4
+U 1 1 4B5F0002
+P 8950 5100
+F 0 "P4" H 8950 5400 40  0000 C C
+F 1 "4094 DATA" H 8950 5350 30  0000 C C
+	1    8950 5100
+	-1   0    0    1   
+$EndComp
+$Comp
+L TST P3
+U 1 1 4B5EFFFA
+P 8300 5100
+F 0 "P3" H 8300 5400 40  0000 C C
+F 1 "4094 CP" H 8300 5350 30  0000 C C
+	1    8300 5100
+	-1   0    0    1   
+$EndComp
+$Comp
+L GND #PWR4
+U 1 1 4B5EFFD6
+P 4250 5450
+F 0 "#PWR4" H 4250 5450 30  0001 C C
+F 1 "GND" H 4250 5380 30  0001 C C
+	1    4250 5450
+	0    -1   -1   0   
+$EndComp
+$Comp
+L GND #PWR5
+U 1 1 4B5EFFC9
+P 4650 5050
+F 0 "#PWR5" H 4650 5050 30  0001 C C
+F 1 "GND" H 4650 4980 30  0001 C C
+	1    4650 5050
+	0    1    1    0   
+$EndComp
+$Comp
+L +5V #PWR6
+U 1 1 4B5EFF6B
+P 4700 4950
+F 0 "#PWR6" H 4700 5040 20  0001 C C
+F 1 "+5V" H 4700 5040 30  0000 C C
+	1    4700 4950
+	0    -1   -1   0   
+$EndComp
+$Comp
+L +5V #PWR1
+U 1 1 4B5EFF66
+P 2650 5150
+F 0 "#PWR1" H 2650 5240 20  0001 C C
+F 1 "+5V" H 2650 5240 30  0000 C C
+	1    2650 5150
+	0    -1   -1   0   
+$EndComp
+$Comp
+L CRYSTALOSC X1
+U 1 1 4B5EFF4F
+P 3450 5300
+F 0 "X1" H 3450 5000 60  0000 C C
+F 1 "CRYSTALOSC" H 3450 5300 60  0000 C C
+	1    3450 5300
+	1    0    0    -1  
+$EndComp
+$Comp
+L ATMEGA8 U2
+U 1 1 4B5EFF10
+P 5950 5000
+F 0 "U2" H 5950 4173 60  0000 C C
+F 1 "ATMEGA8" H 5950 5827 60  0000 C C
+	1    5950 5000
+	1    0    0    -1  
+$EndComp
+$EndSCHEMATC

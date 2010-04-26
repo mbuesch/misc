@@ -1,0 +1,11 @@
+*.tms
+*.pyo
+*.pyc
+*.swp
+*~
+*.bak
+*.cache.*
+*.s
+*.o
+*.bin
+*.hex
