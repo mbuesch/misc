@@ -35,6 +35,8 @@ defaultHttpHeader = {
 	"Connection" : "keep-alive",
 }
 
+m3u_re = re.compile(r".*<a href=\"([\w/?=&]*m3u[\w/?=&]*)\".*", re.DOTALL)
+
 
 def die(message, retcode=1):
 	print message
@@ -70,62 +72,64 @@ def parseM3U(m3u):
 		curTitle = None
 	return ret
 
+def playFeedEntries(feedEntries):
+	for item in feedEntries:
+		albumTitle = item["title"]
+		url = item["link"]
+		print "Playing  [" + albumTitle + "]  " + url
+
+		path = url.replace("http://" + hostname, "")
+		html = jamendoFetchPage(path)
+		m = m3u_re.match(html)
+		if not m:
+			die("Did not find M3U URL")
+		m3uPath = m.group(1)
+		m3u = jamendoFetchPage(m3uPath)
+		for (streamUrl, songTitle) in parseM3U(m3u):
+			try:
+				p = subprocess.Popen( ("mplayer", streamUrl) )
+				p.wait()
+			except KeyboardInterrupt:
+				time.sleep(0.5)
+				while True:
+					print "0) Next song"
+					print "1) Next album"
+					print "2) Terminate"
+					try:
+						sel = int(raw_input("What do? "))
+						if sel < 0 or sel > 2:
+							raise ValueError
+					except ValueError:
+						continue
+					break
+				if sel == 0:
+					continue
+				if sel == 1:
+					break
+				if sel == 2:
+					die("Terminated", retcode=0)
+
 if len(sys.argv) > 1:
-	sel = sys.argv[1]
+	rssSel = sys.argv[1]
 else:
 	for i in range(0, len(feeds)):
 		print str(i) + ") " + feeds[i][0]
-	sel = raw_input("Which feed? ")
+	rssSel = raw_input("Which feed? ")
 try:
-	sel = sel.split(",")
-	sel = map(lambda x: int(x), sel)
-	fsel = filter(lambda x: x >= 0 and x < len(feeds), sel)
-	if fsel != sel or not sel:
+	rssSel = rssSel.split(",")
+	rssSel = map(lambda x: int(x), rssSel)
+	fsel = filter(lambda x: x >= 0 and x < len(feeds), rssSel)
+	if fsel != rssSel or not rssSel:
 		raise ValueError
 except ValueError:
 	die("Invalid feed")
 
-items = []
-for feedNr in sel:
-	(feedName, feedUrl) = feeds[feedNr]
-	feed = feedparser.parse(feedUrl)
-	items.extend(feed["items"])
-random.shuffle(items)
-
-m3u_re = re.compile(r".*<a href=\"([\w/?=&]*m3u[\w/?=&]*)\".*", re.DOTALL)
-
-for item in items:
-	albumTitle = item["title"]
-	url = item["link"]
-	print "Playing  [" + albumTitle + "]  " + url
-
-	path = url.replace("http://" + hostname, "")
-	html = jamendoFetchPage(path)
-	m = m3u_re.match(html)
-	if not m:
-		die("Did not find M3U URL")
-	m3uPath = m.group(1)
-	m3u = jamendoFetchPage(m3uPath)
-	for (streamUrl, songTitle) in parseM3U(m3u):
-		try:
-			p = subprocess.Popen( ("mplayer", streamUrl) )
-			p.wait()
-		except KeyboardInterrupt:
-			time.sleep(0.5)
-			while True:
-				print "0) Next song"
-				print "1) Next album"
-				print "2) Terminate"
-				try:
-					sel = int(raw_input("What do? "))
-					if sel < 0 or sel > 2:
-						raise ValueError
-				except ValueError:
-					continue
-				break
-			if sel == 0:
-				continue
-			if sel == 1:
-				break
-			if sel == 2:
-				die("Terminated", retcode=0)
+while True:
+	items = []
+	for feedNr in rssSel:
+		(feedName, feedUrl) = feeds[feedNr]
+		feed = feedparser.parse(feedUrl)
+		items.extend(feed["items"])
+	random.shuffle(items)
+	playFeedEntries(items)
+	print "Refetching..."
