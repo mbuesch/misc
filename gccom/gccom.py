@@ -16,6 +16,7 @@ opt_user = None
 opt_password = None
 opt_cookie = None
 opt_debug = False
+opt_useHTTPS = True
 actions = []
 
 def usage():
@@ -25,6 +26,7 @@ def usage():
 	print ""
 	print "-u|--user USER             The gc.com username"
 	print "-p|--password PASS         The gc.com password"
+	print "-H|--http                  Use HTTP instead of HTTPS"
 	print "-f|--file FILE             Specify an output/input file. Default is stdout/stdin"
 	print ""
 	print "-c|--getcookie             Retrieve a logged-in cookie"
@@ -57,10 +59,10 @@ def usage():
 
 try:
 	(opts, args) = getopt.getopt(sys.argv[1:],
-		"hu:p:f:P:l:g:cC:Li:r",
+		"hu:p:f:P:l:g:cC:Li:rH",
 		[ "help", "user=", "password=", "file=", "getpage=", "getloc=",
 		  "getgpx=", "getcookie", "usecookie=", "logout", "getcacheid=",
-		  "setprofile",
+		  "setprofile", "http",
 		  "debug", ])
 except getopt.GetoptError:
 	usage()
@@ -96,6 +98,8 @@ for (o, v) in opts:
 		actions.append(["getcacheid", v, currentFile])
 	if o in ("-r", "--setprofile"):
 		actions.append(["setprofile", None, currentFile])
+	if o in ("-H", "--http"):
+		opt_useHTTPS = False;
 if not actions:
 	print "Error: No actions specified\n"
 	usage()
@@ -121,6 +125,11 @@ defaultHttpHeader = {
 	"Connection" : "keep-alive",
 }
 
+def httpConnect():
+	if opt_useHTTPS:
+		return httplib.HTTPSConnection(hostname)
+	return httplib.HTTPConnection(hostname)
+
 def printDebug(string):
 	if opt_debug:
 		print string
@@ -137,7 +146,7 @@ class GC:
 
 	def __requestCookie(self):
 		printDebug("Requesting fresh cookie")
-		http = httplib.HTTPConnection(hostname)
+		http = httpConnect()
 		http.request("GET", "/")
 		resp = http.getresponse()
 		cookie = resp.getheader("set-cookie")
@@ -151,7 +160,7 @@ class GC:
 	def __login(self, user, password):
 		"Login the cookie"
 		printDebug("Logging into geocaching.com...")
-		http = httplib.HTTPConnection(hostname)
+		http = httpConnect()
 		body = self.__getHiddenFormsUrlencoded("/login/default.aspx") + "&" +\
 			"ctl00%24ContentBody%24myUsername=" + urllib.quote_plus(user) + "&" +\
 			"ctl00%24ContentBody%24myPassword=" + urllib.quote_plus(password) + "&" +\
@@ -172,7 +181,7 @@ class GC:
 	def logout(self):
 		"Logout the cookie"
 		printDebug("Logout from geocaching.com...")
-		http = httplib.HTTPConnection(hostname)
+		http = httpConnect()
 		header = defaultHttpHeader.copy()
 		header["Host"] = hostname
 		header["Cookie"] = self.cookie
@@ -226,7 +235,7 @@ class GC:
 
 	def getPage(self, page):
 		"Download a page. Returns the html code of the page."
-		http = httplib.HTTPConnection(hostname)
+		http = httpConnect()
 		header = defaultHttpHeader.copy()
 		header["Host"] = hostname
 		header["Cookie"] = self.cookie
@@ -236,7 +245,7 @@ class GC:
 
 	def getLOC(self, page):
 		"Download the LOC file from a page"
-		http = httplib.HTTPConnection(hostname)
+		http = httpConnect()
 		body = self.__getHiddenFormsUrlencoded(page) + "&" +\
 			"&ctl00%24ContentBody%24btnLocDL=LOC+Waypoint+File"
 		header = defaultHttpHeader.copy()
@@ -252,7 +261,7 @@ class GC:
 
 	def getGPX(self, page):
 		"Download the GPX file from a page. (Needs account support)"
-		http = httplib.HTTPConnection(hostname)
+		http = httpConnect()
 		body = self.__getHiddenFormsUrlencoded(page) + "&" +\
 			"&ctl00%24ContentBody%24btnGPXDL=GPX+eXchange+File"
 		header = defaultHttpHeader.copy()
@@ -279,7 +288,7 @@ class GC:
 	def setProfile(self, profileData):
 		"Upload new public profile data to the account"
 		page = "/account/editprofiledetails.aspx"
-		http = httplib.HTTPConnection(hostname)
+		http = httpConnect()
 		body = self.__getHiddenFormsUrlencoded(page) + "&" +\
 			"ctl00%24ContentBody%24uxProfileDetails=" + urllib.quote_plus(profileData) + "&" +\
 			"ctl00%24ContentBody%24uxSave=Save+Changes"
