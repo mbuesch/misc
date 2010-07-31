@@ -9,6 +9,7 @@ import getopt
 import httplib
 import socket
 import urllib
+import ssl
 import re
 import time
 
@@ -124,6 +125,19 @@ defaultHttpHeader = {
 	"Keep-Alive" : "300",
 	"Connection" : "keep-alive",
 }
+
+class VerifiedHTTPSConnection(httplib.HTTPSConnection):
+	def connect(self):
+		sock = socket.create_connection((self.host, self.port),
+						self.timeout)
+		if self._tunnel_host:
+			self.sock = sock
+			self._tunnel()
+		self.sock = ssl.wrap_socket(sock,
+					    self.key_file,
+					    self.cert_file,
+					    cert_reqs=ssl.CERT_REQUIRED,
+					    ca_certs="trusted_root_certs")
 
 def httpConnect():
 	if opt_useHTTPS:
