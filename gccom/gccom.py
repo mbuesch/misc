@@ -13,103 +13,8 @@ import ssl
 import re
 import time
 
-opt_user = None
-opt_password = None
-opt_cookie = None
 opt_debug = False
 opt_useHTTPS = True
-actions = []
-
-def usage():
-	print "Geocaching.com tool"
-	print ""
-	print "Usage: %s [OPTIONS]" % sys.argv[0]
-	print ""
-	print "-u|--user USER             The gc.com username"
-	print "-p|--password PASS         The gc.com password"
-	print "-H|--http                  Use HTTP instead of HTTPS"
-	print "-f|--file FILE             Specify an output/input file. Default is stdout/stdin"
-	print ""
-	print "-c|--getcookie             Retrieve a logged-in cookie"
-	print "-C|--usecookie COOKIE      Do not login but use COOKIE instead."
-	print "                           COOKIE should be an already logged-in cookie."
-	print "-L|--logout                Logout the cookie."
-	print ""
-	print "-P|--getpage PAGE          Download a random page from gc.com"
-	print "-l|--getloc GUID           Download a LOC file"
-	print "-g|--getgpx GUID           Download a GPX file (Need premium account)"
-	print "-i|--getcacheid GUID       Get the GCxxxx cache ID"
-	print ""
-	print "-r|--setprofile            Upload the public account profile data."
-	print ""
-	print "-h|--help                  Print this help text"
-	print ""
-	print ""
-	print "The GUID identifies a cache. The following formats are valid:"
-	print "   12345678-1234-1234-1234-123456789123"
-	print "   /seek/cache_details.aspx?guid=12345678-1234-1234-1234-123456789123"
-	print "   http://www.geocaching.com/seek/cache_details.aspx?guid=12345678-1234-1234-1234-123456789123"
-	print "Any geocaching.com URL can be used as PAGE identifier."
-	print ""
-	print ""
-	print "EXAMPLE: Download a LOC file and display it on stdout. Also download the cache-page and save it to the file \"page.html\":"
-	print "  gccom.py --getloc 12345678-1234-1234-1234-123456789123 --file page.html --getpage 12345678-1234-1234-1234-123456789123"
-	print ""
-	print "EXAMPLE: Using wget and gccom.py to download a whole page recursively while being logged in."
-	print "   wget -rkl1 --no-cookies --header \"Cookie: $(gccom.py -u USER -p PASSWORD -c)\" http://www.geocaching.com/seek/cache_details.aspx?guid=12345678-1234-1234-1234-123456789123"
-
-try:
-	(opts, args) = getopt.getopt(sys.argv[1:],
-		"hu:p:f:P:l:g:cC:Li:rH",
-		[ "help", "user=", "password=", "file=", "getpage=", "getloc=",
-		  "getgpx=", "getcookie", "usecookie=", "logout", "getcacheid=",
-		  "setprofile", "http",
-		  "debug", ])
-except getopt.GetoptError:
-	usage()
-	sys.exit(1)
-currentFile = None
-for (o, v) in opts:
-	if o in ("-h", "--help"):
-		usage()
-		sys.exit(0)
-	if o == "--debug":
-		opt_debug = True
-	if o in ("-u", "--user"):
-		opt_user = v
-	if o in ("-p", "--password"):
-		opt_password = v
-	if o in ("-f", "--file"):
-		if v.lower() == "stdout":
-			v = None
-		currentFile = v
-	if o in ("-C", "--usecookie"):
-		opt_cookie = v
-	if o in ("-c", "--getcookie"):
-		actions.append(["getcookie", None, currentFile])
-	if o in ("-L", "--logout"):
-		actions.append(["logout", v, currentFile])
-	if o in ("-P", "--getpage"):
-		actions.append(["getpage", v, currentFile])
-	if o in ("-l", "--getloc"):
-		actions.append(["getloc", v, currentFile])
-	if o in ("-g", "--getgpx"):
-		actions.append(["getgpx", v, currentFile])
-	if o in ("-i", "--getcacheid"):
-		actions.append(["getcacheid", v, currentFile])
-	if o in ("-r", "--setprofile"):
-		actions.append(["setprofile", None, currentFile])
-	if o in ("-H", "--http"):
-		opt_useHTTPS = False;
-if not actions:
-	print "Error: No actions specified\n"
-	usage()
-	sys.exit(1)
-if not opt_cookie:
-	if not opt_user:
-		opt_user = raw_input("Geocaching.com username: ")
-	if not opt_password:
-		opt_password = raw_input("Geocaching.com password: ")
 
 
 hostname = "www.geocaching.com"
@@ -125,6 +30,7 @@ defaultHttpHeader = {
 	"Keep-Alive" : "300",
 	"Connection" : "keep-alive",
 }
+
 
 class VerifiedHTTPSConnection(httplib.HTTPSConnection):
 	def connect(self):
@@ -337,47 +243,148 @@ def fetchInput(fileName):
 		print "Failed to read input"
 		print e
 
-try:
-	gc = GC(opt_user, opt_password, opt_cookie)
+def usage():
+	print "Geocaching.com tool"
+	print ""
+	print "Usage: %s [OPTIONS]" % sys.argv[0]
+	print ""
+	print "-u|--user USER             The gc.com username"
+	print "-p|--password PASS         The gc.com password"
+	print "-H|--http                  Use HTTP instead of HTTPS"
+	print "-f|--file FILE             Specify an output/input file. Default is stdout/stdin"
+	print ""
+	print "-c|--getcookie             Retrieve a logged-in cookie"
+	print "-C|--usecookie COOKIE      Do not login but use COOKIE instead."
+	print "                           COOKIE should be an already logged-in cookie."
+	print "-L|--logout                Logout the cookie."
+	print ""
+	print "-P|--getpage PAGE          Download a random page from gc.com"
+	print "-l|--getloc GUID           Download a LOC file"
+	print "-g|--getgpx GUID           Download a GPX file (Need premium account)"
+	print "-i|--getcacheid GUID       Get the GCxxxx cache ID"
+	print ""
+	print "-r|--setprofile            Upload the public account profile data."
+	print ""
+	print "-h|--help                  Print this help text"
+	print ""
+	print ""
+	print "The GUID identifies a cache. The following formats are valid:"
+	print "   12345678-1234-1234-1234-123456789123"
+	print "   /seek/cache_details.aspx?guid=12345678-1234-1234-1234-123456789123"
+	print "   http://www.geocaching.com/seek/cache_details.aspx?guid=12345678-1234-1234-1234-123456789123"
+	print "Any geocaching.com URL can be used as PAGE identifier."
+	print ""
+	print ""
+	print "EXAMPLE: Download a LOC file and display it on stdout. Also download the cache-page and save it to the file \"page.html\":"
+	print "  gccom.py --getloc 12345678-1234-1234-1234-123456789123 --file page.html --getpage 12345678-1234-1234-1234-123456789123"
+	print ""
+	print "EXAMPLE: Using wget and gccom.py to download a whole page recursively while being logged in."
+	print "   wget -rkl1 --no-cookies --header \"Cookie: $(gccom.py -u USER -p PASSWORD -c)\" http://www.geocaching.com/seek/cache_details.aspx?guid=12345678-1234-1234-1234-123456789123"
 
-	autoLogout = True
-	if opt_cookie:
-		# Don't auto-logout, if the cookie was passed by --usecookie
-		autoLogout = False
+def main():
+	actions = []
 
-	for action in actions:
-		request = action[0]
-		value = action[1]
-		fileName = action[2]
+	opt_user = None
+	opt_password = None
+	opt_cookie = None
 
-		if request == "getcookie":
-			printOutput(fileName, gc.getCookie())
+	try:
+		(opts, args) = getopt.getopt(sys.argv[1:],
+			"hu:p:f:P:l:g:cC:Li:rH",
+			[ "help", "user=", "password=", "file=", "getpage=", "getloc=",
+			  "getgpx=", "getcookie", "usecookie=", "logout", "getcacheid=",
+			  "setprofile", "http",
+			  "debug", ])
+	except getopt.GetoptError:
+		usage()
+		return 1
+	currentFile = None
+	for (o, v) in opts:
+		if o in ("-h", "--help"):
+			usage()
+			return 0
+		if o == "--debug":
+			opt_debug = True
+		if o in ("-u", "--user"):
+			opt_user = v
+		if o in ("-p", "--password"):
+			opt_password = v
+		if o in ("-f", "--file"):
+			if v.lower() == "stdout":
+				v = None
+			currentFile = v
+		if o in ("-C", "--usecookie"):
+			opt_cookie = v
+		if o in ("-c", "--getcookie"):
+			actions.append(["getcookie", None, currentFile])
+		if o in ("-L", "--logout"):
+			actions.append(["logout", v, currentFile])
+		if o in ("-P", "--getpage"):
+			actions.append(["getpage", v, currentFile])
+		if o in ("-l", "--getloc"):
+			actions.append(["getloc", v, currentFile])
+		if o in ("-g", "--getgpx"):
+			actions.append(["getgpx", v, currentFile])
+		if o in ("-i", "--getcacheid"):
+			actions.append(["getcacheid", v, currentFile])
+		if o in ("-r", "--setprofile"):
+			actions.append(["setprofile", None, currentFile])
+		if o in ("-H", "--http"):
+			opt_useHTTPS = False;
+	if not actions:
+		print "Error: No actions specified\n"
+		usage()
+		return 1
+	if not opt_cookie:
+		if not opt_user:
+			opt_user = raw_input("Geocaching.com username: ")
+		if not opt_password:
+			opt_password = raw_input("Geocaching.com password: ")
+
+	try:
+		gc = GC(opt_user, opt_password, opt_cookie)
+
+		autoLogout = True
+		if opt_cookie:
+			# Don't auto-logout, if the cookie was passed by --usecookie
 			autoLogout = False
-		if request == "getpage":
-			printOutput(fileName, gc.getPage(value))
-		if request == "getloc":
-			printOutput(fileName, gc.getLOC(value))
-		if request == "getgpx":
-			printOutput(fileName, gc.getGPX(value))
-		if request == "getcacheid":
-			printOutput(fileName, gc.getCacheId(value))
-		if request == "setprofile":
-			gc.setProfile(fetchInput(fileName))
-		if request == "logout":
+
+		for action in actions:
+			request = action[0]
+			value = action[1]
+			fileName = action[2]
+
+			if request == "getcookie":
+				printOutput(fileName, gc.getCookie())
+				autoLogout = False
+			if request == "getpage":
+				printOutput(fileName, gc.getPage(value))
+			if request == "getloc":
+				printOutput(fileName, gc.getLOC(value))
+			if request == "getgpx":
+				printOutput(fileName, gc.getGPX(value))
+			if request == "getcacheid":
+				printOutput(fileName, gc.getCacheId(value))
+			if request == "setprofile":
+				gc.setProfile(fetchInput(fileName))
+			if request == "logout":
+				gc.logout()
+				autoLogout = False
+		if autoLogout:
 			gc.logout()
-			autoLogout = False
-	if autoLogout:
-		gc.logout()
 
-except GCException, e:
-	print e
-	sys.exit(1)
-except socket.error, e:
-	print "Socket error:"
-	print e
-	sys.exit(1)
-except httplib.HTTPException, e:
-	print "HTTP error:"
-	print e.__class__
-	sys.exit(1)
-sys.exit(0)
+	except GCException, e:
+		print e
+		return 1
+	except socket.error, e:
+		print "Socket error:"
+		print e
+		return 1
+	except httplib.HTTPException, e:
+		print "HTTP error:"
+		print e.__class__
+		return 1
+	return 0
+
+if __name__ == "__main__":
+	sys.exit(main())
