@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# vim: set fileencoding=UTF-8 :
 """
 # Geocaching.com stats tool
 # (c) Copyright 2010 Michael Buesch
@@ -14,6 +15,7 @@ import time
 import datetime
 import calendar
 import htmllib
+import cgi
 
 
 barTemplateUrl		= "http://img.geocaching.com/cache/log/f8db1278-8482-4aec-9dff-a16659e9d647.jpg"
@@ -43,6 +45,9 @@ def gcStringToDate(string):
 				     day=int(elements[1]))
 	except ValueError, IndexError:
 		raise ValueError
+
+def htmlEscape(string):
+	return cgi.escape(string)
 
 def htmlUnescape(string):
 	p = htmllib.HTMLParser(None)
@@ -79,7 +84,8 @@ class Geocache:
 
 	def __init__(self, guid, gcId, hiddenDate,
 		     cacheType, containerType,
-		     difficulty, terrain, country):
+		     difficulty, terrain, country,
+		     cacheOwner):
 		self.guid = guid
 		self.gcId = gcId
 		self.hiddenDate = hiddenDate
@@ -88,6 +94,7 @@ class Geocache:
 		self.difficulty = difficulty
 		self.terrain = terrain
 		self.country = country
+		self.cacheOwner = cacheOwner
 
 	def __eq__(self, x):
 		return self.guid == x.guid
@@ -158,13 +165,18 @@ class Geocache:
 		}
 		return type2text[self.containerType]
 
+	def getCacheOwner(self):
+		return self.cacheOwner
+
 class FoundGeocache(Geocache):
 	def __init__(self, guid, gcId, hiddenDate,
 		     cacheType, containerType,
-		     difficulty, terrain, country, foundDate):
+		     difficulty, terrain, country,
+		     cacheOwner, foundDate):
 		Geocache.__init__(self, guid, gcId, hiddenDate,
 				  cacheType, containerType,
-				  difficulty, terrain, country)
+				  difficulty, terrain, country,
+				  cacheOwner)
 		self.foundDate = foundDate
 		self.foundWeekday = calendar.weekday(foundDate.year,
 					foundDate.month, foundDate.day)
@@ -195,9 +207,8 @@ def localCacheinfoPut(guid, requestId, info):
 		raise gccom.GCException("Failed to write local cache info \"" +\
 					requestId + "\" for " + guid)
 
-def getDetailedCacheInfo(gc, guid):
-	# Returns detailed information about a cache.
-	# Returns a tuple (gcId, hiddenDate, cacheType, containerType, difficulty, terrain, country)
+def buildFoundGeocacheInfo(gc, guid, foundDate):
+	# Download information and build a FoundGeocache object
 	raw = localCacheinfoGet(guid, "details")
 	if not raw:
 		print "Fetching cache details for", guid
@@ -261,7 +272,17 @@ def getDetailedCacheInfo(gc, guid):
 	except (KeyError):
 		raise gccom.GCException("Unknown cache type: " + m.group(1))
 
-	return (gcId, hiddenDate, cacheType, containerType, difficulty, terrain, country)
+	m = re.match(r".*\(GC[\w]+\) was created by ([\w\s\-\'\"´`^°\.,;:+\*#&\|~]+) on \d\d/\d\d/\d\d\d\d.*",
+		     raw, re.DOTALL)
+	if not m:
+		raise gccom.GCException("Cacheowner regex failed on " + guid)
+	owner = htmlUnescape(m.group(1).strip())
+
+	return FoundGeocache(guid=guid, gcId=gcId, hiddenDate=hiddenDate,
+			     cacheType=cacheType, containerType=containerType,
+			     difficulty=difficulty, terrain=terrain,
+			     country=country, cacheOwner=owner,
+			     foundDate=foundDate)
 
 def getAllFound(gc):
 	# Returns a list of FoundGC (found geocaches)
@@ -287,19 +308,28 @@ def getAllFound(gc):
 			fdate = gcStringToDate(foundDate)
 		except (ValueError):
 			raise gccom.GCException("Failed to parse date " + foundDate)
-		details = getDetailedCacheInfo(gc, foundGuid)
-		(gcId, hdate, cacheType, container, difficulty, terrain, country) = details
-		fgc = FoundGeocache(guid=foundGuid, gcId=gcId, hiddenDate=hdate,
-				    cacheType=cacheType, containerType=container,
-				    difficulty=difficulty, terrain=terrain,
-				    country=country, foundDate=fdate)
-		found.append(fgc)
+		found.append(buildFoundGeocacheInfo(gc, foundGuid, fdate))
 	found = uniquifyList(found)
 	return found
 
+def htmlHistogramRow(fd, nrFound, count,
+		     iconUrl, entityText):
+	percent = float(count) * 100.0 / float(nrFound)
+	fd.write('<tr>')
+	fd.write('<td>')
+	if iconUrl:
+		fd.write('<img src="' + iconUrl + '" /> ')
+	fd.write(htmlEscape(entityText) + '</td>')
+	fd.write('<td>%d</td>' % count)
+	fd.write('<td>%.01f%%</td>' % percent)
+	fd.write('<td><img src="' + barTemplateUrl +\
+		 '"width=%d height=12 /></td>' % max(int(percent), 1))
+	fd.write('</tr>')
+
 def createHtmlHistogram(fd, foundCaches, attribute,
 			entityName, headline,
-			toIconUrl, toText):
+			toIconUrl, toText,
+			sortByCount=0, onlyTop=0):
 	headerDiv = '<div style="width:400px; background: #000080; ' +\
 		    'font-weight: bold; line-height: 20px; font-size: ' +\
 		    '13px; color: white; border: 1px solid #000000; ' +\
@@ -317,28 +347,35 @@ def createHtmlHistogram(fd, foundCaches, attribute,
 	fd.write(headerDiv + headline + '</div>')
 	fd.write(tableStart)
 	fd.write('<tr>')
-	fd.write('<td>%s</td>' % entityName)
+	fd.write('<td>%s</td>' % htmlEscape(entityName))
 	fd.write('<td>Count</td>')
 	fd.write('<td>Percent</td>')
 	fd.write('<td>Hist</td>')
 	fd.write('</tr>')
 	types = byType.keys()
-	types.sort()
+	if sortByCount:
+		# Sort by "Count" column
+		types.sort(key = lambda x: len(byType[x]),
+			   reverse=(sortByCount < 0))
+	else:
+		# Sort by "entity name" column
+		types.sort()
+	othersCount = 0
+	rows = 0
 	for t in types:
 		count = len(byType[t])
 		if not count:
 			continue
-		percent = float(count) * 100.0 / float(len(foundCaches))
-		fd.write('<tr>')
-		url = toIconUrl(byType[t][0])
-		fd.write('<td>')
-		if url:
-			fd.write('<img src="' + url + '" /> ')
-		fd.write(toText(byType[t][0]) + '</td>')
-		fd.write('<td>%d</td>' % count)
-		fd.write('<td>%.01f%%</td>' % percent)
-		fd.write('<td><img src="' + barTemplateUrl +\
-			 '"width=%d height=12 /></td>' % max(int(percent), 1))
+		if onlyTop and rows >= onlyTop:
+			othersCount += count
+			continue
+		htmlHistogramRow(fd, len(foundCaches), count,
+				 toIconUrl(byType[t][0]),
+				 toText(byType[t][0]))
+		rows += 1
+	if othersCount:
+		htmlHistogramRow(fd, len(foundCaches), othersCount,
+				 None, "<others>")
 	fd.write('</table><br />')
 
 def createHtmlStats(foundCaches, outdir):
@@ -370,7 +407,8 @@ def createHtmlStats(foundCaches, outdir):
 		createHtmlHistogram(fd, foundCaches, "cacheType",
 				    "Type", "Finds by cache type",
 				    lambda x: x.getCacheTypeIconUrl(),
-				    lambda x: x.getCacheTypeText())
+				    lambda x: x.getCacheTypeText(),
+				    sortByCount=-1)
 		fd.write('</td><td valign="top">')
 		createHtmlHistogram(fd, foundCaches, "containerType",
 				    "Container", "Finds by container type",
@@ -393,8 +431,14 @@ def createHtmlStats(foundCaches, outdir):
 		fd.write('<td valign="top">')
 		createHtmlHistogram(fd, foundCaches, "foundWeekday",
 				    "Weekday", "Finds by day of week",
-				    lambda x: "",
+				    lambda x: None,
 				    lambda x: x.getFoundWeekdayText())
+		fd.write('</td><td valign="top">')
+		createHtmlHistogram(fd, foundCaches, "cacheOwner",
+				    "Cache owner", "Finds by cache owner (Top 10)",
+				    lambda x: None,
+				    lambda x: x.getCacheOwner(),
+				    sortByCount=-1, onlyTop=10)
 		fd.write('</td>')
 		fd.write('</tr>')
 		fd.write('</table>')
