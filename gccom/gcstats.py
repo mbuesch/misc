@@ -346,8 +346,22 @@ def createHtmlStats(foundCaches, outdir):
 	try:
 		fd = file(outdir + "/gcstats.html", "w")
 
-		fd.write('<p style="font-size: 16px; font-weight: bold; ">')
-		fd.write('Total number of unique cache finds: %d' % len(foundCaches))
+		foundDates = {}
+		for c in foundCaches:
+			if c.foundDate in foundDates:
+				foundDates[c.foundDate].append(c)
+			else:
+				foundDates[c.foundDate] = [c,]
+		nrCacheDays = len(foundDates.keys())
+		mostPerDay = 0
+		for d in foundDates.keys():
+			mostPerDay = max(len(foundDates[d]), mostPerDay)
+		avgCachesPerDay = float(len(foundCaches)) / nrCacheDays
+
+		fd.write('<p style="font-size: 16px; ">')
+		fd.write('Total number of unique cache finds: <b>%d</b><br />' % len(foundCaches))
+		fd.write('Largest number of caches on one day: <b>%d</b><br />' % mostPerDay)
+		fd.write('Average number of caches per day: <b>%.1f</b>' % avgCachesPerDay)
 		fd.write('</p>')
 
 		fd.write('<table border="0">')
