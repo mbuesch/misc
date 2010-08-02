@@ -284,6 +284,8 @@ def usage():
 def main():
 	actions = []
 
+	global opt_debug
+	global opt_useHTTPS
 	opt_user = None
 	opt_password = None
 	opt_cookie = None
