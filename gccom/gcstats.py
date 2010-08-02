@@ -330,11 +330,11 @@ def createHtmlHistogram(fd, foundCaches, attribute,
 			entityName, headline,
 			toIconUrl, toText,
 			sortByCount=0, onlyTop=0):
-	headerDiv = '<div style="width:400px; background: #000080; ' +\
+	headerDiv = '<div style="width:350px; background: #000080; ' +\
 		    'font-weight: bold; line-height: 20px; font-size: ' +\
 		    '13px; color: white; border: 1px solid #000000; ' +\
 		    'text-align: center;">'
-	tableStart = '<table border="1" width="400px" ' +\
+	tableStart = '<table border="1" width="350px" ' +\
 		     'style="text-align: left; background: #EEEEFF; ' +\
 		     'font-size: 13px; color: black; ">'
 	byType = {}
