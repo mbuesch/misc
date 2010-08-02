@@ -364,8 +364,7 @@ def createHtmlHistogram(fd, foundCaches, attribute,
 	rows = 0
 	for t in types:
 		count = len(byType[t])
-		if not count:
-			continue
+		assert(count)
 		if onlyTop and rows >= onlyTop:
 			othersCount += count
 			continue
