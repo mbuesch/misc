@@ -198,9 +198,9 @@ def localCacheinfoPut(guid, requestId, info):
 def getDetailedCacheInfo(gc, guid):
 	# Returns detailed information about a cache.
 	# Returns a tuple (gcId, hiddenDate, cacheType, containerType, difficulty, terrain, country)
-	print "Fetching cache details for", guid
 	raw = localCacheinfoGet(guid, "details")
 	if not raw:
+		print "Fetching cache details for", guid
 		raw = gc.getPage("/seek/cache_details.aspx?guid=" + guid)
 		localCacheinfoPut(guid, "details", raw)
 
