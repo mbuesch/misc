@@ -10,7 +10,7 @@ import getopt
 import httplib
 import socket
 import urllib
-import ssl
+#import ssl
 import re
 import time
 
