@@ -322,7 +322,7 @@ def htmlHistogramRow(fd, nrFound, count,
 	fd.write(htmlEscape(entityText) + '</td>')
 	fd.write('<td>%d</td>' % count)
 	fd.write('<td>%.01f%%</td>' % percent)
-	fd.write('<td><img src="' + barTemplateUrl +\
+	fd.write('<td width="100px"><img src="' + barTemplateUrl +\
 		 '"width=%d height=12 /></td>' % max(int(percent), 1))
 	fd.write('</tr>')
 
