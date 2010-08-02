@@ -80,16 +80,26 @@ class Geocache:
 		self.country = country
 
 	@staticmethod
-	def __getStarsIconUrl(level):
+	def __getLevelIconUrl(level):
 		if level % 10 == 0:
 			return starsIconUrl % (str(level)[0])
 		return starsIconUrl % (str(level)[0] + "_" + str(level)[1])
 
+	@staticmethod
+	def __getLevelText(level):
+		return "%.01f" % (float(level) / 10.0)
+
 	def getDifficultyIconUrl(self):
-		return self.__getStarsIconUrl(self.difficulty)
+		return self.__getLevelIconUrl(self.difficulty)
+
+	def getDifficultyText(self):
+		return self.__getLevelText(self.difficulty)
 
 	def getTerrainIconUrl(self):
-		return self.__getStarsIconUrl(self.terrain)
+		return self.__getLevelIconUrl(self.terrain)
+
+	def getTerrainText(self):
+		return self.__getLevelText(self.terrain)
 
 	def getCacheTypeIconUrl(self):
 		type2url = {
@@ -327,7 +337,16 @@ def createHtmlStats(foundCaches, outdir):
 				    lambda x: x.getContainerTypeIconUrl(),
 				    lambda x: x.getContainerTypeText())
 
-		#TODO
+		createHtmlHistogram(fd, foundCaches, "difficulty",
+				    "Difficulty", "Finds by difficulty level",
+				    lambda x: x.getDifficultyIconUrl(),
+				    lambda x: x.getDifficultyText())
+
+		createHtmlHistogram(fd, foundCaches, "terrain",
+				    "Terrain", "Finds by terrain level",
+				    lambda x: x.getTerrainIconUrl(),
+				    lambda x: x.getTerrainText())
+
 		fd.close()
 	except (IOError), e:
 		raise gccom.GCException("Failed to write HTML stats: " + e.strerror)
