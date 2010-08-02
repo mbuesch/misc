@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """
 # Geocaching.com tool
-# Public Domain
+# (c) Copyright 2010 Michael Buesch
+# Licensed under the GNU/GPL version 2 or later.
 """
 
 import sys
