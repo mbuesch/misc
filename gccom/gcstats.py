@@ -321,7 +321,7 @@ def htmlHistogramRow(fd, nrFound, count,
 		fd.write('<img src="' + iconUrl + '" /> ')
 	fd.write(htmlEscape(entityText) + '</td>')
 	fd.write('<td>%d</td>' % count)
-	fd.write('<td>%.01f%%</td>' % percent)
+	fd.write('<td>%.01f %%</td>' % percent)
 	fd.write('<td width="100px"><img src="' + barTemplateUrl +\
 		 '"width=%d height=12 /></td>' % max(int(percent), 1))
 	fd.write('</tr>')
@@ -336,7 +336,7 @@ def createHtmlHistogram(fd, foundCaches, attribute,
 		    'text-align: center;">'
 	tableStart = '<table border="1" width="400px" ' +\
 		     'style="text-align: left; background: #EEEEFF; ' +\
-		     'font-size: 13px; color: black; text-align: left; ">'
+		     'font-size: 13px; color: black; ">'
 	byType = {}
 	for f in foundCaches:
 		attr = getattr(f, attribute)
@@ -394,12 +394,24 @@ def createHtmlStats(foundCaches, outdir):
 			mostPerDay = max(len(foundDates[d]), mostPerDay)
 		avgCachesPerDay = float(len(foundCaches)) / nrCacheDays
 
-		fd.write('<p style="font-size: 16px; ">')
-		fd.write('Total number of unique cache finds: <b>%d</b><br />' % len(foundCaches))
-		fd.write('Largest number of caches on one day: <b>%d</b><br />' % mostPerDay)
-		fd.write('Average number of caches per day: <b>%.1f</b><br />' % avgCachesPerDay)
-		fd.write('</p>')
+		# Header information
+		fd.write('<table border="0" style="text-align: left; ' +\
+			 'background: #EEEEFF;' +\
+			 'font-size: 16px; color: black; ">')
+		fd.write('<tr>')
+		fd.write('<td>Total number of unique cache finds:</td>')
+		fd.write('<td style="font-weight: bold; ">%d</td>' % len(foundCaches))
+		fd.write('</tr><tr>')
+		fd.write('<td>Largest number of cache finds on one day:</td>')
+		fd.write('<td style="font-weight: bold; ">%d</td>' % mostPerDay)
+		fd.write('</tr><tr>')
+		fd.write('<td>Average number of cache finds per caching day:</td>')
+		fd.write('<td style="font-weight: bold; ">%.1f</td>' % avgCachesPerDay)
+		fd.write('</tr>')
+		fd.write('</table>')
+		fd.write('<br />')
 
+		# Tables
 		fd.write('<table border="0">')
 		fd.write('<tr>')
 		fd.write('<td valign="top">')
