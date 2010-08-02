@@ -12,6 +12,7 @@ import getopt
 import re
 import time
 import datetime
+import calendar
 import htmllib
 
 
@@ -165,6 +166,11 @@ class FoundGeocache(Geocache):
 				  cacheType, containerType,
 				  difficulty, terrain, country)
 		self.foundDate = foundDate
+		self.foundWeekday = calendar.weekday(foundDate.year,
+					foundDate.month, foundDate.day)
+
+	def getFoundWeekdayText(self):
+		return calendar.day_name[self.foundWeekday]
 
 def dbgOut(data, outdir="."):
 	fd = file(outdir + "/gcstats.debug", "w")
@@ -324,9 +330,11 @@ def createHtmlHistogram(fd, foundCaches, attribute,
 			continue
 		percent = float(count) * 100.0 / float(len(foundCaches))
 		fd.write('<tr>')
-		fd.write('<td><img src="' +\
-			 toIconUrl(byType[t][0]) + '" /> ' +\
-			 toText(byType[t][0]) + '</td>')
+		url = toIconUrl(byType[t][0])
+		fd.write('<td>')
+		if url:
+			fd.write('<img src="' + url + '" /> ')
+		fd.write(toText(byType[t][0]) + '</td>')
 		fd.write('<td>%d</td>' % count)
 		fd.write('<td>%.01f%%</td>' % percent)
 		fd.write('<td><img src="' + barTemplateUrl +\
@@ -335,7 +343,6 @@ def createHtmlHistogram(fd, foundCaches, attribute,
 
 def createHtmlStats(foundCaches, outdir):
 	print "Generating HTML statistics..."
-
 	try:
 		fd = file(outdir + "/gcstats.html", "w")
 
@@ -367,6 +374,13 @@ def createHtmlStats(foundCaches, outdir):
 				    "Terrain", "Finds by terrain level",
 				    lambda x: x.getTerrainIconUrl(),
 				    lambda x: x.getTerrainText())
+		fd.write('</td>')
+		fd.write('</tr><tr>')
+		fd.write('<td valign="top">')
+		createHtmlHistogram(fd, foundCaches, "foundWeekday",
+				    "Weekday", "Finds by day of week",
+				    lambda x: "",
+				    lambda x: x.getFoundWeekdayText())
 		fd.write('</td>')
 		fd.write('</tr>')
 		fd.write('</table>')
