@@ -22,7 +22,7 @@ containerTypeIconUrl	= "http://www.geocaching.com/images/icons/container/%s.gif"
 starsIconUrl		= "http://www.geocaching.com/images/stars/stars%s.gif"
 
 
-opt_localstorage = "./gcstats"
+opt_localstorage = None
 
 
 def mkdir_recursive(filename, mode=0755):
@@ -361,7 +361,7 @@ def createHtmlStats(foundCaches, outdir):
 		fd.write('<p style="font-size: 16px; ">')
 		fd.write('Total number of unique cache finds: <b>%d</b><br />' % len(foundCaches))
 		fd.write('Largest number of caches on one day: <b>%d</b><br />' % mostPerDay)
-		fd.write('Average number of caches per day: <b>%.1f</b>' % avgCachesPerDay)
+		fd.write('Average number of caches per day: <b>%.1f</b><br />' % avgCachesPerDay)
 		fd.write('</p>')
 
 		fd.write('<table border="0">')
@@ -422,7 +422,7 @@ def usage():
 	print "-H|--http                  Use HTTP instead of HTTPS"
 	print ""
 	print "-o|--outdir                Output directory (defaults to PWD)"
-	print "-l|--localstorage          Local storage directory (defaults to PWD/gcstats)"
+	print "-l|--localstorage          Local storage directory (defaults to $outdir/gcstats)"
 	print ""
 	print "-h|--help                  Print this help text"
 
@@ -460,6 +460,8 @@ def main():
 		opt_user = raw_input("Geocaching.com username: ")
 	if not opt_password:
 		opt_password = raw_input("Geocaching.com password: ")
+	if not opt_localstorage:
+		opt_localstorage = opt_outdir + "/gcstats"
 	mkdir_recursive(opt_localstorage)
 
 	try:
