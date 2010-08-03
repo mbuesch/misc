@@ -23,8 +23,13 @@ cacheTypeIconUrl	= "http://www.geocaching.com/images/wpttypes/sm/%s.gif"
 containerTypeIconUrl	= "http://www.geocaching.com/images/icons/container/%s.gif"
 starsIconUrl		= "http://www.geocaching.com/images/stars/stars%s.gif"
 
+urlRegex		= r'[\w\.\-:&%=\?/]+'
+
+htmlBgColor		= "#D0D0E0"
+htmlTitleBgColor	= "#606090"
 
 opt_localstorage = None
+opt_offline = False
 
 
 def mkdir_recursive(filename, mode=0755):
@@ -119,7 +124,7 @@ class Geocache:
 	def __init__(self, guid, gcId, hiddenDate,
 		     cacheType, containerType,
 		     difficulty, terrain, country,
-		     cacheOwner):
+		     cacheOwner, cacheOwnerUrl):
 		self.guid = guid
 		self.gcId = gcId
 		self.hiddenDate = hiddenDate
@@ -129,6 +134,7 @@ class Geocache:
 		self.terrain = terrain
 		self.country = country
 		self.cacheOwner = cacheOwner
+		self.cacheOwnerUrl = cacheOwnerUrl
 
 	def __eq__(self, x):
 		return self.guid == x.guid
@@ -179,11 +185,12 @@ class FoundGeocache(Geocache):
 	def __init__(self, guid, gcId, hiddenDate,
 		     cacheType, containerType,
 		     difficulty, terrain, country,
-		     cacheOwner, foundDate):
+		     cacheOwner, cacheOwnerUrl,
+		     foundDate):
 		Geocache.__init__(self, guid, gcId, hiddenDate,
 				  cacheType, containerType,
 				  difficulty, terrain, country,
-				  cacheOwner)
+				  cacheOwner, cacheOwnerUrl)
 		self.foundDate = foundDate
 		self.foundWeekday = calendar.weekday(foundDate.year,
 					foundDate.month, foundDate.day)
@@ -192,41 +199,41 @@ class FoundGeocache(Geocache):
 	def getFoundWeekdayText(foundWeekday):
 		return calendar.day_name[foundWeekday]
 
-def dbgOut(data, outdir="."):
-	fd = file(outdir + "/gcstats.debug", "w")
-	fd.write(data)
-	fd.close()
-
-def localCacheinfoGet(guid, requestId):
+def localCacheinfoGet(itemId, requestId):
 	try:
-		fd = file(opt_localstorage + "/" + guid + "." + requestId, "r")
+		fd = file(opt_localstorage + "/" + itemId + "." + requestId, "r")
 		info = fd.read()
 		fd.close()
 	except IOError:
 		return None
 	return info
 
-def localCacheinfoPut(guid, requestId, info):
+def localCacheinfoPut(itemId, requestId, info):
 	try:
-		fd = file(opt_localstorage + "/" + guid + "." + requestId, "w")
+		fd = file(opt_localstorage + "/" + itemId + "." + requestId, "w")
 		fd.write(info)
 		fd.close()
 	except (IOError), e:
-		raise gccom.GCException("Failed to write local cache info \"" +\
-					requestId + "\" for " + guid)
+		raise gccom.GCException("Failed to write local cache info " +\
+					itemId + "." + requestId)
 
 def buildFoundGeocacheInfo(gc, guid, foundDate):
 	# Download information and build a FoundGeocache object
 	raw = localCacheinfoGet(guid, "details")
 	if not raw:
 		print "Fetching cache details for", guid
+		if opt_offline:
+			raise gccom.GCException("Offline: Details for " + guid +\
+				" not in local cache")
 		raw = gc.getPage("/seek/cache_details.aspx?guid=" + guid)
 		localCacheinfoPut(guid, "details", raw)
 
-	m = re.match(r".*It's a ([\w\s]+) size geocache, " +\
-		     r"with difficulty of ([\d\.]+), " +\
-		     r"terrain of ([\d\.]+)\. " +\
-		     r"It's located in ([\w\s\-,&#;]+)\..*",
+	m = re.match(r'.*\((GC\w+)\) was created by ([\w\s\-\'\"´`^°\.,;:+\*#&\|~]+) ' +\
+		     r'on \d\d/\d\d/\d\d\d\d\. ' +\
+		     r'It\'s a ([\w\s]+) size geocache, ' +\
+		     r'with difficulty of ([\d\.]+), ' +\
+		     r'terrain of ([\d\.]+)\. ' +\
+		     r'It\'s located in ([\w\s\-,&#;]+)\..*',
 		     raw, re.DOTALL)
 	if not m:
 		raise gccom.GCException("Detail info regex failed on " + guid)
@@ -240,17 +247,19 @@ def buildFoundGeocacheInfo(gc, guid, foundDate):
 			"virtual"	: Geocache.CONTAINER_VIRTUAL,
 			"other"		: Geocache.CONTAINER_OTHER,
 		}
-		containerType = containerMap[m.group(1).lower()]
-		difficulty = int(float(m.group(2)) * 10)
-		terrain = int(float(m.group(3)) * 10)
+		gcId = m.group(1)
+		owner = htmlUnescape(m.group(2)).lower()
+		containerType = containerMap[m.group(3).lower()]
+		difficulty = int(float(m.group(4)) * 10)
+		terrain = int(float(m.group(5)) * 10)
 		if difficulty not in Geocache.LEVELS or\
 		   terrain not in Geocache.LEVELS:
 			raise ValueError
-		country = htmlUnescape(m.group(4))
+		country = htmlUnescape(m.group(6))
 	except (ValueError, KeyError):
 		raise gccom.GCException("Failed to parse detail info of " + guid)
 
-	m = re.match(r".*<strong>\s+Hidden\s+:\s+</strong>\s+(\d\d/\d\d/\d\d\d\d).*",
+	m = re.match(r'.*<strong>\s+Hidden\s+:\s+</strong>\s+(\d\d/\d\d/\d\d\d\d).*',
 		     raw, re.DOTALL)
 	if not m:
 		raise gccom.GCException("Hidden info regex failed on " + guid)
@@ -259,12 +268,8 @@ def buildFoundGeocacheInfo(gc, guid, foundDate):
 	except (ValueError):
 		raise gccom.GCException("Failed to parse Hidden date of " + guid)
 
-	m = re.match(r".*<title>\s+(GC\w+)\s.*", raw, re.DOTALL)
-	if not m:
-		raise gccom.GCException("GC-id regex failed on " + guid)
-	gcId = m.group(1)
-
-	m = re.match(r".*title=\"About Cache Types\"><img src=\"[\w\.\-/]+\" alt=\"([\w\s\-]+)\".*",
+	m = re.match(r'.*title="About Cache Types"><img src="' + urlRegex +\
+		     r'" alt="([\w\s\-]+)".*',
 		     raw, re.DOTALL)
 	if not m:
 		raise gccom.GCException("Cachetype regex failed on " + guid)
@@ -280,22 +285,30 @@ def buildFoundGeocacheInfo(gc, guid, foundDate):
 	except (KeyError):
 		raise gccom.GCException("Unknown cache type: " + m.group(1))
 
-	m = re.match(r".*\(GC[\w]+\) was created by ([\w\s\-\'\"´`^°\.,;:+\*#&\|~]+) on \d\d/\d\d/\d\d\d\d.*",
+	m = re.match(r'.*<strong>\s+A\s+cache\s+</strong>\s+by\s+<a href="(' +\
+		     urlRegex + r')">.*',
 		     raw, re.DOTALL)
 	if not m:
-		raise gccom.GCException("Cacheowner regex failed on " + guid)
-	owner = htmlUnescape(m.group(1).strip())
+		raise gccom.GCException("Cacheowner-URL regex failed on " + guid)
+	ownerUrl = m.group(1)
 
 	return FoundGeocache(guid=guid, gcId=gcId, hiddenDate=hiddenDate,
 			     cacheType=cacheType, containerType=containerType,
 			     difficulty=difficulty, terrain=terrain,
 			     country=country, cacheOwner=owner,
+			     cacheOwnerUrl=ownerUrl,
 			     foundDate=foundDate)
 
 def getAllFound(gc):
 	# Returns a list of FoundGC (found geocaches)
 	print "Fetching \"found-it\" summary..."
-	foundit = gc.getPage("/my/logs.aspx?s=1&lt=2")
+	if opt_offline:
+		foundit = localCacheinfoGet("found", "index")
+		if not foundit:
+			raise gccom.GCException("Offline: Failed to get cached found-index")
+	else:
+		foundit = gc.getPage("/my/logs.aspx?s=1&lt=2")
+		localCacheinfoPut("found", "index", foundit)
 	matches = re.findall(r"<td>\s*(\d\d/\d\d/\d\d\d\d)\s*</td>\s*<td>[\s\w=<>\"]*" +\
 			r"<a href=\"http://www\.geocaching\.com/seek/cache_details\.aspx" +\
 			r"\?guid=(" + gccom.guidRegex + r")\" class=\"lnk\">",
@@ -320,37 +333,57 @@ def getAllFound(gc):
 	found = uniquifyList(found)
 	return found
 
-def htmlHistogramRow(fd, nrFound, count,
-		     iconUrl, entityText):
-	percent = float(count) * 100.0 / float(nrFound)
-	fd.write('<tr>')
-	fd.write('<td>')
-	if iconUrl:
-		fd.write('<img src="' + iconUrl + '" /> ')
-	fd.write(htmlEscape(entityText) + '</td>')
-	fd.write('<td>%d</td>' % count)
-	fd.write('<td>%.01f %%</td>' % percent)
-	fd.write('<td width="100px">')
-	if count:
-		fd.write('<img src="%s" width=%d height=12 />' %\
-			 (barTemplateUrl, max(int(percent), 1)))
-	else:
-		fd.write('&nbsp;')
-	fd.write('</td>')
+def createHtmlTableHeader(fd, text):
+	fd.write('<div style="width:350px; background: %s; ' % htmlTitleBgColor +\
+		 'font-weight: bold; line-height: 20px; font-size: ' +\
+		 '13px; color: white; border: 0px; ' +\
+		 'text-align: center;">')
+	fd.write(htmlEscape(text))
+	fd.write('</div>')
+	fd.write('<table border="0" width="350px">')
+
+def createHtmlTableRow(fd, *columns):
+	style = 'text-align: left; background: %s; ' % htmlBgColor +\
+		'font-size: 13px; color: black; '
+	fd.write('<tr style="%s">' % style)
+	for column in columns:
+		if not column.startswith('<td'):
+			fd.write('<td>')
+		fd.write(column)
+		fd.write('</td>')
 	fd.write('</tr>')
+
+def createHtmlTableEnd(fd):
+	fd.write('</table><br />')
+
+def htmlHistogramRow(fd, nrFound, count,
+		     entityIconUrl, entityText, entityUrl):
+	percent = float(count) * 100.0 / float(nrFound)
+	col0 = ''
+	if entityIconUrl:
+		col0 += '<img src="' + entityIconUrl + '" /> '
+	if entityUrl:
+		col0 += '<a href="' + entityUrl + '" target="_blank">'
+	col0 += htmlEscape(entityText)
+	if entityUrl:
+		col0 += '</a>'
+	col1 = '%d' % count
+	col2 = '%.01f %%' % percent
+	col3 = '<td width="100px">'
+	if count:
+		col3 += '<img src="%s" width=%d height=12 />' %\
+			(barTemplateUrl, max(int(percent), 1))
+	else:
+		col3 += '&nbsp;'
+	createHtmlTableRow(fd, col0, col1, col2, col3)
 
 def createHtmlHistogram(fd, foundCaches, attribute,
 			entityName, headline,
-			typeToIconUrl, typeToText,
+			typeToIconUrl=lambda t: None,
+			typeToText=lambda t: None,
+			typeToTextUrl=lambda t: None,
 			listOfPossibleTypes=[],
 			sortByCount=0, onlyTop=0):
-	headerDiv = '<div style="width:350px; background: #000080; ' +\
-		    'font-weight: bold; line-height: 20px; font-size: ' +\
-		    '13px; color: white; border: 1px solid #000000; ' +\
-		    'text-align: center;">'
-	tableStart = '<table border="1" width="350px" ' +\
-		     'style="text-align: left; background: #EEEEFF; ' +\
-		     'font-size: 13px; color: black; ">'
 	byType = {}
 	for possibleType in listOfPossibleTypes:
 		byType[possibleType] = []
@@ -360,14 +393,10 @@ def createHtmlHistogram(fd, foundCaches, attribute,
 			byType[entityType].append(f)
 		else:
 			byType[entityType] = [f,]
-	fd.write(headerDiv + headline + '</div>')
-	fd.write(tableStart)
-	fd.write('<tr>')
-	fd.write('<td>%s</td>' % htmlEscape(entityName))
-	fd.write('<td>Count</td>')
-	fd.write('<td>Percent</td>')
-	fd.write('<td>Hist</td>')
-	fd.write('</tr>')
+	createHtmlTableHeader(fd, headline)
+	createHtmlTableRow(fd, "<b>" + htmlEscape(entityName) + "</b>",
+			   "<b>Count</b>", "<b>Percent</b>",
+			   "<b>Hist</b>")
 	types = byType.keys()
 	if sortByCount:
 		# Sort by "Count" column
@@ -385,93 +414,99 @@ def createHtmlHistogram(fd, foundCaches, attribute,
 			continue
 		htmlHistogramRow(fd, len(foundCaches), count,
 				 typeToIconUrl(t),
-				 typeToText(t))
+				 typeToText(t),
+				 typeToTextUrl(t))
 		rows += 1
 	if othersCount:
 		htmlHistogramRow(fd, len(foundCaches), othersCount,
-				 None, "<others>")
-	fd.write('</table><br />')
+				 None, "<others>", None)
+	createHtmlTableEnd(fd)
+
+def createHtmlStatsHistograms(fd, foundCaches):
+	fd.write('<table border="0">')
+	fd.write('<tr>')
+	fd.write('<td valign="top">')
+	createHtmlHistogram(fd, foundCaches, "cacheType",
+			    "Type", "Finds by cache type",
+			    typeToIconUrl=lambda t: Geocache.getCacheTypeIconUrl(t),
+			    typeToText=lambda t: Geocache.getCacheTypeText(t),
+			    sortByCount=-1)
+	fd.write('</td><td valign="top">')
+	createHtmlHistogram(fd, foundCaches, "containerType",
+			    "Container", "Finds by container type",
+			    typeToIconUrl=lambda t: Geocache.getContainerTypeIconUrl(t),
+			    typeToText=lambda t: Geocache.getContainerTypeText(t),
+			    listOfPossibleTypes=Geocache.containerTypeToTextMap.keys())
+	fd.write('</td>')
+	fd.write('</tr><tr>')
+	fd.write('<td valign="top">')
+	createHtmlHistogram(fd, foundCaches, "difficulty",
+			    "Difficulty", "Finds by difficulty level",
+			    typeToIconUrl=lambda t: Geocache.getDifficultyIconUrl(t),
+			    typeToText=lambda t: Geocache.getDifficultyText(t),
+			    listOfPossibleTypes=Geocache.LEVELS)
+	fd.write('</td><td valign="top">')
+	createHtmlHistogram(fd, foundCaches, "terrain",
+			    "Terrain", "Finds by terrain level",
+			    typeToIconUrl=lambda t: Geocache.getTerrainIconUrl(t),
+			    typeToText=lambda t: Geocache.getTerrainText(t),
+			    listOfPossibleTypes=Geocache.LEVELS)
+	fd.write('</td>')
+	fd.write('</tr><tr>')
+	fd.write('<td valign="top">')
+	createHtmlHistogram(fd, foundCaches, "foundWeekday",
+			    "Weekday", "Finds by day of week",
+			    typeToText=lambda t: FoundGeocache.getFoundWeekdayText(t),
+			    listOfPossibleTypes=[x for x in range(7)])
+	fd.write('</td><td valign="top">')
+	createHtmlHistogram(fd, foundCaches, "cacheOwner",
+			    "Cache owner", "Finds by cache owner (Top 10)",
+			    typeToText=lambda t: t,
+			    typeToTextUrl=lambda t: [x for x in foundCaches if x.cacheOwner == t][0].cacheOwnerUrl,
+			    sortByCount=-1, onlyTop=10)
+	fd.write('</td>')
+	fd.write('</tr>')
+	fd.write('</table>')
+
+def createHtmlStatsHeader(fd, foundCaches):
+	fd.write('<table border="0" style="text-align: left; ' +\
+		 'background: %s;' % htmlBgColor +\
+		 'font-size: 16px; color: black; ">')
+	fd.write('<tr>')
+	fd.write('<td>Total number of unique cache finds:</td>')
+	fd.write('<td style="font-weight: bold; ">%d</td>' % len(foundCaches))
+	fd.write('</tr>')
+	fd.write('</table>')
+	fd.write('<br />')
+
+def createHtmlStatsMisc(fd, foundCaches):
+	foundDates = {}
+	for c in foundCaches:
+		if c.foundDate in foundDates:
+			foundDates[c.foundDate].append(c)
+		else:
+			foundDates[c.foundDate] = [c,]
+	nrCacheDays = len(foundDates.keys())
+	mostPerDay = 0
+	for d in foundDates.keys():
+		mostPerDay = max(len(foundDates[d]), mostPerDay)
+	avgCachesPerDay = float(len(foundCaches)) / nrCacheDays
+
+	createHtmlTableHeader(fd, "Miscellaneous statistics")
+	createHtmlTableRow(fd, "Largest number of cache finds on one day:",
+			   "%d" % mostPerDay)
+	createHtmlTableRow(fd, "Average number of cache finds per caching day:",
+			   "%.1f" % avgCachesPerDay)
+	createHtmlTableEnd(fd)
 
 def createHtmlStats(foundCaches, outdir):
 	print "Generating HTML statistics..."
 	try:
 		fd = file(outdir + "/gcstats.html", "w")
 
-		foundDates = {}
-		for c in foundCaches:
-			if c.foundDate in foundDates:
-				foundDates[c.foundDate].append(c)
-			else:
-				foundDates[c.foundDate] = [c,]
-		nrCacheDays = len(foundDates.keys())
-		mostPerDay = 0
-		for d in foundDates.keys():
-			mostPerDay = max(len(foundDates[d]), mostPerDay)
-		avgCachesPerDay = float(len(foundCaches)) / nrCacheDays
-
-		# Header information
-		fd.write('<table border="0" style="text-align: left; ' +\
-			 'background: #EEEEFF;' +\
-			 'font-size: 16px; color: black; ">')
-		fd.write('<tr>')
-		fd.write('<td>Total number of unique cache finds:</td>')
-		fd.write('<td style="font-weight: bold; ">%d</td>' % len(foundCaches))
-		fd.write('</tr><tr>')
-		fd.write('<td>Largest number of cache finds on one day:</td>')
-		fd.write('<td style="font-weight: bold; ">%d</td>' % mostPerDay)
-		fd.write('</tr><tr>')
-		fd.write('<td>Average number of cache finds per caching day:</td>')
-		fd.write('<td style="font-weight: bold; ">%.1f</td>' % avgCachesPerDay)
-		fd.write('</tr>')
-		fd.write('</table>')
-		fd.write('<br />')
-
-		# Tables
-		fd.write('<table border="0">')
-		fd.write('<tr>')
-		fd.write('<td valign="top">')
-		createHtmlHistogram(fd, foundCaches, "cacheType",
-				    "Type", "Finds by cache type",
-				    lambda t: Geocache.getCacheTypeIconUrl(t),
-				    lambda t: Geocache.getCacheTypeText(t),
-				    sortByCount=-1)
-		fd.write('</td><td valign="top">')
-		createHtmlHistogram(fd, foundCaches, "containerType",
-				    "Container", "Finds by container type",
-				    lambda t: Geocache.getContainerTypeIconUrl(t),
-				    lambda t: Geocache.getContainerTypeText(t),
-				    listOfPossibleTypes=Geocache.containerTypeToTextMap.keys())
-		fd.write('</td>')
-		fd.write('</tr><tr>')
-		fd.write('<td valign="top">')
-		createHtmlHistogram(fd, foundCaches, "difficulty",
-				    "Difficulty", "Finds by difficulty level",
-				    lambda t: Geocache.getDifficultyIconUrl(t),
-				    lambda t: Geocache.getDifficultyText(t),
-				    listOfPossibleTypes=Geocache.LEVELS)
-		fd.write('</td><td valign="top">')
-		createHtmlHistogram(fd, foundCaches, "terrain",
-				    "Terrain", "Finds by terrain level",
-				    lambda t: Geocache.getTerrainIconUrl(t),
-				    lambda t: Geocache.getTerrainText(t),
-				    listOfPossibleTypes=Geocache.LEVELS)
-		fd.write('</td>')
-		fd.write('</tr><tr>')
-		fd.write('<td valign="top">')
-		createHtmlHistogram(fd, foundCaches, "foundWeekday",
-				    "Weekday", "Finds by day of week",
-				    lambda t: None,
-				    lambda t: FoundGeocache.getFoundWeekdayText(t),
-				    listOfPossibleTypes=[x for x in range(7)])
-		fd.write('</td><td valign="top">')
-		createHtmlHistogram(fd, foundCaches, "cacheOwner",
-				    "Cache owner", "Finds by cache owner (Top 10)",
-				    lambda t: None,
-				    lambda t: t,
-				    sortByCount=-1, onlyTop=10)
-		fd.write('</td>')
-		fd.write('</tr>')
-		fd.write('</table>')
+		createHtmlStatsHeader(fd, foundCaches)
+		createHtmlStatsHistograms(fd, foundCaches)
+		createHtmlStatsMisc(fd, foundCaches)
 
 		fd.write('\n<p style="font-size: 10px; ">Generated by <a href="' +\
 			 'http://bu3sch.de/joomla/index.php/geocaching-tools' +\
@@ -481,12 +516,15 @@ def createHtmlStats(foundCaches, outdir):
 		raise gccom.GCException("Failed to write HTML stats: " + e.strerror)
 
 def createStats(user, password, outdir):
-	gc = gccom.GC(user, password)
+	gc = None
+	if not opt_offline:
+		gc = gccom.GC(user, password)
 
 	found = getAllFound(gc)
 	createHtmlStats(found, outdir)
 
-	gc.logout()
+	if not opt_offline:
+		gc.logout()
 
 def usage():
 	print "Geocaching.com stats tool"
@@ -497,20 +535,22 @@ def usage():
 	print ""
 	print "-o|--outdir                Output directory (defaults to PWD)"
 	print "-l|--localstorage          Local storage directory (defaults to $outdir/gcstats)"
+	print "-O|--offline               Offline mode. Only use local cache information."
 	print ""
 	print "-h|--help                  Print this help text"
 
 def main():
 	global opt_localstorage
+	global opt_offline
 	opt_user = None
 	opt_password = None
 	opt_outdir = "."
 
 	try:
 		(opts, args) = getopt.getopt(sys.argv[1:],
-			"hu:p:Ho:l:",
+			"hu:p:Ho:l:O",
 			[ "help", "user=", "password=", "http", "outdir=",
-			  "localstorage=", "debug", ])
+			  "localstorage=", "debug", "offline", ])
 	except getopt.GetoptError:
 		usage()
 		return 1
@@ -530,10 +570,13 @@ def main():
 			opt_outdir = v
 		if o in ("-l", "--localstorage"):
 			opt_localstorage = v
-	if not opt_user:
-		opt_user = raw_input("Geocaching.com username: ")
-	if not opt_password:
-		opt_password = raw_input("Geocaching.com password: ")
+		if o in ("-O", "--offline"):
+			opt_offline = True
+	if not opt_offline:
+		if not opt_user:
+			opt_user = raw_input("Geocaching.com username: ")
+		if not opt_password:
+			opt_password = raw_input("Geocaching.com password: ")
 	if not opt_localstorage:
 		opt_localstorage = opt_outdir + "/gcstats"
 	mkdir_recursive(opt_localstorage)
