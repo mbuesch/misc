@@ -462,7 +462,7 @@ def createHtmlStats(foundCaches, outdir):
 				    "Weekday", "Finds by day of week",
 				    lambda t: None,
 				    lambda t: FoundGeocache.getFoundWeekdayText(t),
-				    listOfPossibleTypes=[]) #TODO
+				    listOfPossibleTypes=[x for x in range(7)])
 		fd.write('</td><td valign="top">')
 		createHtmlHistogram(fd, foundCaches, "cacheOwner",
 				    "Cache owner", "Finds by cache owner (Top 10)",
@@ -506,17 +506,17 @@ def main():
 	opt_password = None
 	opt_outdir = "."
 
-	gccom.opt_debug = True #XXX
-
 	try:
 		(opts, args) = getopt.getopt(sys.argv[1:],
 			"hu:p:Ho:l:",
 			[ "help", "user=", "password=", "http", "outdir=",
-			  "localstorage=", ])
+			  "localstorage=", "debug", ])
 	except getopt.GetoptError:
 		usage()
 		return 1
 	for (o, v) in opts:
+		if o == "--debug":
+			gccom.opt_debug = True
 		if o in ("-h", "--help"):
 			usage()
 			return 0
