@@ -469,6 +469,13 @@ def createHtmlStatsHistograms(fd, foundCaches):
 			    typeToTextUrl=lambda t: [x for x in foundCaches if x.cacheOwner == t][0].cacheOwnerUrl,
 			    sortByCount=-1, onlyTop=10)
 	fd.write('</td>')
+	fd.write('</tr><tr>')
+	fd.write('<td valign="top">')
+	createHtmlHistogram(fd, foundCaches, "country",
+			    "Location", "Finds by cache location",
+			    typeToText=lambda t: t,
+			    sortByCount=-1)
+	fd.write('</td>')
 	fd.write('</tr>')
 	fd.write('</table>')
 
