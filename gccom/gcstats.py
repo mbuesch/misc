@@ -70,6 +70,21 @@ class Geocache:
 	CACHE_EARTH		= 3
 	CACHE_VIRTUAL		= 4
 
+	cacheTypeToIconUrlMap = {
+		CACHE_TRADITIONAL	: cacheTypeIconUrl % "2",
+		CACHE_MULTI		: cacheTypeIconUrl % "3",
+		CACHE_MYSTERY		: cacheTypeIconUrl % "8",
+		CACHE_EARTH		: cacheTypeIconUrl % "earthcache",
+		CACHE_VIRTUAL		: cacheTypeIconUrl % "4",
+	}
+	cacheTypeToTextMap = {
+		CACHE_TRADITIONAL	: "traditional",
+		CACHE_MULTI		: "multi",
+		CACHE_MYSTERY		: "mystery",
+		CACHE_EARTH		: "earth",
+		CACHE_VIRTUAL		: "virtual",
+	}
+
 	# Container types
 	CONTAINER_NOTCHOSEN	= 0
 	CONTAINER_MICRO		= 1
@@ -78,6 +93,25 @@ class Geocache:
 	CONTAINER_LARGE		= 4
 	CONTAINER_VIRTUAL	= 5
 	CONTAINER_OTHER		= 6
+
+	containerTypeToIconUrlMap = {
+		CONTAINER_NOTCHOSEN	: containerTypeIconUrl % "not_chosen",
+		CONTAINER_MICRO		: containerTypeIconUrl % "micro",
+		CONTAINER_SMALL		: containerTypeIconUrl % "small",
+		CONTAINER_REGULAR	: containerTypeIconUrl % "regular",
+		CONTAINER_LARGE		: containerTypeIconUrl % "large",
+		CONTAINER_VIRTUAL	: containerTypeIconUrl % "virtual",
+		CONTAINER_OTHER		: containerTypeIconUrl % "other",
+	}
+	containerTypeToTextMap = {
+		CONTAINER_NOTCHOSEN	: "not chosen",
+		CONTAINER_MICRO		: "micro",
+		CONTAINER_SMALL		: "small",
+		CONTAINER_REGULAR	: "regular",
+		CONTAINER_LARGE		: "large",
+		CONTAINER_VIRTUAL	: "virtual",
+		CONTAINER_OTHER		: "other",
+	}
 
 	# Valid level values for "terrain" and "difficulty"
 	LEVELS = (10, 15, 20, 25, 30, 35, 40, 45, 50)
@@ -109,64 +143,37 @@ class Geocache:
 	def __getLevelText(level):
 		return "%.01f" % (float(level) / 10.0)
 
-	def getDifficultyIconUrl(self):
-		return self.__getLevelIconUrl(self.difficulty)
+	@staticmethod
+	def getDifficultyIconUrl(difficulty):
+		return Geocache.__getLevelIconUrl(difficulty)
 
-	def getDifficultyText(self):
-		return self.__getLevelText(self.difficulty)
+	@staticmethod
+	def getDifficultyText(difficulty):
+		return Geocache.__getLevelText(difficulty)
 
-	def getTerrainIconUrl(self):
-		return self.__getLevelIconUrl(self.terrain)
+	@staticmethod
+	def getTerrainIconUrl(terrain):
+		return Geocache.__getLevelIconUrl(terrain)
 
-	def getTerrainText(self):
-		return self.__getLevelText(self.terrain)
+	@staticmethod
+	def getTerrainText(terrain):
+		return Geocache.__getLevelText(terrain)
 
-	def getCacheTypeIconUrl(self):
-		type2url = {
-			self.CACHE_TRADITIONAL	: "2",
-			self.CACHE_MULTI	: "3",
-			self.CACHE_MYSTERY	: "8",
-			self.CACHE_EARTH	: "earthcache",
-			self.CACHE_VIRTUAL	: "4",
-		}
-		return cacheTypeIconUrl % (type2url[self.cacheType])
+	@staticmethod
+	def getCacheTypeIconUrl(cacheType):
+		return Geocache.cacheTypeToIconUrlMap[cacheType]
 
-	def getCacheTypeText(self):
-		type2text = {
-			self.CACHE_TRADITIONAL	: "traditional",
-			self.CACHE_MULTI	: "multi",
-			self.CACHE_MYSTERY	: "mystery",
-			self.CACHE_EARTH	: "earth",
-			self.CACHE_VIRTUAL	: "virtual",
-		}
-		return type2text[self.cacheType]
+	@staticmethod
+	def getCacheTypeText(cacheType):
+		return Geocache.cacheTypeToTextMap[cacheType]
 
-	def getContainerTypeIconUrl(self):
-		type2url = {
-			self.CONTAINER_NOTCHOSEN	: "not_chosen",
-			self.CONTAINER_MICRO		: "micro",
-			self.CONTAINER_SMALL		: "small",
-			self.CONTAINER_REGULAR		: "regular",
-			self.CONTAINER_LARGE		: "large",
-			self.CONTAINER_VIRTUAL		: "virtual",
-			self.CONTAINER_OTHER		: "other",
-		}
-		return containerTypeIconUrl % (type2url[self.containerType])
+	@staticmethod
+	def getContainerTypeIconUrl(containerType):
+		return Geocache.containerTypeToIconUrlMap[containerType]
 
-	def getContainerTypeText(self):
-		type2text = {
-			self.CONTAINER_NOTCHOSEN	: "not chosen",
-			self.CONTAINER_MICRO		: "micro",
-			self.CONTAINER_SMALL		: "small",
-			self.CONTAINER_REGULAR		: "regular",
-			self.CONTAINER_LARGE		: "large",
-			self.CONTAINER_VIRTUAL		: "virtual",
-			self.CONTAINER_OTHER		: "other",
-		}
-		return type2text[self.containerType]
-
-	def getCacheOwner(self):
-		return self.cacheOwner
+	@staticmethod
+	def getContainerTypeText(containerType):
+		return Geocache.containerTypeToTextMap[containerType]
 
 class FoundGeocache(Geocache):
 	def __init__(self, guid, gcId, hiddenDate,
@@ -181,8 +188,9 @@ class FoundGeocache(Geocache):
 		self.foundWeekday = calendar.weekday(foundDate.year,
 					foundDate.month, foundDate.day)
 
-	def getFoundWeekdayText(self):
-		return calendar.day_name[self.foundWeekday]
+	@staticmethod
+	def getFoundWeekdayText(foundWeekday):
+		return calendar.day_name[foundWeekday]
 
 def dbgOut(data, outdir="."):
 	fd = file(outdir + "/gcstats.debug", "w")
@@ -322,13 +330,19 @@ def htmlHistogramRow(fd, nrFound, count,
 	fd.write(htmlEscape(entityText) + '</td>')
 	fd.write('<td>%d</td>' % count)
 	fd.write('<td>%.01f %%</td>' % percent)
-	fd.write('<td width="100px"><img src="' + barTemplateUrl +\
-		 '"width=%d height=12 /></td>' % max(int(percent), 1))
+	fd.write('<td width="100px">')
+	if count:
+		fd.write('<img src="%s" width=%d height=12 />' %\
+			 (barTemplateUrl, max(int(percent), 1)))
+	else:
+		fd.write('&nbsp;')
+	fd.write('</td>')
 	fd.write('</tr>')
 
 def createHtmlHistogram(fd, foundCaches, attribute,
 			entityName, headline,
-			toIconUrl, toText,
+			typeToIconUrl, typeToText,
+			listOfPossibleTypes=[],
 			sortByCount=0, onlyTop=0):
 	headerDiv = '<div style="width:350px; background: #000080; ' +\
 		    'font-weight: bold; line-height: 20px; font-size: ' +\
@@ -338,12 +352,14 @@ def createHtmlHistogram(fd, foundCaches, attribute,
 		     'style="text-align: left; background: #EEEEFF; ' +\
 		     'font-size: 13px; color: black; ">'
 	byType = {}
+	for possibleType in listOfPossibleTypes:
+		byType[possibleType] = []
 	for f in foundCaches:
-		attr = getattr(f, attribute)
-		if attr in byType.keys():
-			byType[attr].append(f)
+		entityType = getattr(f, attribute)
+		if entityType in byType.keys():
+			byType[entityType].append(f)
 		else:
-			byType[attr] = [f,]
+			byType[entityType] = [f,]
 	fd.write(headerDiv + headline + '</div>')
 	fd.write(tableStart)
 	fd.write('<tr>')
@@ -364,13 +380,12 @@ def createHtmlHistogram(fd, foundCaches, attribute,
 	rows = 0
 	for t in types:
 		count = len(byType[t])
-		assert(count)
 		if onlyTop and rows >= onlyTop:
 			othersCount += count
 			continue
 		htmlHistogramRow(fd, len(foundCaches), count,
-				 toIconUrl(byType[t][0]),
-				 toText(byType[t][0]))
+				 typeToIconUrl(t),
+				 typeToText(t))
 		rows += 1
 	if othersCount:
 		htmlHistogramRow(fd, len(foundCaches), othersCount,
@@ -417,38 +432,42 @@ def createHtmlStats(foundCaches, outdir):
 		fd.write('<td valign="top">')
 		createHtmlHistogram(fd, foundCaches, "cacheType",
 				    "Type", "Finds by cache type",
-				    lambda x: x.getCacheTypeIconUrl(),
-				    lambda x: x.getCacheTypeText(),
+				    lambda t: Geocache.getCacheTypeIconUrl(t),
+				    lambda t: Geocache.getCacheTypeText(t),
 				    sortByCount=-1)
 		fd.write('</td><td valign="top">')
 		createHtmlHistogram(fd, foundCaches, "containerType",
 				    "Container", "Finds by container type",
-				    lambda x: x.getContainerTypeIconUrl(),
-				    lambda x: x.getContainerTypeText())
+				    lambda t: Geocache.getContainerTypeIconUrl(t),
+				    lambda t: Geocache.getContainerTypeText(t),
+				    listOfPossibleTypes=Geocache.containerTypeToTextMap.keys())
 		fd.write('</td>')
 		fd.write('</tr><tr>')
 		fd.write('<td valign="top">')
 		createHtmlHistogram(fd, foundCaches, "difficulty",
 				    "Difficulty", "Finds by difficulty level",
-				    lambda x: x.getDifficultyIconUrl(),
-				    lambda x: x.getDifficultyText())
+				    lambda t: Geocache.getDifficultyIconUrl(t),
+				    lambda t: Geocache.getDifficultyText(t),
+				    listOfPossibleTypes=Geocache.LEVELS)
 		fd.write('</td><td valign="top">')
 		createHtmlHistogram(fd, foundCaches, "terrain",
 				    "Terrain", "Finds by terrain level",
-				    lambda x: x.getTerrainIconUrl(),
-				    lambda x: x.getTerrainText())
+				    lambda t: Geocache.getTerrainIconUrl(t),
+				    lambda t: Geocache.getTerrainText(t),
+				    listOfPossibleTypes=Geocache.LEVELS)
 		fd.write('</td>')
 		fd.write('</tr><tr>')
 		fd.write('<td valign="top">')
 		createHtmlHistogram(fd, foundCaches, "foundWeekday",
 				    "Weekday", "Finds by day of week",
-				    lambda x: None,
-				    lambda x: x.getFoundWeekdayText())
+				    lambda t: None,
+				    lambda t: FoundGeocache.getFoundWeekdayText(t),
+				    listOfPossibleTypes=[]) #TODO
 		fd.write('</td><td valign="top">')
 		createHtmlHistogram(fd, foundCaches, "cacheOwner",
 				    "Cache owner", "Finds by cache owner (Top 10)",
-				    lambda x: None,
-				    lambda x: x.getCacheOwner(),
+				    lambda t: None,
+				    lambda t: t,
 				    sortByCount=-1, onlyTop=10)
 		fd.write('</td>')
 		fd.write('</tr>')
