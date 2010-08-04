@@ -1,2 +1,2 @@
 #!/bin/sh
-rm -Rf print_templates locs
+rm -Rf "locs" "web" "web.tmp" "print"
