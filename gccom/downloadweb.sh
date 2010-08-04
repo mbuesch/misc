@@ -44,11 +44,12 @@ http_download() # $1=target_dir $2=URL
 	cd "$origin"
 }
 
-printpage_get() # $1=target_dir $2=guid $3=URL-suffix
+printpage_get() # $1=target_dir $2=guid $3=cacheid $4=URL-suffix
 {
 	local target_dir="$1"
 	local guid="$2"
-	local url_suffix="$3"
+	local id="$3"
+	local url_suffix="$4"
 	local url="http://www.geocaching.com/seek/cdpf.aspx?guid=$guid$url_suffix"
 
 	mkdir -p "$target_dir" || die "Failed to mkdir $target_dir"
@@ -66,6 +67,13 @@ printpage_get() # $1=target_dir $2=guid $3=URL-suffix
 	fi
 	sed -i -e 's/<head>/<head><meta http-equiv="Content-Type" content="text\/html; charset=UTF-8" \/>/' \
 		"$file" || die "Patching print page failed (2)"
+
+	# Creating a convenience link
+	clink="$target_dir/www.geocaching.com/seek/$id.html"
+	ln -s "$file" "$clink" || die "Failed to create link"
+
+	# Generate a PDF
+	wkhtmltopdf "$clink" "$target_dir/$id.pdf" || die "Failed to generate PDF"
 }
 
 for cache in "$@"; do
@@ -76,7 +84,7 @@ for cache in "$@"; do
 	id="$(gccom --usecookie "$cookie" --getcacheid "$guid")"
 
 	echo "Fetching webpages for $id..."
-	printpage_get "$web_dir/$id" "$guid" "&lc=10"
+	printpage_get "$web_dir/$id" "$guid" "$id" "&lc=10"
 
 	tmp_file="$tmp_dir/mainpage.html"
 	gccom --usecookie "$cookie" \
@@ -90,7 +98,7 @@ for cache in "$@"; do
 	rm -f "$tmp_file"
 
 	echo "Fetching printpages for $id..."
-	printpage_get "$print_dir/$id" "$guid" ""
+	printpage_get "$print_dir/$id" "$guid" "$id" ""
 
 #	echo "Loading $id in browser..."
 #	$BROWSER "$dlfile" 2>/dev/null >/dev/null &
