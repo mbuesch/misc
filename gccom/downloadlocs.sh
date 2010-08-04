@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 
 basedir="$(dirname "$0")"
 [ "${basedir:0:1}" = "/" ] || basedir="$PWD/$basedir"
@@ -9,17 +8,28 @@ loc_basedir="$basedir/locs"
 GCCOM="$basedir/gccom.py"
 ACCOUNT="$basedir/account"
 
+die()
+{
+	echo "$*"
+	exit 1
+}
+
+gccom()
+{
+	"$GCCOM" "$@" || die "gccom.py FAILED"
+}
 
 user="$(cat "$ACCOUNT" | cut -d ' ' -f 1)"
 password="$(cat "$ACCOUNT" | cut -d ' ' -f 2)"
-cookie="$($GCCOM --user "$user" --password "$password" --getcookie)"
+cookie="$(gccom --user "$user" --password "$password" --getcookie)"
 
-for cache in $@; do
+for cache in "$@"; do
 	echo "Downloading LOC for $cache..."
-	id="$($GCCOM --usecookie "$cookie" --getcacheid "$cache")"
-	mkdir -p "$loc_basedir"
+	id="$(gccom --usecookie "$cookie" --getcacheid "$cache")"
+	mkdir -p "$loc_basedir" || die "mkdir FAILED"
 	file="$loc_basedir/$id.loc"
-	$GCCOM --usecookie "$cookie" --file "$file" --getloc "$cache"
+	gccom --usecookie "$cookie" --file "$file" --getloc "$cache"
 done
+gccom --usecookie "$cookie" --logout
 
-$GCCOM --usecookie "$cookie" --logout
+exit 0

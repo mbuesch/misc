@@ -1,10 +1,15 @@
 #!/bin/bash
-set -e
 
 basedir="$(dirname "$0")"
 [ "${basedir:0:1}" = "/" ] || basedir="$PWD/$basedir"
 
-$basedir/downloadlocs.sh $@
-$basedir/downloadprint.sh $@
+if ! $basedir/downloadlocs.sh $@; then
+	echo "Failed to download LOCs"
+	exit 1
+fi
+if ! $basedir/downloadprint.sh $@; then
+	echo "Failed to download WEB"
+	exit 1
+fi
 
 exit 0
