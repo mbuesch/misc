@@ -102,9 +102,9 @@ class IntRange:
 		   self.maxValue == self.UNLIMITED:
 			return "unlimited"
 		if self.minValue == self.UNLIMITED:
-			return "< %s%d%s" % (self.prefix, self.maxValue, self.suffix)
+			return "<= %s%d%s" % (self.prefix, self.maxValue, self.suffix)
 		if self.maxValue == self.UNLIMITED:
-			return "> %s%d%s" % (self.prefix, self.minValue, self.suffix)
+			return ">= %s%d%s" % (self.prefix, self.minValue, self.suffix)
 		return "%s%d - %s%d%s" % (self.prefix, self.minValue,
 					  self.prefix, self.maxValue, self.suffix)
 
