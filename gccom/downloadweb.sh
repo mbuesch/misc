@@ -60,8 +60,10 @@ printpage_get() # $1=target_dir $2=guid $3=URL-suffix
 	fi
 
 	# Patch the page
-	sed -i -e 's/<\/body>/<script type="text\/javascript"> dht(); <\/script><\/body>/' \
-		"$file" || die "Patching print page failed (1)"
+	if [ "x$(grep -e '<div id="div_hint' "$file")" != "x" ]; then
+		sed -i -e 's/<\/body>/<script type="text\/javascript"> dht(); <\/script><\/body>/' \
+			"$file" || die "Patching print page failed (1)"
+	fi
 	sed -i -e 's/<head>/<head><meta http-equiv="Content-Type" content="text\/html; charset=UTF-8" \/>/' \
 		"$file" || die "Patching print page failed (2)"
 }
