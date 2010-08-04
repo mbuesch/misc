@@ -28,6 +28,7 @@ urlRegex		= r'[\w\.\-:&%=\?/]+'
 
 htmlBgColor		= "#D0D0E0"
 htmlTitleBgColor	= "#606090"
+htmlTableWidth		= 350
 
 opt_localstorage = None
 opt_offline = False
@@ -495,7 +496,7 @@ def createHtmlTableRow(fd, *columns):
 	fd.write('</tr>')
 
 def createHtmlTableEnd(fd):
-	fd.write('</table><br />')
+	fd.write('</table>')
 
 def htmlHistogramRow(fd, nrFound, count,
 		     entityIconUrl, entityText, entityUrl):
@@ -534,7 +535,7 @@ def createHtmlHistogram(fd, foundCaches, attribute,
 			byType[entityType].append(f)
 		else:
 			byType[entityType] = [f,]
-	createHtmlTableHeader(fd, headline, nrColumns=4, width=350)
+	createHtmlTableHeader(fd, headline, nrColumns=4, width=htmlTableWidth)
 	createHtmlTableRow(fd, "<b>" + htmlEscape(entityName) + "</b>",
 			   "<b>Count</b>", "<b>Percent</b>",
 			   "<b>Hist</b>")
@@ -572,7 +573,7 @@ def createHtmlStatsHistograms(fd, foundCaches):
 			    typeToIconUrl=lambda t: Geocache.getCacheTypeIconUrl(t),
 			    typeToText=lambda t: Geocache.getCacheTypeText(t),
 			    sortByCount=-1)
-	fd.write('</td><td valign="top">')
+	fd.write('<br /></td><td valign="top">')
 	createHtmlHistogram(fd, foundCaches, "containerType",
 			    "Container", "Finds by container type",
 			    typeToIconUrl=lambda t: Geocache.getContainerTypeIconUrl(t),
@@ -586,38 +587,55 @@ def createHtmlStatsHistograms(fd, foundCaches):
 			    typeToIconUrl=lambda t: Geocache.getDifficultyIconUrl(t),
 			    typeToText=lambda t: Geocache.getDifficultyText(t),
 			    listOfPossibleTypes=Geocache.LEVELS)
-	fd.write('</td><td valign="top">')
+	fd.write('<br /></td><td valign="top">')
 	createHtmlHistogram(fd, foundCaches, "terrain",
 			    "Terrain", "Finds by terrain level",
 			    typeToIconUrl=lambda t: Geocache.getTerrainIconUrl(t),
 			    typeToText=lambda t: Geocache.getTerrainText(t),
 			    listOfPossibleTypes=Geocache.LEVELS)
-	fd.write('</td>')
+	fd.write('<br /></td>')
 	fd.write('</tr><tr>')
 	fd.write('<td valign="top">')
 	createHtmlHistogram(fd, foundCaches, "foundWeekday",
 			    "Weekday", "Finds by day of week",
 			    typeToText=lambda t: FoundGeocache.getFoundWeekdayText(t),
 			    listOfPossibleTypes=range(7))
-	fd.write('</td><td valign="top">')
+
+	weekday = 0
+	weekend = 0
+	for c in foundCaches:
+		if c.foundWeekday in range(5):
+			weekday += 1
+		else:
+			weekend += 1
+	fd.write('<table border="0" style="width: %dpx; '
+		 'line-height: 20px; font-size: 13px;">' % htmlTableWidth)
+	fd.write('<tr><td style="background: %s; ">' % htmlBgColor)
+	fd.write('Weekend finds: %d (%.01f %%)<br />' %\
+		 (weekend, float(weekend) * 100.0 / len(foundCaches)))
+	fd.write('Weekday finds: %d (%.01f %%)<br />' %\
+		 (weekday, float(weekday) * 100.0 / len(foundCaches)))
+	fd.write('</td></tr></table>')
+
+	fd.write('<br /></td><td valign="top">')
 	createHtmlHistogram(fd, foundCaches, "homeDistanceRange",
 			    "Distance", "Finds by distance from home",
 			    typeToText=lambda t: str(t),
 			    listOfPossibleTypes=Geocache.distanceRanges)
-	fd.write('</td>')
+	fd.write('<br /></td>')
 	fd.write('</tr><tr>')
 	fd.write('<td valign="top">')
 	createHtmlHistogram(fd, foundCaches, "country",
 			    "Location", "Finds by cache location",
 			    typeToText=lambda t: t,
 			    sortByCount=-1)
-	fd.write('</td><td valign="top">')
+	fd.write('<br /></td><td valign="top">')
 	createHtmlHistogram(fd, foundCaches, "cacheOwner",
 			    "Cache owner", "Finds by cache owner (Top 10)",
 			    typeToText=lambda t: t,
 			    typeToTextUrl=lambda t: [x for x in foundCaches if x.cacheOwner == t][0].cacheOwnerUrl,
 			    sortByCount=-1, onlyTop=10)
-	fd.write('</td>')
+	fd.write('<br /></td>')
 	fd.write('</tr>')
 	fd.write('</table>')
 
