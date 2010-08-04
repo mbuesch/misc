@@ -16,6 +16,7 @@ import datetime
 import calendar
 import htmllib
 import cgi
+import math
 
 
 barTemplateUrl		= "http://img.geocaching.com/cache/log/f8db1278-8482-4aec-9dff-a16659e9d647.jpg"
@@ -31,6 +32,91 @@ htmlTitleBgColor	= "#606090"
 opt_localstorage = None
 opt_offline = False
 
+
+class Coordinate:
+	COORD_REGEX = r'([NSEOW])\s+(\d+)\s*°?\s+([\d+\.]+)\s*\'?'
+	COORD_REGEX_RAW = COORD_REGEX.replace('(', '').replace(')', '')
+
+	def __init__(self, latString, lonString):
+		self.lat = self.__parseCoord(latString)
+		self.lon = self.__parseCoord(lonString)
+
+	def __parseCoord(self, coordString):
+		try:
+			m = re.match(r'\s*' + self.COORD_REGEX + r'\s*',
+				     coordString.upper())
+			if not m:
+				raise ValueError
+			c = m.group(1)
+			if c == "O":
+				c = "E"
+			integer = int(m.group(2))
+			fractional = float(m.group(3))
+			multiplier = 1
+			if c in ("W", "S"):
+				multiplier = -1
+			return (float(integer) + fractional / 60.0) * multiplier
+		except ValueError:
+			raise gccom.GCException("Failed to parse coodinate")
+
+	def __distance(self, coord):
+		lat0 = math.radians(self.lat)
+		lon0 = math.radians(self.lon)
+		lat1 = math.radians(coord.lat)
+		lon1 = math.radians(coord.lon)
+		return math.acos((math.cos(lat0) * math.cos(lat1) * math.cos(lon1 - lon0)) +
+				 (math.sin(lat0) * math.sin(lat1)))
+
+	def distanceInKm(self, coord):
+		return self.__distance(coord) * 6371.0
+
+class IntRange:
+	UNLIMITED = "nan"
+
+	def __init__(self,
+		     minValue=UNLIMITED,
+		     maxValue=UNLIMITED,
+		     prefix="", suffix=""):
+		self.minValue = minValue
+		self.maxValue = maxValue
+		self.prefix = prefix
+		self.suffix = suffix
+
+	def valueIsInRange(self, val):
+		if self.minValue == self.UNLIMITED and\
+		   self.maxValue == self.UNLIMITED:
+			return True
+		if self.minValue == self.UNLIMITED:
+			return val <= self.maxValue
+		if self.maxValue == self.UNLIMITED:
+			return val >= self.minValue
+		return val >= self.minValue and val <= self.maxValue
+
+	def __eq__(self, intRange):
+		return self.minValue == intRange.minValue and\
+		       self.maxValue == intRange.maxValue
+
+	def __repr__(self):
+		if self.minValue == self.UNLIMITED and\
+		   self.maxValue == self.UNLIMITED:
+			return "unlimited"
+		if self.minValue == self.UNLIMITED:
+			return "< %s%d%s" % (self.prefix, self.maxValue, self.suffix)
+		if self.maxValue == self.UNLIMITED:
+			return "> %s%d%s" % (self.prefix, self.minValue, self.suffix)
+		return "%s%d - %s%d%s" % (self.prefix, self.minValue,
+					  self.prefix, self.maxValue, self.suffix)
+
+	def __hash__(self):
+		minVal = self.minValue
+		maxVal = self.maxValue
+		if minVal == self.UNLIMITED:
+			minVal = 0xFFFF
+		if maxVal == self.UNLIMITED:
+			maxVal = 0xFFFF
+		assert((minVal & ~0xFFFF) == 0)
+		assert((minVal & ~0xFFFF) == 0)
+		return minVal | (maxVal << 16)
 
 def mkdir_recursive(filename, mode=0755):
 	try:
@@ -121,10 +207,23 @@ class Geocache:
 	# Valid level values for "terrain" and "difficulty"
 	LEVELS = (10, 15, 20, 25, 30, 35, 40, 45, 50)
 
+	distanceRanges = (
+		IntRange(maxValue=9, suffix=" km"),
+		IntRange(minValue=10, maxValue=19, suffix=" km"),
+		IntRange(minValue=20, maxValue=29, suffix=" km"),
+		IntRange(minValue=30, maxValue=39, suffix=" km"),
+		IntRange(minValue=40, maxValue=49, suffix=" km"),
+		IntRange(minValue=50, maxValue=99, suffix=" km"),
+		IntRange(minValue=100, maxValue=199, suffix=" km"),
+		IntRange(minValue=200, maxValue=499, suffix=" km"),
+		IntRange(minValue=500, maxValue=999, suffix=" km"),
+		IntRange(minValue=1000, suffix=" km"),
+	)
+
 	def __init__(self, guid, gcId, hiddenDate,
 		     cacheType, containerType,
 		     difficulty, terrain, country,
-		     cacheOwner, cacheOwnerUrl):
+		     cacheOwner, cacheOwnerUrl, homeDistance):
 		self.guid = guid
 		self.gcId = gcId
 		self.hiddenDate = hiddenDate
@@ -135,6 +234,13 @@ class Geocache:
 		self.country = country
 		self.cacheOwner = cacheOwner
 		self.cacheOwnerUrl = cacheOwnerUrl
+		self.homeDistance = homeDistance
+		for rnge in self.distanceRanges:
+			if rnge.valueIsInRange(int(round(homeDistance))):
+				self.homeDistanceRange = rnge
+				break
+		else:
+			assert(False)
 
 	def __eq__(self, x):
 		return self.guid == x.guid
@@ -185,12 +291,12 @@ class FoundGeocache(Geocache):
 	def __init__(self, guid, gcId, hiddenDate,
 		     cacheType, containerType,
 		     difficulty, terrain, country,
-		     cacheOwner, cacheOwnerUrl,
+		     cacheOwner, cacheOwnerUrl, homeDistance,
 		     foundDate):
 		Geocache.__init__(self, guid, gcId, hiddenDate,
 				  cacheType, containerType,
 				  difficulty, terrain, country,
-				  cacheOwner, cacheOwnerUrl)
+				  cacheOwner, cacheOwnerUrl, homeDistance)
 		self.foundDate = foundDate
 		self.foundWeekday = calendar.weekday(foundDate.year,
 					foundDate.month, foundDate.day)
@@ -217,7 +323,7 @@ def localCacheinfoPut(itemId, requestId, info):
 		raise gccom.GCException("Failed to write local cache info " +\
 					itemId + "." + requestId)
 
-def buildFoundGeocacheInfo(gc, guid, foundDate):
+def buildFoundGeocacheInfo(gc, guid, foundDate, homeCoord):
 	# Download information and build a FoundGeocache object
 	raw = localCacheinfoGet(guid, "details")
 	if not raw:
@@ -292,14 +398,25 @@ def buildFoundGeocacheInfo(gc, guid, foundDate):
 		raise gccom.GCException("Cacheowner-URL regex failed on " + guid)
 	ownerUrl = m.group(1)
 
+	m = re.match(r'.*<span id="ctl00_ContentBody_LatLon" style="font-weight:bold;">'
+		     r'(' + Coordinate.COORD_REGEX_RAW + r')' +\
+		     r'(' + Coordinate.COORD_REGEX_RAW + r')' +\
+		     r'</span>.*',
+		     raw, re.DOTALL)
+	if not m:
+		raise gccom.GCException("Cache location regex failed on " + guid)
+	lat = m.group(1)
+	lon = m.group(2)
+	homeDistance = Coordinate(latString=lat, lonString=lon).distanceInKm(homeCoord)
+
 	return FoundGeocache(guid=guid, gcId=gcId, hiddenDate=hiddenDate,
 			     cacheType=cacheType, containerType=containerType,
 			     difficulty=difficulty, terrain=terrain,
 			     country=country, cacheOwner=owner,
-			     cacheOwnerUrl=ownerUrl,
+			     cacheOwnerUrl=ownerUrl, homeDistance=homeDistance,
 			     foundDate=foundDate)
 
-def getAllFound(gc):
+def getAllFound(gc, homeCoord):
 	# Returns a list of FoundGeocache objects
 	print "Fetching \"found-it\" summary..."
 	if opt_offline:
@@ -329,9 +446,29 @@ def getAllFound(gc):
 			fdate = gcStringToDate(foundDate)
 		except (ValueError):
 			raise gccom.GCException("Failed to parse date " + foundDate)
-		found.append(buildFoundGeocacheInfo(gc, foundGuid, fdate))
+		found.append(buildFoundGeocacheInfo(gc, foundGuid, fdate, homeCoord))
 	found = uniquifyList(found)
 	return found
+
+def getHomeCoordinates(gc):
+	print "Fetching home coordinates..."
+	if opt_offline:
+		accountHome = localCacheinfoGet("account", "home")
+		if not accountHome:
+			raise gccom.GCException("Offline: Failed to get cached home coordinate")
+	else:
+		accountHome = gc.getPage("/account/default.aspx")
+		localCacheinfoPut("account", "home", accountHome)
+	m = re.match(r'.*Home Location \((' +\
+		     Coordinate.COORD_REGEX_RAW + r')\s*(' +\
+		     Coordinate.COORD_REGEX_RAW + r')\)</a>.*',
+		     accountHome, re.DOTALL)
+	if not m:
+		raise gccom.GCException("Failed to parse home coordinates")
+	lat = m.group(1)
+	lon = m.group(2)
+	homeCoord = Coordinate(latString=lat, lonString=lon)
+	return homeCoord
 
 def createHtmlTableHeader(fd, text, nrColumns, width=-1):
 	styleWidth = ""
@@ -461,13 +598,12 @@ def createHtmlStatsHistograms(fd, foundCaches):
 	createHtmlHistogram(fd, foundCaches, "foundWeekday",
 			    "Weekday", "Finds by day of week",
 			    typeToText=lambda t: FoundGeocache.getFoundWeekdayText(t),
-			    listOfPossibleTypes=[x for x in range(7)])
+			    listOfPossibleTypes=range(7))
 	fd.write('</td><td valign="top">')
-	createHtmlHistogram(fd, foundCaches, "cacheOwner",
-			    "Cache owner", "Finds by cache owner (Top 10)",
-			    typeToText=lambda t: t,
-			    typeToTextUrl=lambda t: [x for x in foundCaches if x.cacheOwner == t][0].cacheOwnerUrl,
-			    sortByCount=-1, onlyTop=10)
+	createHtmlHistogram(fd, foundCaches, "homeDistanceRange",
+			    "Distance", "Finds by distance from home",
+			    typeToText=lambda t: str(t),
+			    listOfPossibleTypes=Geocache.distanceRanges)
 	fd.write('</td>')
 	fd.write('</tr><tr>')
 	fd.write('<td valign="top">')
@@ -475,6 +611,12 @@ def createHtmlStatsHistograms(fd, foundCaches):
 			    "Location", "Finds by cache location",
 			    typeToText=lambda t: t,
 			    sortByCount=-1)
+	fd.write('</td><td valign="top">')
+	createHtmlHistogram(fd, foundCaches, "cacheOwner",
+			    "Cache owner", "Finds by cache owner (Top 10)",
+			    typeToText=lambda t: t,
+			    typeToTextUrl=lambda t: [x for x in foundCaches if x.cacheOwner == t][0].cacheOwnerUrl,
+			    sortByCount=-1, onlyTop=10)
 	fd.write('</td>')
 	fd.write('</tr>')
 	fd.write('</table>')
@@ -531,7 +673,8 @@ def createStats(user, password, outdir):
 	if not opt_offline:
 		gc = gccom.GC(user, password)
 
-	found = getAllFound(gc)
+	homeCoord = getHomeCoordinates(gc)
+	found = getAllFound(gc, homeCoord)
 	createHtmlStats(found, outdir)
 
 	if not opt_offline:
