@@ -24,6 +24,8 @@ password="$(cat "$ACCOUNT" | cut -d ' ' -f 2)"
 cookie="$(gccom --user "$user" --password "$password" --getcookie)"
 
 for cache in "$@"; do
+	[ "${cache:0:2}" != "--" ] || continue # ignore options starting with --
+
 	echo "Downloading LOC for $cache..."
 	id="$(gccom --usecookie "$cookie" --getcacheid "$cache")"
 	mkdir -p "$loc_basedir" || die "mkdir FAILED"

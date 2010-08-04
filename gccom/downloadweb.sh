@@ -9,7 +9,6 @@ tmp_dir="$basedir/web.tmp"
 
 GCCOM="$basedir/gccom.py"
 ACCOUNT="$basedir/account"
-BROWSER="konqueror"
 
 die()
 {
@@ -25,6 +24,7 @@ gccom()
 user="$(cat "$ACCOUNT" | cut -d ' ' -f 1)"
 password="$(cat "$ACCOUNT" | cut -d ' ' -f 2)"
 cookie="$(gccom --user "$user" --password "$password" --getcookie)"
+noprint=0
 rm -rf "$tmp_dir"
 mkdir "$tmp_dir" || die "Failed to mkdir $tmp_dir"
 
@@ -52,6 +52,7 @@ printpage_get() # $1=target_dir $2=guid $3=cacheid $4=URL-suffix
 	local url_suffix="$4"
 	local url="http://www.geocaching.com/seek/cdpf.aspx?guid=$guid$url_suffix"
 
+	rm -rf "$target_dir"
 	mkdir -p "$target_dir" || die "Failed to mkdir $target_dir"
 	http_download_recursive "$target_dir" "$url"
 
@@ -77,6 +78,11 @@ printpage_get() # $1=target_dir $2=guid $3=cacheid $4=URL-suffix
 }
 
 for cache in "$@"; do
+	if [ "$cache" = "--noprint" ]; then
+		noprint=1
+		continue
+	fi
+
 	# Convert input to GUID.
 	guid="$(python -c "print \"$cache\"[-36:]")"
 
@@ -86,6 +92,7 @@ for cache in "$@"; do
 	echo "Fetching webpages for $id..."
 	printpage_get "$web_dir/$id" "$guid" "$id" "&lc=10"
 
+	# Fetch spoiler images
 	tmp_file="$tmp_dir/mainpage.html"
 	gccom --usecookie "$cookie" \
 		--file "$tmp_file" \
@@ -100,8 +107,15 @@ for cache in "$@"; do
 	echo "Fetching printpages for $id..."
 	printpage_get "$print_dir/$id" "$guid" "$id" ""
 
-#	echo "Loading $id in browser..."
-#	$BROWSER "$dlfile" 2>/dev/null >/dev/null &
+	if [ $noprint -eq 0 ]; then
+		echo "Sending $id to printer..."
+		pdf="$print_dir/$id/$id.pdf"
+#		ps="$tmp_dir/$id.ps"
+#		pdf2ps "$pdf" "$ps" || die "Failed to generate PS"
+		lpr -o "Duplex=DuplexNoTumble,CAPT=SFine" \
+			"$pdf" || die "Failed to print $id"
+#		rm "$ps" || die "Failed to delete $ps"
+	fi
 done
 
 echo "logout."
