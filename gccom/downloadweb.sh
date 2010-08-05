@@ -110,11 +110,10 @@ for cache in "$@"; do
 	if [ $noprint -eq 0 ]; then
 		echo "Sending $id to printer..."
 		pdf="$print_dir/$id/$id.pdf"
-#		ps="$tmp_dir/$id.ps"
-#		pdf2ps "$pdf" "$ps" || die "Failed to generate PS"
-		lpr -o "Duplex=DuplexNoTumble,CAPT=SFine" \
-			"$pdf" || die "Failed to print $id"
-#		rm "$ps" || die "Failed to delete $ps"
+		lp -oDuplex=DuplexNoTumble \
+		   -osides=two-sided-long-edge \
+		   -oCAPT=SFine \
+		   "$pdf" || die "Failed to print $id"
 	fi
 done
 
