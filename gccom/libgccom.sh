@@ -1,5 +1,10 @@
 GCCOM="$basedir/gccom.py"
+GCSTATS="$basedir/gcstats.py"
 ACCOUNT="$basedir/account"
+
+user="$(cat "$ACCOUNT" | cut -d ' ' -f 1)"
+password="$(cat "$ACCOUNT" | cut -d ' ' -f 2)"
+
 
 die()
 {
@@ -14,8 +19,6 @@ gccom()
 
 gccom_login()
 {
-	local user="$(cat "$ACCOUNT" | cut -d ' ' -f 1)"
-	local password="$(cat "$ACCOUNT" | cut -d ' ' -f 2)"
 	cookie="$(gccom --user "$user" --password "$password" --getcookie)"
 }
 

@@ -1,19 +1,12 @@
 #!/bin/bash
 # Geocaching.com - Automatic profile update
-set -e
 
 basedir="$(dirname "$0")"
 [ "${basedir:0:1}" = "/" ] || basedir="$PWD/$basedir"
 
-GCCOM="$basedir/gccom.py"
-GCSTATS="$basedir/gcstats.py"
-ACCOUNT="$basedir/account"
-
-user="$(cat "$ACCOUNT" | cut -d ' ' -f 1)"
-password="$(cat "$ACCOUNT" | cut -d ' ' -f 2)"
-
-
 html_template="$basedir/gcstats.html"
+
+. "$basedir/libgccom.sh"
 
 template_sha1sum()
 {
@@ -24,7 +17,8 @@ old_stats_sha1=
 [ -f "$html_template" ] && old_stats_sha1="$(template_sha1sum)"
 
 echo "Generating statistics..."
-$GCSTATS --user "$user" --password "$password" -o "$basedir"
+$GCSTATS --user "$user" --password "$password" -o "$basedir" || \
+	die "Failed to generate statistics"
 echo
 
 new_stats_sha1="$(template_sha1sum)"
@@ -32,6 +26,8 @@ if [ "$new_stats_sha1" = "$old_stats_sha1" ]; then
 	echo "Upload not necessary. Profile data unchanged."
 else
 	echo "Uploading profile..."
-	$GCCOM --user "$user" --password "$password" -f "$html_template" --setprofile
+	$GCCOM --user "$user" --password "$password" -f "$html_template" --setprofile || \
+		die "Failed to upload statistics"
 fi
 
+exit 0
