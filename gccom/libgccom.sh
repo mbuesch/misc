@@ -50,5 +50,7 @@ gccom_download() # $1=target_dir $2=URL
 
 extract_guid() # $1=string
 {
-	python -c "print \"$1\"[-36:]" || die "Failed to extract GUID"
+	code="import gccom, re;"
+	code="$code print re.match(r'.*(' + gccom.guidRegex + r').*', r'$1', re.DOTALL).group(1)"
+	python -c "$code" || die "Failed to extract GUID"
 }
