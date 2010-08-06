@@ -652,14 +652,12 @@ def createHtmlStatsHistograms(fd, foundCaches):
 			weekday += 1
 		else:
 			weekend += 1
-	fd.write('<table border="0" style="width: %dpx; '
-		 'line-height: 20px; font-size: 13px;">' % htmlTableWidth)
-	fd.write('<tr><td style="background: %s; ">' % htmlBgColor)
-	fd.write('Weekend finds: %d (%.01f %%)<br />' %\
+	createHtmlTableHeader(fd, nrColumns=2, width=htmlTableWidth)
+	createHtmlTableRow(fd, 'Weekend finds: ', '%d (%.01f %%)' %\
 		 (weekend, float(weekend) * 100.0 / len(foundCaches)))
-	fd.write('Weekday finds: %d (%.01f %%)<br />' %\
+	createHtmlTableRow(fd, 'Weekday finds: ', '%d (%.01f %%)' %\
 		 (weekday, float(weekday) * 100.0 / len(foundCaches)))
-	fd.write('</td></tr></table>')
+	createHtmlTableEnd(fd)
 
 	fd.write('<br /></td><td valign="top">')
 	createHtmlHistogram(fd, foundCaches, "homeDistanceRange",
