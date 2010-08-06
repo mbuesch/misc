@@ -322,13 +322,9 @@ class FoundGeocache(Geocache):
 	def getFoundWeekdayText(foundWeekday):
 		return calendar.day_name[foundWeekday]
 
-class PlacedGeocache(Geocache):
+class HiddenGeocache(Geocache):
 	def __init__(self, guid):
 		Geocache.__init__(self, guid)
-		self.placedDate = None
-
-	def setPlacedDate(self, placedDate):
-		self.placedDate = placedDate
 
 def localCacheinfoGet(itemId, requestId):
 	try:
@@ -474,29 +470,29 @@ def getAllFound(gc, homeCoord):
 	found = uniquifyList(found)
 	return found
 
-def getAllPlaced(gc, homeCoord):
-	# Returns a list of PlacedGeocache objects
-	print "Fetching placed geocaches..."
+def getAllHidden(gc, homeCoord):
+	# Returns a list of HiddenGeocache objects
+	print "Fetching hidden geocaches..."
 	if opt_offline:
-		placedIndex = localCacheinfoGet("placed", "index")
-		if not placedIndex:
-			raise gccom.GCException("Offline: Failed to get cached placed-index")
+		hiddenIndex = localCacheinfoGet("hidden", "index")
+		if not hiddenIndex:
+			raise gccom.GCException("Offline: Failed to get cached hidden-index")
 	else:
-		placedIndex = gc.getPage("/my/owned.aspx")
-		localCacheinfoPut("placed", "index", placedIndex)
+		hiddenIndex = gc.getPage("/my/owned.aspx")
+		localCacheinfoPut("hidden", "index", hiddenIndex)
 	matches = re.findall(r'<td><a href="'
 			     r'http://www\.geocaching\.com/seek/cache_details\.aspx\?guid='
 			     r'(' + gccom.guidRegex + r')">[\w\s\-,&#;]+'
 			     r'</a></td>\s*<td>Found: \d\d/\d\d/\d\d\d\d</td>',
-			     placedIndex, re.DOTALL)
-	print "Got %d placed caches." % len(matches)
-	placed = []
+			     hiddenIndex, re.DOTALL)
+	print "Got %d hidden caches." % len(matches)
+	hidden = []
 	for guid in matches:
-		cache = PlacedGeocache(guid)
+		cache = HiddenGeocache(guid)
 		fetchGenericGeocacheInfo(gc, cache, homeCoord)
-		placed.append(cache)
-	placed = uniquifyList(placed)
-	return placed
+		hidden.append(cache)
+	assert(len(hidden) == len(uniquifyList(hidden)))
+	return hidden
 
 def getHomeCoordinates(gc):
 	print "Fetching home coordinates..."
@@ -518,18 +514,19 @@ def getHomeCoordinates(gc):
 	homeCoord = Coordinate(latString=lat, lonString=lon)
 	return homeCoord
 
-def createHtmlTableHeader(fd, text, nrColumns, width=-1):
+def createHtmlTableHeader(fd, nrColumns, text=None, width=-1):
 	styleWidth = ""
 	if width >= 0:
 		styleWidth = "width: %dpx;" % width
 	fd.write('<table border="0" style="%s">' % styleWidth)
-	fd.write('<th colspan="%d" ' \
-		 'style="%s background: %s; font-weight: bold; ' \
-		 'line-height: 20px; font-size: 13px; ' \
-		 'color: white; text-align: center; ">' %\
-		 (nrColumns, styleWidth, htmlTitleBgColor))
-	fd.write(htmlEscape(text))
-	fd.write('</th>')
+	if text:
+		fd.write('<th colspan="%d" ' \
+			 'style="%s background: %s; font-weight: bold; ' \
+			 'line-height: 20px; font-size: 13px; ' \
+			 'color: white; text-align: center; ">' %\
+			 (nrColumns, styleWidth, htmlTitleBgColor))
+		fd.write(htmlEscape(text))
+		fd.write('</th>')
 
 def createHtmlTableRow(fd, *columns):
 	style = 'text-align: left; background: %s; ' % htmlBgColor +\
@@ -582,7 +579,7 @@ def createHtmlHistogram(fd, foundCaches, attribute,
 			byType[entityType].append(f)
 		else:
 			byType[entityType] = [f,]
-	createHtmlTableHeader(fd, headline, nrColumns=4, width=htmlTableWidth)
+	createHtmlTableHeader(fd, nrColumns=4, text=headline, width=htmlTableWidth)
 	createHtmlTableRow(fd, "<b>" + htmlEscape(entityName) + "</b>",
 			   "<b>Count</b>", "<b>Percent</b>",
 			   "<b>Hist</b>")
@@ -686,15 +683,13 @@ def createHtmlStatsHistograms(fd, foundCaches):
 	fd.write('</tr>')
 	fd.write('</table>')
 
-def createHtmlStatsHeader(fd, foundCaches):
-	fd.write('<table border="0" style="text-align: left; ' \
-		 'background: %s;' % htmlBgColor +\
-		 'font-size: 16px; color: black; ">')
-	fd.write('<tr>')
-	fd.write('<td>Total number of unique cache finds:</td>')
-	fd.write('<td style="font-weight: bold; ">%d</td>' % len(foundCaches))
-	fd.write('</tr>')
-	fd.write('</table>')
+def createHtmlStatsHeader(fd, foundCaches, hiddenCaches):
+	createHtmlTableHeader(fd, 2)
+	createHtmlTableRow(fd, "Total number of unique cache finds:",
+			   "<b>%d</b>" % len(foundCaches))
+	createHtmlTableRow(fd, "Total number of hidden caches:",
+			   "<b>%d</b>" % len(hiddenCaches))
+	createHtmlTableEnd(fd)
 	fd.write('<br />')
 
 def createHtmlStatsMisc(fd, foundCaches):
@@ -719,7 +714,7 @@ def createHtmlStatsMisc(fd, foundCaches):
 		leastPerDay = min(len(foundDates[d]), leastPerDay)
 	avgCachesPerDay = float(len(foundCaches)) / nrCacheDays
 
-	createHtmlTableHeader(fd, "Miscellaneous statistics", nrColumns=2)
+	createHtmlTableHeader(fd, nrColumns=2, text="Miscellaneous statistics")
 	createHtmlTableRow(fd, "Number of caching days:",
 			   "<b>%d caching days out of %d calendar days (%.01f %%)</b>" % \
 			   (nrCacheDays, nrCalendarDays,
@@ -732,12 +727,12 @@ def createHtmlStatsMisc(fd, foundCaches):
 			   "<b>%d</b>" % leastPerDay)
 	createHtmlTableEnd(fd)
 
-def createHtmlStats(foundCaches, outdir):
+def createHtmlStats(foundCaches, hiddenCaches, outdir):
 	print "Generating HTML statistics..."
 	try:
 		fd = file(outdir + "/gcstats.html", "w")
 
-		createHtmlStatsHeader(fd, foundCaches)
+		createHtmlStatsHeader(fd, foundCaches, hiddenCaches)
 		createHtmlStatsHistograms(fd, foundCaches)
 		createHtmlStatsMisc(fd, foundCaches)
 
@@ -756,8 +751,8 @@ def createStats(user, password, outdir):
 
 	homeCoord = getHomeCoordinates(gc)
 	found = getAllFound(gc, homeCoord)
-	placed = getAllPlaced(gc, homeCoord)
-	createHtmlStats(found, outdir)
+	hidden = getAllHidden(gc, homeCoord)
+	createHtmlStats(found, hidden, outdir)
 
 	if not opt_offline:
 		gc.logout()
