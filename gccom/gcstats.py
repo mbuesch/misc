@@ -514,35 +514,42 @@ def getHomeCoordinates(gc):
 	homeCoord = Coordinate(latString=lat, lonString=lon)
 	return homeCoord
 
-def createHtmlTableHeader(fd, nrColumns, text=None, width=-1):
-	styleWidth = ""
-	if width >= 0:
-		styleWidth = "width: %dpx;" % width
-	fd.write('<table border="0" style="%s">' % styleWidth)
-	if text:
-		fd.write('<th colspan="%d" ' \
-			 'style="%s background: %s; font-weight: bold; ' \
-			 'line-height: 20px; font-size: 13px; ' \
-			 'color: white; text-align: center; ">' %\
-			 (nrColumns, styleWidth, htmlTitleBgColor))
-		fd.write(htmlEscape(text))
-		fd.write('</th>')
+class HtmlTable:
+	def __init__(self, fd, nrColumns, headline=None, width=-1):
+		self.fd = fd
+		self.nrColumns = nrColumns
+		self.width = width
 
-def createHtmlTableRow(fd, *columns):
-	style = 'text-align: left; background: %s; ' % htmlBgColor +\
-		'font-size: 13px; color: black; '
-	fd.write('<tr style="%s">' % style)
-	for column in columns:
-		if not column.startswith('<td'):
-			fd.write('<td>')
-		fd.write(column)
-		fd.write('</td>')
-	fd.write('</tr>')
+		styleWidth = ""
+		if width >= 0:
+			styleWidth = "width: %dpx;" % width
+		fd.write('<table border="0" style="%s">' % styleWidth)
+		if headline:
+			fd.write('<th colspan="%d" ' \
+				 'style="%s background: %s; font-weight: bold; ' \
+				 'line-height: 20px; font-size: 13px; ' \
+				 'color: white; text-align: center; ">' %\
+				 (nrColumns, styleWidth, htmlTitleBgColor))
+			fd.write(htmlEscape(headline))
+			fd.write('</th>')
 
-def createHtmlTableEnd(fd):
-	fd.write('</table>')
+	def addRow(self, *columns):
+		assert(len(columns) == self.nrColumns)
+		style = 'text-align: left; background: %s; ' % htmlBgColor +\
+			'font-size: 13px; color: black; '
+		self.fd.write('<tr style="%s">' % style)
+		for column in columns:
+			if not column.startswith('<td'):
+				self.fd.write('<td>')
+			self.fd.write(column)
+			self.fd.write('</td>')
+		self.fd.write('</tr>')
 
-def htmlHistogramRow(fd, nrFound, count,
+	def end(self):
+		self.fd.write('</table>')
+		self.fd = None
+
+def htmlHistogramRow(tab, nrFound, count,
 		     entityIconUrl, entityText, entityUrl):
 	percent = float(count) * 100.0 / float(nrFound)
 	col0 = ''
@@ -561,7 +568,7 @@ def htmlHistogramRow(fd, nrFound, count,
 			(barTemplateUrl, max(int(percent), 1))
 	else:
 		col3 += '&nbsp;'
-	createHtmlTableRow(fd, col0, col1, col2, col3)
+	tab.addRow(col0, col1, col2, col3)
 
 def createHtmlHistogram(fd, foundCaches, attribute,
 			entityName, headline,
@@ -579,10 +586,10 @@ def createHtmlHistogram(fd, foundCaches, attribute,
 			byType[entityType].append(f)
 		else:
 			byType[entityType] = [f,]
-	createHtmlTableHeader(fd, nrColumns=4, text=headline, width=htmlTableWidth)
-	createHtmlTableRow(fd, "<b>" + htmlEscape(entityName) + "</b>",
-			   "<b>Count</b>", "<b>Percent</b>",
-			   "<b>Hist</b>")
+	tab = HtmlTable(fd, nrColumns=4, headline=headline, width=htmlTableWidth)
+	tab.addRow("<b>" + htmlEscape(entityName) + "</b>",
+		   "<b>Count</b>", "<b>Percent</b>",
+		   "<b>Hist</b>")
 	types = byType.keys()
 	if sortByCount:
 		# Sort by "Count" column
@@ -598,15 +605,15 @@ def createHtmlHistogram(fd, foundCaches, attribute,
 		if onlyTop and rows >= onlyTop:
 			othersCount += count
 			continue
-		htmlHistogramRow(fd, len(foundCaches), count,
+		htmlHistogramRow(tab, len(foundCaches), count,
 				 typeToIconUrl(t),
 				 typeToText(t),
 				 typeToTextUrl(t))
 		rows += 1
 	if othersCount:
-		htmlHistogramRow(fd, len(foundCaches), othersCount,
+		htmlHistogramRow(tab, len(foundCaches), othersCount,
 				 None, "<others>", None)
-	createHtmlTableEnd(fd)
+	tab.end()
 
 def createHtmlStatsHistograms(fd, foundCaches):
 	fd.write('<table border="0">')
@@ -652,12 +659,12 @@ def createHtmlStatsHistograms(fd, foundCaches):
 			weekday += 1
 		else:
 			weekend += 1
-	createHtmlTableHeader(fd, nrColumns=2, width=htmlTableWidth)
-	createHtmlTableRow(fd, 'Weekend finds: ', '%d (%.01f %%)' %\
-		 (weekend, float(weekend) * 100.0 / len(foundCaches)))
-	createHtmlTableRow(fd, 'Weekday finds: ', '%d (%.01f %%)' %\
-		 (weekday, float(weekday) * 100.0 / len(foundCaches)))
-	createHtmlTableEnd(fd)
+	tab = HtmlTable(fd, nrColumns=2, width=htmlTableWidth)
+	tab.addRow('Weekend finds: ', '%d (%.01f %%)' %\
+		   (weekend, float(weekend) * 100.0 / len(foundCaches)))
+	tab.addRow('Weekday finds: ', '%d (%.01f %%)' %\
+		   (weekday, float(weekday) * 100.0 / len(foundCaches)))
+	tab.end()
 
 	fd.write('<br /></td><td valign="top">')
 	createHtmlHistogram(fd, foundCaches, "homeDistanceRange",
@@ -682,12 +689,12 @@ def createHtmlStatsHistograms(fd, foundCaches):
 	fd.write('</table>')
 
 def createHtmlStatsHeader(fd, foundCaches, hiddenCaches):
-	createHtmlTableHeader(fd, 2)
-	createHtmlTableRow(fd, "Total number of unique cache finds:",
-			   "<b>%d</b>" % len(foundCaches))
-	createHtmlTableRow(fd, "Total number of hidden caches:",
-			   "<b>%d</b>" % len(hiddenCaches))
-	createHtmlTableEnd(fd)
+	tab = HtmlTable(fd, nrColumns=2)
+	tab.addRow("Total number of unique cache finds:",
+		   "<b>%d</b>" % len(foundCaches))
+	tab.addRow("Total number of hidden caches:",
+		   "<b>%d</b>" % len(hiddenCaches))
+	tab.end()
 	fd.write('<br />')
 
 def createHtmlStatsMisc(fd, foundCaches):
@@ -712,18 +719,18 @@ def createHtmlStatsMisc(fd, foundCaches):
 		leastPerDay = min(len(foundDates[d]), leastPerDay)
 	avgCachesPerDay = float(len(foundCaches)) / nrCacheDays
 
-	createHtmlTableHeader(fd, nrColumns=2, text="Miscellaneous statistics")
-	createHtmlTableRow(fd, "Number of caching days:",
-			   "<b>%d caching days out of %d calendar days (%.01f %%)</b>" % \
-			   (nrCacheDays, nrCalendarDays,
-			    float(nrCacheDays) * 100.0 / float(nrCalendarDays)))
-	createHtmlTableRow(fd, "Average number of cache finds per caching day:",
-			   "<b>%.1f</b>" % avgCachesPerDay)
-	createHtmlTableRow(fd, "Largest number of cache finds on one caching day:",
-			   "<b>%d</b>" % mostPerDay)
-	createHtmlTableRow(fd, "Lowest number of cache finds on one caching day:",
-			   "<b>%d</b>" % leastPerDay)
-	createHtmlTableEnd(fd)
+	tab = HtmlTable(fd, nrColumns=2, headline="Miscellaneous statistics")
+	tab.addRow("Number of caching days:",
+		   "<b>%d caching days out of %d calendar days (%.01f %%)</b>" % \
+		   (nrCacheDays, nrCalendarDays,
+		    float(nrCacheDays) * 100.0 / float(nrCalendarDays)))
+	tab.addRow("Average number of cache finds per caching day:",
+		   "<b>%.1f</b>" % avgCachesPerDay)
+	tab.addRow("Largest number of cache finds on one caching day:",
+		   "<b>%d</b>" % mostPerDay)
+	tab.addRow("Lowest number of cache finds on one caching day:",
+		   "<b>%d</b>" % leastPerDay)
+	tab.end()
 
 def createHtmlStats(foundCaches, hiddenCaches, outdir):
 	print "Generating HTML statistics..."
