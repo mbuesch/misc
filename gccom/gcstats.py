@@ -221,23 +221,42 @@ class Geocache:
 		IntRange(minValue=1000, suffix=" km"),
 	)
 
-	def __init__(self, guid, gcId, hiddenDate,
-		     cacheType, containerType,
-		     difficulty, terrain, country,
-		     cacheOwner, cacheOwnerUrl, homeDistance):
+	def __init__(self, guid):
 		self.guid = guid
+		self.gcId = None
+		self.hiddenDate = None
+		self.cacheType = None
+		self.containerType = None
+		self.difficulty = None
+		self.terrain = None
+		self.country = None
+		self.cacheOwner = None
+		self.cacheOwnerUrl = None
+		self.homeDistance = None
+		self.homeDistanceRange = None
+
+	def setGcID(self, gcId):
 		self.gcId = gcId
+	def setHiddenDate(self, hiddenDate):
 		self.hiddenDate = hiddenDate
+	def setCacheType(self, cacheType):
 		self.cacheType = cacheType
+	def setContainerType(self, containerType):
 		self.containerType = containerType
+	def setDifficulty(self, difficulty):
 		self.difficulty = difficulty
+	def setTerrain(self, terrain):
 		self.terrain = terrain
+	def setCountry(self, country):
 		self.country = country
-		self.cacheOwner = cacheOwner
-		self.cacheOwnerUrl = cacheOwnerUrl
-		self.homeDistance = homeDistance
+	def setCacheOwner(self, owner):
+		self.cacheOwner = owner
+	def setCacheOwnerUrl(self, url):
+		self.cacheOwnerUrl = url
+	def setHomeDistance(self, distance):
+		self.homeDistance = distance
 		for rnge in self.distanceRanges:
-			if rnge.valueIsInRange(int(round(homeDistance))):
+			if rnge.valueIsInRange(int(round(distance))):
 				self.homeDistanceRange = rnge
 				break
 		else:
@@ -289,15 +308,12 @@ class Geocache:
 		return Geocache.containerTypeToTextMap[containerType]
 
 class FoundGeocache(Geocache):
-	def __init__(self, guid, gcId, hiddenDate,
-		     cacheType, containerType,
-		     difficulty, terrain, country,
-		     cacheOwner, cacheOwnerUrl, homeDistance,
-		     foundDate):
-		Geocache.__init__(self, guid, gcId, hiddenDate,
-				  cacheType, containerType,
-				  difficulty, terrain, country,
-				  cacheOwner, cacheOwnerUrl, homeDistance)
+	def __init__(self, guid):
+		Geocache.__init__(self, guid)
+		self.foundDate = None
+		self.foundWeekday = None
+
+	def setFoundDate(self, foundDate):
 		self.foundDate = foundDate
 		self.foundWeekday = calendar.weekday(foundDate.year,
 					foundDate.month, foundDate.day)
@@ -305,6 +321,14 @@ class FoundGeocache(Geocache):
 	@staticmethod
 	def getFoundWeekdayText(foundWeekday):
 		return calendar.day_name[foundWeekday]
+
+class PlacedGeocache(Geocache):
+	def __init__(self, guid):
+		Geocache.__init__(self, guid)
+		self.placedDate = None
+
+	def setPlacedDate(self, placedDate):
+		self.placedDate = placedDate
 
 def localCacheinfoGet(itemId, requestId):
 	try:
@@ -324,8 +348,8 @@ def localCacheinfoPut(itemId, requestId, info):
 		raise gccom.GCException("Failed to write local cache info " +\
 					itemId + "." + requestId)
 
-def buildFoundGeocacheInfo(gc, guid, foundDate, homeCoord):
-	# Download information and build a FoundGeocache object
+def fetchGenericGeocacheInfo(gc, cache, homeCoord):
+	guid = cache.guid
 	raw = localCacheinfoGet(guid, "details")
 	if not raw:
 		print "Fetching cache details for", guid
@@ -354,15 +378,17 @@ def buildFoundGeocacheInfo(gc, guid, foundDate, homeCoord):
 			"virtual"	: Geocache.CONTAINER_VIRTUAL,
 			"other"		: Geocache.CONTAINER_OTHER,
 		}
-		gcId = m.group(1)
-		owner = htmlUnescape(m.group(2)).lower()
-		containerType = containerMap[m.group(3).lower()]
+		cache.setGcID(m.group(1))
+		cache.setCacheOwner(htmlUnescape(m.group(2)).lower())
+		cache.setContainerType(containerMap[m.group(3).lower()])
 		difficulty = int(float(m.group(4)) * 10)
 		terrain = int(float(m.group(5)) * 10)
 		if difficulty not in Geocache.LEVELS or\
 		   terrain not in Geocache.LEVELS:
 			raise ValueError
-		country = htmlUnescape(m.group(6))
+		cache.setDifficulty(difficulty)
+		cache.setTerrain(terrain)
+		cache.setCountry(htmlUnescape(m.group(6)))
 	except (ValueError, KeyError):
 		raise gccom.GCException("Failed to parse detail info of " + guid)
 
@@ -371,7 +397,7 @@ def buildFoundGeocacheInfo(gc, guid, foundDate, homeCoord):
 	if not m:
 		raise gccom.GCException("Hidden info regex failed on " + guid)
 	try:
-		hiddenDate = gcStringToDate(m.group(1))
+		cache.setHiddenDate(gcStringToDate(m.group(1)))
 	except (ValueError):
 		raise gccom.GCException("Failed to parse Hidden date of " + guid)
 
@@ -388,7 +414,7 @@ def buildFoundGeocacheInfo(gc, guid, foundDate, homeCoord):
 			"earthcache"		: Geocache.CACHE_EARTH,
 			"virtual cache"		: Geocache.CACHE_VIRTUAL,
 		}
-		cacheType = typeMap[m.group(1).lower()]
+		cache.setCacheType(typeMap[m.group(1).lower()])
 	except (KeyError):
 		raise gccom.GCException("Unknown cache type: " + m.group(1))
 
@@ -397,7 +423,7 @@ def buildFoundGeocacheInfo(gc, guid, foundDate, homeCoord):
 		     raw, re.DOTALL)
 	if not m:
 		raise gccom.GCException("Cacheowner-URL regex failed on " + guid)
-	ownerUrl = m.group(1)
+	cache.setCacheOwnerUrl(m.group(1))
 
 	m = re.match(r'.*<span id="ctl00_ContentBody_LatLon" style="font-weight:bold;">'
 		     r'(' + Coordinate.COORD_REGEX_RAW + r')' +\
@@ -408,18 +434,12 @@ def buildFoundGeocacheInfo(gc, guid, foundDate, homeCoord):
 		raise gccom.GCException("Cache location regex failed on " + guid)
 	lat = m.group(1)
 	lon = m.group(2)
-	homeDistance = Coordinate(latString=lat, lonString=lon).distanceInKm(homeCoord)
-
-	return FoundGeocache(guid=guid, gcId=gcId, hiddenDate=hiddenDate,
-			     cacheType=cacheType, containerType=containerType,
-			     difficulty=difficulty, terrain=terrain,
-			     country=country, cacheOwner=owner,
-			     cacheOwnerUrl=ownerUrl, homeDistance=homeDistance,
-			     foundDate=foundDate)
+	cacheCoord = Coordinate(latString=lat, lonString=lon)
+	cache.setHomeDistance(cacheCoord.distanceInKm(homeCoord))
 
 def getAllFound(gc, homeCoord):
 	# Returns a list of FoundGeocache objects
-	print "Fetching \"found-it\" summary..."
+	print "Fetching found geocaches..."
 	if opt_offline:
 		foundit = localCacheinfoGet("found", "index")
 		if not foundit:
@@ -431,7 +451,7 @@ def getAllFound(gc, homeCoord):
 			r"<a href=\"http://www\.geocaching\.com/seek/cache_details\.aspx" \
 			r"\?guid=(" + gccom.guidRegex + r")\" class=\"lnk\">",
 			foundit, re.DOTALL)
-	print "Got %d \"found-it\" caches." % len(matches)
+	print "Got %d found caches." % len(matches)
 	found = []
 	for (foundDate, foundGuid) in matches:
 		localf = localCacheinfoGet(foundGuid, "founddate")
@@ -447,9 +467,36 @@ def getAllFound(gc, homeCoord):
 			fdate = gcStringToDate(foundDate)
 		except (ValueError):
 			raise gccom.GCException("Failed to parse date " + foundDate)
-		found.append(buildFoundGeocacheInfo(gc, foundGuid, fdate, homeCoord))
+		cache = FoundGeocache(foundGuid)
+		cache.setFoundDate(fdate)
+		fetchGenericGeocacheInfo(gc, cache, homeCoord)
+		found.append(cache)
 	found = uniquifyList(found)
 	return found
+
+def getAllPlaced(gc, homeCoord):
+	# Returns a list of PlacedGeocache objects
+	print "Fetching placed geocaches..."
+	if opt_offline:
+		placedIndex = localCacheinfoGet("placed", "index")
+		if not placedIndex:
+			raise gccom.GCException("Offline: Failed to get cached placed-index")
+	else:
+		placedIndex = gc.getPage("/my/owned.aspx")
+		localCacheinfoPut("placed", "index", placedIndex)
+	matches = re.findall(r'<td><a href="'
+			     r'http://www\.geocaching\.com/seek/cache_details\.aspx\?guid='
+			     r'(' + gccom.guidRegex + r')">[\w\s\-,&#;]+'
+			     r'</a></td>\s*<td>Found: \d\d/\d\d/\d\d\d\d</td>',
+			     placedIndex, re.DOTALL)
+	print "Got %d placed caches." % len(matches)
+	placed = []
+	for guid in matches:
+		cache = PlacedGeocache(guid)
+		fetchGenericGeocacheInfo(gc, cache, homeCoord)
+		placed.append(cache)
+	placed = uniquifyList(placed)
+	return placed
 
 def getHomeCoordinates(gc):
 	print "Fetching home coordinates..."
@@ -709,6 +756,7 @@ def createStats(user, password, outdir):
 
 	homeCoord = getHomeCoordinates(gc)
 	found = getAllFound(gc, homeCoord)
+	placed = getAllPlaced(gc, homeCoord)
 	createHtmlStats(found, outdir)
 
 	if not opt_offline:
