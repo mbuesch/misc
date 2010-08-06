@@ -652,22 +652,37 @@ def createHtmlStatsHeader(fd, foundCaches):
 
 def createHtmlStatsMisc(fd, foundCaches):
 	foundDates = {}
+	firstDate = None
+	lastDate = None
 	for c in foundCaches:
+		if firstDate is None or c.foundDate < firstDate:
+			firstDate = c.foundDate
+		if lastDate is None or c.foundDate > lastDate:
+			lastDate = c.foundDate
 		if c.foundDate in foundDates:
 			foundDates[c.foundDate].append(c)
 		else:
 			foundDates[c.foundDate] = [c,]
+	nrCalendarDays = lastDate.toordinal() - firstDate.toordinal()
 	nrCacheDays = len(foundDates.keys())
 	mostPerDay = 0
+	leastPerDay = 0xFFFFFFFF
 	for d in foundDates.keys():
 		mostPerDay = max(len(foundDates[d]), mostPerDay)
+		leastPerDay = min(len(foundDates[d]), leastPerDay)
 	avgCachesPerDay = float(len(foundCaches)) / nrCacheDays
 
 	createHtmlTableHeader(fd, "Miscellaneous statistics", nrColumns=2)
-	createHtmlTableRow(fd, "Largest number of cache finds on one day:",
-			   "<b>%d</b>" % mostPerDay)
+	createHtmlTableRow(fd, "Number of caching days:",
+			   "<b>%d caching days out of %d calendar days (%.01f %%)</b>" % \
+			   (nrCacheDays, nrCalendarDays,
+			    float(nrCacheDays) * 100.0 / float(nrCalendarDays)))
 	createHtmlTableRow(fd, "Average number of cache finds per caching day:",
 			   "<b>%.1f</b>" % avgCachesPerDay)
+	createHtmlTableRow(fd, "Largest number of cache finds on one caching day:",
+			   "<b>%d</b>" % mostPerDay)
+	createHtmlTableRow(fd, "Lowest number of cache finds on one caching day:",
+			   "<b>%d</b>" % leastPerDay)
 	createHtmlTableEnd(fd)
 
 def createHtmlStats(foundCaches, outdir):
