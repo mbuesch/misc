@@ -15,6 +15,7 @@ DEVS_RE = (
 )
 
 FORMAT_CMDS = (
+	"umount \"%s\"; true",
 	"dd if=/dev/zero \"of=%s\" bs=1024 count=512",
 	"mkfs.vfat \"%s\"",
 )
