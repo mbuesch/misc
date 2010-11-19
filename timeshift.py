@@ -1,16 +1,20 @@
 #!/usr/bin/env python
 """
 # timeshift.py
-# Copyright (c) 2009 Michael Buesch <mb@bu3sch.de>
+# Copyright (c) 2009-2010 Michael Buesch <mb@bu3sch.de>
 # Licensed under the GNU/GPL version 2 or later.
 """
 
 import sys
+import os
+import errno
 import ConfigParser
 import base64
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 
+
+MAX_SHIFTCONFIG_ITEMS	= 1024
 
 # Shift types
 SHIFT_EARLY		= 0
@@ -18,33 +22,16 @@ SHIFT_LATE		= 1
 SHIFT_NIGHT		= 2
 SHIFT_DAY		= 3
 
-# Shift scheduling types
-SHIFTSCHED_EARLY		= 0 # early only
-SHIFTSCHED_LATE			= 1 # late only
-SHIFTSCHED_NIGHT		= 2 # night only
-SHIFTSCHED_DAY			= 3 # day only
-SHIFTSCHED_EARLY_LATE		= 4 # early -> late -> early...
-SHIFTSCHED_EARLY_NIGHT_LATE	= 5 # early -> night -> late -> early...
+# Day type overrides
+DTYPE_DEFAULT		= 0
+DTYPE_COMPTIME		= 1
+DTYPE_HOLIDAY		= 2
+DTYPE_FEASTDAY		= 3
+DTYPE_SHORTTIME		= 4
 
-# Day attributes
-DAYATTR_WORKDAY		= 1 << 0
-DAYATTR_WEEKEND		= 1 << 1
-DAYATTR_COMPTIME	= 1 << 2
-DAYATTR_HOLIDAY		= 1 << 3
-DAYATTR_SHORTTIME	= 1 << 4
-DAYATTR_SHIFT_EARLY	= 1 << 5
-DAYATTR_SHIFT_LATE	= 1 << 6
-DAYATTR_SHIFT_NIGHT	= 1 << 7
-DAYATTR_SHIFT_DAY	= 1 << 8
-DAYATTR_FEASTDAY	= 1 << 9
 
-DAYATTR_SHIFT_MASK	= DAYATTR_SHIFT_EARLY | DAYATTR_SHIFT_LATE |\
-			  DAYATTR_SHIFT_NIGHT | DAYATTR_SHIFT_DAY
-
-DAYATTR_TYPE_MASK	= DAYATTR_WORKDAY | DAYATTR_WEEKEND |\
-			  DAYATTR_COMPTIME | DAYATTR_HOLIDAY |\
-			  DAYATTR_SHORTTIME | DAYATTR_FEASTDAY
-
+def floatEqual(f0, f1):
+	return abs(f0 - f1) < 0.001
 
 def QDateToId(qdate):
 	"Convert a QDate object to a unique integer ID"
@@ -54,8 +41,211 @@ def IdToQDate(id):
 	"Convert a unique integer ID to a QDate object"
 	return QDateTime.fromTime_t(id).date()
 
+def QStringToBase64(qstring):
+	if type(qstring) != type(QString()):
+		qstring = QString(qstring)
+	qstring = qstring.toUtf8()
+	unistr = unicode(qstring, "utf-8").encode("utf-8")
+	b64str = base64.standard_b64encode(unistr)
+	return b64str
 
-class TimeshiftException(Exception): pass
+def base64ToQString(b64str):
+	unistr = base64.standard_b64decode(b64str)
+	unistr = unistr.decode("utf-8")
+	qstring = QString(unistr)
+	return qstring
+
+class TsException(Exception): pass
+
+class TimeSpinBox(QDoubleSpinBox):
+	def __init__(self, parent, val=0.0, minVal=0.0, maxVal=10.0,
+		     step=0.05, prefix=None, suffix="h"):
+		QDoubleSpinBox.__init__(self, parent)
+		self.setMinimum(minVal)
+		self.setMaximum(maxVal)
+		self.setValue(val)
+		self.setSingleStep(step)
+		if suffix:
+			self.setSuffix(" " + suffix)
+		if prefix:
+			self.setPrefix(prefix + " ")
+
+class ShiftConfigItem:
+	def __init__(self, name, shift, workTime, breakTime, attendanceTime):
+		self.name = name
+		self.shift = shift
+		self.workTime = workTime
+		self.breakTime = breakTime
+		self.attendanceTime = attendanceTime
+
+defaultShiftConfig = [
+	ShiftConfigItem("Montag",     SHIFT_DAY, 7.0, 0.5, 8.5),
+	ShiftConfigItem("Dienstag",   SHIFT_DAY, 7.0, 0.5, 8.5),
+	ShiftConfigItem("Mittwoch",   SHIFT_DAY, 7.0, 0.5, 8.5),
+	ShiftConfigItem("Donnerstag", SHIFT_DAY, 7.0, 0.5, 8.5),
+	ShiftConfigItem("Freitag",    SHIFT_DAY, 7.0, 0.5, 8.5),
+	ShiftConfigItem("Samstag",    SHIFT_DAY, 0.0, 0.5, 0.0),
+	ShiftConfigItem("Sonntag",    SHIFT_DAY, 0.0, 0.0, 0.0),
+]
+
+class ShiftConfigDialog(QDialog):
+	def __init__(self, mainWidget):
+		QDialog.__init__(self, mainWidget)
+		self.mainWidget = mainWidget
+		self.setWindowTitle("Schichtkonfiguration")
+		self.setLayout(QGridLayout())
+
+		self.itemList = QListWidget(self)
+		self.layout().addWidget(self.itemList, 0, 0, 10, 2)
+
+		self.addButton = QPushButton("Neu", self)
+		self.layout().addWidget(self.addButton, 11, 0)
+
+		self.removeButton = QPushButton("Loeschen", self)
+		self.layout().addWidget(self.removeButton, 11, 1)
+
+		label = QLabel("Name", self)
+		self.layout().addWidget(label, 0, 2)
+		self.nameEdit = QLineEdit(self)
+		self.layout().addWidget(self.nameEdit, 0, 3)
+
+		label = QLabel("Schicht", self)
+		self.layout().addWidget(label, 1, 2)
+		self.shiftCombo = QComboBox(self)
+		self.shiftCombo.addItem("Frueh", QVariant(SHIFT_EARLY))
+		self.shiftCombo.addItem("Nacht", QVariant(SHIFT_NIGHT))
+		self.shiftCombo.addItem("Spaet", QVariant(SHIFT_LATE))
+		self.shiftCombo.addItem("Normal", QVariant(SHIFT_DAY))
+		self.layout().addWidget(self.shiftCombo, 1, 3)
+
+		label = QLabel("Arbeitszeit", self)
+		self.layout().addWidget(label, 2, 2)
+		self.workTime = TimeSpinBox(self)
+		self.layout().addWidget(self.workTime, 2, 3)
+
+		label = QLabel("Pausenzeit", self)
+		self.layout().addWidget(label, 3, 2)
+		self.breakTime = TimeSpinBox(self)
+		self.layout().addWidget(self.breakTime, 3, 3)
+
+		label = QLabel("Anwesenheit", self)
+		self.layout().addWidget(label, 4, 2)
+		self.attendanceTime = TimeSpinBox(self)
+		self.layout().addWidget(self.attendanceTime, 4, 3)
+
+		self.updateBlocked = False
+		self.loadConfig()
+
+		self.connect(self.itemList, SIGNAL("currentRowChanged(int)"),
+			     self.itemChanged)
+		self.connect(self.addButton, SIGNAL("released()"),
+			     self.addItem)
+		self.connect(self.removeButton, SIGNAL("released()"),
+			     self.removeItem)
+
+		self.connect(self.nameEdit, SIGNAL("textChanged(QString)"),
+			     self.updateCurrentItem)
+		self.connect(self.shiftCombo, SIGNAL("currentIndexChanged(int)"),
+			     self.updateCurrentItem)
+		self.connect(self.workTime, SIGNAL("valueChanged(double)"),
+			     self.updateCurrentItem)
+		self.connect(self.breakTime, SIGNAL("valueChanged(double)"),
+			     self.updateCurrentItem)
+		self.connect(self.attendanceTime, SIGNAL("valueChanged(double)"),
+			     self.updateCurrentItem)
+
+	def setInputEnabled(self, enable):
+		self.removeButton.setEnabled(enable)
+		self.nameEdit.setEnabled(enable)
+		self.shiftCombo.setEnabled(enable)
+		self.workTime.setEnabled(enable)
+		self.breakTime.setEnabled(enable)
+		self.attendanceTime.setEnabled(enable)
+
+	def loadConfig(self):
+		self.itemList.clear()
+		count = 1
+		for cfg in self.mainWidget.shiftConfig:
+			name = "%d (%s)" % (count, cfg.name)
+			count += 1
+			self.itemList.addItem(name)
+		if self.mainWidget.shiftConfig:
+			self.itemList.setCurrentRow(0)
+			currentItem = self.mainWidget.shiftConfig[0]
+		else:
+			currentItem = None
+		self.loadItem(currentItem)
+		self.setInputEnabled(currentItem is not None)
+
+	def loadItem(self, item=None):
+		self.updateBlocked = True
+		self.nameEdit.clear()
+		self.shiftCombo.setCurrentIndex(0)
+		self.workTime.setValue(0.0)
+		self.breakTime.setValue(0.0)
+		self.attendanceTime.setValue(0.0)
+		if item:
+			self.nameEdit.setText(item.name)
+			index = self.shiftCombo.findData(QVariant(item.shift))
+			self.shiftCombo.setCurrentIndex(index)
+			self.workTime.setValue(item.workTime)
+			self.breakTime.setValue(item.breakTime)
+			self.attendanceTime.setValue(item.attendanceTime)
+		self.updateBlocked = False
+
+	def updateItem(self, item):
+		item.name = self.nameEdit.text()
+		index = self.shiftCombo.currentIndex()
+		item.shift = self.shiftCombo.itemData(index).toInt()[0]
+		item.workTime = self.workTime.value()
+		item.breakTime = self.breakTime.value()
+		item.attendanceTime = self.attendanceTime.value()
+		self.mainWidget.dirty = True
+
+	def itemChanged(self, row):
+		if row >= 0:
+			self.loadItem(self.mainWidget.shiftConfig[row])
+
+	def updateCurrentItem(self):
+		if self.updateBlocked:
+			return
+		index = self.itemList.currentRow()
+		if index < 0:
+			return
+		self.updateItem(self.mainWidget.shiftConfig[index])
+		name = "%d (%s)" % (index + 1, self.mainWidget.shiftConfig[index].name)
+		self.itemList.item(index).setText(name)
+
+	def addItem(self):
+		if len(self.mainWidget.shiftConfig) >= MAX_SHIFTCONFIG_ITEMS:
+			return
+		index = self.itemList.currentRow()
+		if index < 0:
+			index = 0
+		else:
+			index += 1
+		item = defaultShiftConfig[:][0]
+		item.name = "Unbenannt"
+		self.mainWidget.shiftConfig.insert(index, item)
+		self.loadConfig()
+		self.itemList.setCurrentRow(index)
+		self.mainWidget.dirty = True
+
+	def removeItem(self):
+		index = self.itemList.currentRow()
+		if index < 0:
+			return
+		res = QMessageBox.question(self, "Eintrag loeschen?",
+					   "'%s' loeschen?" % self.itemList.item(index).text(),
+					   QMessageBox.Yes | QMessageBox.No)
+		if res != QMessageBox.Yes:
+			return
+		self.mainWidget.shiftConfig.pop(index)
+		self.loadConfig()
+		if index >= self.itemList.count() and index > 0:
+			index -= 1
+		self.itemList.setCurrentRow(index)
+		self.mainWidget.dirty = True
 
 class EnhancedDialog(QDialog):
 	def __init__(self, mainWidget):
@@ -64,9 +254,12 @@ class EnhancedDialog(QDialog):
 		self.setWindowTitle("Erweitert")
 		self.setLayout(QGridLayout())
 
+		self.dayInfo = QLabel(self)#TODO
+		self.layout().addWidget(self.dayInfo, 0, 0, 1, 2)
+
 		self.commentGroup = QGroupBox("Kommentar", self)
 		self.commentGroup.setLayout(QGridLayout())
-		self.layout().addWidget(self.commentGroup, 0, 0, 1, 2)
+		self.layout().addWidget(self.commentGroup, 1, 0, 1, 2)
 
 		self.comment = QTextEdit(self)
 		self.commentGroup.layout().addWidget(self.comment, 0, 0)
@@ -74,12 +267,12 @@ class EnhancedDialog(QDialog):
 		self.comment.document().setPlainText(mainWidget.getCommentFor(date))
 
 		self.okButton = QPushButton("OK", self)
-		self.layout().addWidget(self.okButton, 1, 0)
+		self.layout().addWidget(self.okButton, 2, 0)
 		self.connect(self.okButton, SIGNAL("released()"),
 			     self.ok)
 
 		self.cancelButton = QPushButton("Abbrechen", self)
-		self.layout().addWidget(self.cancelButton, 1, 1)
+		self.layout().addWidget(self.cancelButton, 2, 1)
 		self.connect(self.cancelButton, SIGNAL("released()"),
 			     self.cancel)
 
@@ -127,65 +320,16 @@ class ManageDialog(QDialog):
 		self.connect(self.resetCalButton, SIGNAL("released()"),
 			     self.resetCalendar)
 
+		self.schedConfButton = QPushButton("Schichtkonfig", self)
+		self.fileGroup.layout().addWidget(self.schedConfButton, 4, 0)
+		self.connect(self.schedConfButton, SIGNAL("released()"),
+			     self.doShiftConfig)
+
 		self.paramsGroup = QGroupBox("Parameter", self)
 		self.paramsGroup.setLayout(QGridLayout())
 		self.layout().addWidget(self.paramsGroup, 0, 2)
 
-		l = QLabel("Regelarbeitszeit:", self)
-		self.paramsGroup.layout().addWidget(l, 0, 0)
-		self.workTime = QDoubleSpinBox(self)
-		self.workTime.setMinimum(1.0)
-		self.workTime.setMaximum(10.0)
-		self.workTime.setSuffix(" h")
-		self.workTime.setSingleStep(0.05)
-		self.paramsGroup.layout().addWidget(self.workTime, 0, 1)
-
-		l = QLabel("Schichtsystem:", self)
-		self.paramsGroup.layout().addWidget(l, 1, 0)
-		self.shiftSched = QComboBox(self)
-		self.shiftSched.addItem("Nur Frueh", QVariant(SHIFTSCHED_EARLY))
-		self.shiftSched.addItem("Nur Nacht", QVariant(SHIFTSCHED_NIGHT))
-		self.shiftSched.addItem("Nur Spaet", QVariant(SHIFTSCHED_LATE))
-		self.shiftSched.addItem("Nur Normal", QVariant(SHIFTSCHED_DAY))
-		self.shiftSched.addItem("Frueh, Spaet", QVariant(SHIFTSCHED_EARLY_LATE))
-		self.shiftSched.addItem("Frueh, Nacht, Spaet", QVariant(SHIFTSCHED_EARLY_NIGHT_LATE))
-		self.paramsGroup.layout().addWidget(self.shiftSched, 1, 1)
-
-		l = QLabel("Frueh Aufbau:", self)
-		self.paramsGroup.layout().addWidget(l, 2, 0)
-		self.earlyGain = QDoubleSpinBox(self)
-		self.earlyGain.setMinimum(-10.0)
-		self.earlyGain.setMaximum(10.0)
-		self.earlyGain.setSuffix(" h")
-		self.earlyGain.setSingleStep(0.05)
-		self.paramsGroup.layout().addWidget(self.earlyGain, 2, 1)
-
-		l = QLabel("Spaet Aufbau:", self)
-		self.paramsGroup.layout().addWidget(l, 3, 0)
-		self.lateGain = QDoubleSpinBox(self)
-		self.lateGain.setMinimum(-10.0)
-		self.lateGain.setMaximum(10.0)
-		self.lateGain.setSuffix(" h")
-		self.lateGain.setSingleStep(0.05)
-		self.paramsGroup.layout().addWidget(self.lateGain, 3, 1)
-
-		l = QLabel("Nacht Aufbau:", self)
-		self.paramsGroup.layout().addWidget(l, 4, 0)
-		self.nightGain = QDoubleSpinBox(self)
-		self.nightGain.setMinimum(-10.0)
-		self.nightGain.setMaximum(10.0)
-		self.nightGain.setSuffix(" h")
-		self.nightGain.setSingleStep(0.05)
-		self.paramsGroup.layout().addWidget(self.nightGain, 4, 1)
-
-		l = QLabel("Normal Aufbau:", self)
-		self.paramsGroup.layout().addWidget(l, 5, 0)
-		self.dayGain = QDoubleSpinBox(self)
-		self.dayGain.setMinimum(-10.0)
-		self.dayGain.setMaximum(10.0)
-		self.dayGain.setSuffix(" h")
-		self.dayGain.setSingleStep(0.05)
-		self.paramsGroup.layout().addWidget(self.dayGain, 5, 1)
+		#TODO holiday
 
 		self.resetParamsButton = QPushButton("Parameter ruecksetzen", self)
 		self.paramsGroup.layout().addWidget(self.resetParamsButton, 6, 0, 1, 2)
@@ -193,39 +337,14 @@ class ManageDialog(QDialog):
 			     self.resetParams)
 
 		self.loadParams()
-		self.connect(self.workTime, SIGNAL("valueChanged(double)"),
-			     self.updateParams)
-		self.connect(self.shiftSched, SIGNAL("currentIndexChanged(int)"),
-			     self.updateParams)
-		self.connect(self.earlyGain, SIGNAL("valueChanged(double)"),
-			     self.updateParams)
-		self.connect(self.lateGain, SIGNAL("valueChanged(double)"),
-			     self.updateParams)
-		self.connect(self.nightGain, SIGNAL("valueChanged(double)"),
-			     self.updateParams)
-		self.connect(self.dayGain, SIGNAL("valueChanged(double)"),
-			     self.updateParams)
 
 	def loadParams(self):
-		self.workTime.setValue(self.mainWidget.workTime)
-		index = self.shiftSched.findData(QVariant(self.mainWidget.shiftSched))
-		if index >= 0:
-			self.shiftSched.setCurrentIndex(index)
-		self.earlyGain.setValue(self.mainWidget.earlyGain)
-		self.lateGain.setValue(self.mainWidget.lateGain)
-		self.nightGain.setValue(self.mainWidget.nightGain)
-		self.dayGain.setValue(self.mainWidget.dayGain)
+		pass#TODO
 
 	def updateParams(self):
 		mainWidget = self.mainWidget
 		mainWidget.dirty = True
-		mainWidget.workTime = self.workTime.value()
-		index = self.shiftSched.currentIndex()
-		mainWidget.shiftSched = self.shiftSched.itemData(index).toUInt()[0]
-		mainWidget.earlyGain = self.earlyGain.value()
-		mainWidget.lateGain = self.lateGain.value()
-		mainWidget.nightGain = self.nightGain.value()
-		mainWidget.dayGain = self.dayGain.value()
+		#TODO
 		mainWidget.recalculate()
 
 	def resetParams(self):
@@ -257,57 +376,53 @@ class ManageDialog(QDialog):
 			self.mainWidget.resetCalendar()
 			self.accept()
 
+	def doShiftConfig(self):
+		dlg = ShiftConfigDialog(self.mainWidget)
+		dlg.exec_()
+		self.mainWidget.recalculate()
+		#FIXME need to fixup (kill?) snapshots that have an out-of-range shiftConfigIndex
+		self.accept()
+
 class Snapshot:
-	def __init__(self, date, shift, accountValue):
+	def __init__(self, date, shiftConfigIndex, accountValue):
 		self.date = date
-		self.shift = shift
+		self.shiftConfigIndex = shiftConfigIndex
 		self.accountValue = accountValue
 
 class SnapshotDialog(QDialog):
-	def __init__(self, mainWidget, date, shift=None, accountValue=None):
+	def __init__(self, mainWidget, date, shiftConfigIndex=0, accountValue=0.0):
 		QDialog.__init__(self, mainWidget)
 		self.setWindowTitle("Schnappschuss setzen")
 		self.setLayout(QGridLayout())
 		self.mainWidget = mainWidget
 		self.date = date
 
-		self.dateLabel = QLabel(date.toString("dd.MM.yyyy"), self)
+		self.dateLabel = QLabel(date.toString("dddd, dd.MM.yyyy"), self)
 		self.layout().addWidget(self.dateLabel, 0, 0)
 
-		l = QLabel("Schicht:", self)
+		l = QLabel("Startschicht:", self)
 		self.layout().addWidget(l, 1, 0)
-		self.shift = QComboBox(self)
-		shiftSched = mainWidget.shiftSched
-		if shiftSched == SHIFTSCHED_EARLY or \
-		   shiftSched == SHIFTSCHED_EARLY_LATE or \
-		   shiftSched == SHIFTSCHED_EARLY_NIGHT_LATE:
-			self.shift.addItem("Frueh", QVariant(SHIFT_EARLY))
-		if shiftSched == SHIFTSCHED_NIGHT or \
-		   shiftSched == SHIFTSCHED_EARLY_NIGHT_LATE:
-			self.shift.addItem("Nacht", QVariant(SHIFT_NIGHT))
-		if shiftSched == SHIFTSCHED_LATE or \
-		   shiftSched == SHIFTSCHED_EARLY_LATE or \
-		   shiftSched == SHIFTSCHED_EARLY_NIGHT_LATE:
-			self.shift.addItem("Spaet", QVariant(SHIFT_LATE))
-		if shiftSched == SHIFTSCHED_DAY:
-			self.shift.addItem("Normal", QVariant(SHIFT_DAY))
-		self.layout().addWidget(self.shift, 1, 1)
-		if shift is not None:
-			index = self.shift.findData(QVariant(shift))
-			if index >= 0:
-				self.shift.setCurrentIndex(index)
+		self.shiftConfig = QComboBox(self)
+		assert(mainWidget.shiftConfig)
+		index = 0
+		for cfg in mainWidget.shiftConfig:
+			name = "%d (%s)" % (index + 1, cfg.name)
+			self.shiftConfig.addItem(name, QVariant(index))
+			index += 1
+		self.layout().addWidget(self.shiftConfig, 1, 1)
+		index = self.shiftConfig.findData(QVariant(shiftConfigIndex))
+		if index >= 0:
+			self.shiftConfig.setCurrentIndex(index)
 
 		l = QLabel("Kontostand:", self)
 		self.layout().addWidget(l, 2, 0)
 		self.accountValue = QDoubleSpinBox(self)
 		self.accountValue.setMinimum(-1000.0)
 		self.accountValue.setMaximum(1000.0)
-		self.accountValue.setValue(0.0)
+		self.accountValue.setValue(accountValue)
 		self.accountValue.setSuffix(" h")
 		self.accountValue.setSingleStep(0.1)
 		self.layout().addWidget(self.accountValue, 2, 1)
-		if accountValue is not None:
-			self.accountValue.setValue(accountValue)
 
 		self.removeButton = QPushButton("Schnappschuss loeschen", self)
 		self.layout().addWidget(self.removeButton, 3, 0, 1, 2)
@@ -341,9 +456,10 @@ class SnapshotDialog(QDialog):
 			self.reject()
 
 	def getSnapshot(self):
-		shift = self.shift.itemData(self.shift.currentIndex()).toInt()[0]
+		index = self.shiftConfig.currentIndex()
+		shiftConfigIndex = self.shiftConfig.itemData(index).toInt()[0]
 		value = self.accountValue.value()
-		return Snapshot(self.date, shift, value)
+		return Snapshot(self.date, shiftConfigIndex, value)
 
 class Calendar(QCalendarWidget):
 	def __init__(self, mainWidget):
@@ -360,7 +476,6 @@ class Calendar(QCalendarWidget):
 		painter.save()
 
 		mainWidget = self.mainWidget
-		attrs = mainWidget.getAttributes(date)
 
 		if mainWidget.dateHasSnapshot(date):
 			pen = QPen(QColor("#007FFF"))
@@ -378,28 +493,28 @@ class Calendar(QCalendarWidget):
 			painter.drawRect(rect.x() + 3, rect.y() + 3,
 					 rect.width() - 3 - 3, rect.height() - 3 - 3)
 
-		lowerLeft = None
+		dtype = self.mainWidget.getDayType(date)
+		typeLetter = {
+			DTYPE_DEFAULT		: None,
+			DTYPE_COMPTIME		: "Z",
+			DTYPE_HOLIDAY		: "U",
+			DTYPE_SHORTTIME		: "C",
+			DTYPE_FEASTDAY		: "F",
+		}
+		lowerLeft = typeLetter[dtype]
+
 		lowerRight = None
-
-		if attrs & DAYATTR_COMPTIME:
-			lowerLeft = "Z"
-		elif attrs & DAYATTR_HOLIDAY:
-			lowerLeft = "U"
-		elif attrs & DAYATTR_SHORTTIME:
-			lowerLeft = "C"
-		elif attrs & DAYATTR_FEASTDAY:
-			lowerLeft = "F"
-		elif attrs & DAYATTR_WORKDAY:
-			lowerLeft = "A"
-
-		if attrs & DAYATTR_SHIFT_EARLY:
-			lowerRight = "F"
-		elif attrs & DAYATTR_SHIFT_LATE:
-			lowerRight = "S"
-		elif attrs & DAYATTR_SHIFT_NIGHT:
-			lowerRight = "N"
-		elif attrs & DAYATTR_SHIFT_DAY:
-			lowerRight = "O"
+		try:
+			shiftOverride = self.mainWidget.shiftOverrides[QDateToId(date)]
+			shiftLetter = {
+				SHIFT_EARLY	: "F",
+				SHIFT_LATE	: "S",
+				SHIFT_NIGHT	: "N",
+				SHIFT_DAY	: "O",
+			}
+			lowerRight = shiftLetter[shiftOverride]
+		except (KeyError):
+			pass
 
 		font = painter.font()
 		font.setBold(True)
@@ -434,53 +549,44 @@ class MainWidget(QWidget):
 
 		self.calendar = Calendar(self)
 		self.layout().addWidget(self.calendar, 0, 0, 7, 3)
+
+		self.typeCombo = QComboBox(self)
+		self.typeCombo.addItem("---", QVariant(DTYPE_DEFAULT))
+		self.typeCombo.addItem("Zeitausgleich", QVariant(DTYPE_COMPTIME))
+		self.typeCombo.addItem("Urlaub", QVariant(DTYPE_HOLIDAY))
+		self.typeCombo.addItem("Feiertag", QVariant(DTYPE_FEASTDAY))
+		self.typeCombo.addItem("Kurzarbeit", QVariant(DTYPE_SHORTTIME))
+		self.layout().addWidget(self.typeCombo, 0, 4)
+
+		self.shiftCombo = QComboBox(self)
+		self.shiftCombo.addItem("Fruehschicht", QVariant(SHIFT_EARLY))
+		self.shiftCombo.addItem("Nachtschicht", QVariant(SHIFT_NIGHT))
+		self.shiftCombo.addItem("Spaetschicht", QVariant(SHIFT_LATE))
+		self.shiftCombo.addItem("Normalschicht", QVariant(SHIFT_DAY))
+		self.layout().addWidget(self.shiftCombo, 1, 4)
+
+		self.workTime = TimeSpinBox(self, prefix="Arb.zeit")
+		self.layout().addWidget(self.workTime, 2, 4)
+
+		self.breakTime = TimeSpinBox(self, prefix="Pause")
+		self.layout().addWidget(self.breakTime, 3, 4)
+
+		self.attendanceTime = TimeSpinBox(self, prefix="Anwes.")
+		self.layout().addWidget(self.attendanceTime, 4, 4)
+
 		self.connect(self.calendar, SIGNAL("selectionChanged()"),
 			     self.recalculate)
-
-		self.compTimeButton = QPushButton("(Z)eitausgl.", self)
-		self.layout().addWidget(self.compTimeButton, 0, 4)
-		self.connect(self.compTimeButton, SIGNAL("released()"),
-			     self.setCompensatoryTime)
-
-		self.holidayButton = QPushButton("(U)rlaub", self)
-		self.layout().addWidget(self.holidayButton, 1, 4)
-		self.connect(self.holidayButton, SIGNAL("released()"),
-			     self.setHoliday)
-
-		self.feastdayButton = QPushButton("(F)eiertag", self)
-		self.layout().addWidget(self.feastdayButton, 2, 4)
-		self.connect(self.feastdayButton, SIGNAL("released()"),
-			     self.setFeastday)
-
-		self.shortTimeWorkButton = QPushButton("(C)Kurzarb.", self)
-		self.layout().addWidget(self.shortTimeWorkButton, 3, 4)
-		self.connect(self.shortTimeWorkButton, SIGNAL("released()"),
-			     self.setShortTimeWork)
-
-		self.workOverrideButton = QPushButton("(A)nwesend", self)
-		self.layout().addWidget(self.workOverrideButton, 4, 4)
-		self.connect(self.workOverrideButton, SIGNAL("released()"),
-			     self.workOverride)
-
-		self.earlyOverrideButton = QPushButton("(F)rueh", self)
-		self.layout().addWidget(self.earlyOverrideButton, 0, 5)
-		self.connect(self.earlyOverrideButton, SIGNAL("released()"),
-			     self.earlyOverride)
-
-		self.nightOverrideButton = QPushButton("(N)acht", self)
-		self.layout().addWidget(self.nightOverrideButton, 1, 5)
-		self.connect(self.nightOverrideButton, SIGNAL("released()"),
-			     self.nightOverride)
-
-		self.lateOverrideButton = QPushButton("(S)spaet", self)
-		self.layout().addWidget(self.lateOverrideButton, 2, 5)
-		self.connect(self.lateOverrideButton, SIGNAL("released()"),
-			     self.lateOverride)
-
-		self.dayOverrideButton = QPushButton("N(O)rmal", self)
-		self.layout().addWidget(self.dayOverrideButton, 3, 5)
-		self.connect(self.dayOverrideButton, SIGNAL("released()"),
-			     self.dayOverride)
+		self.connect(self.typeCombo, SIGNAL("currentIndexChanged(int)"),
+			     self.overrideChanged)
+		self.connect(self.shiftCombo, SIGNAL("currentIndexChanged(int)"),
+			     self.overrideChanged)
+		self.connect(self.workTime, SIGNAL("valueChanged(double)"),
+			     self.overrideChanged)
+		self.connect(self.breakTime, SIGNAL("valueChanged(double)"),
+			     self.overrideChanged)
+		self.connect(self.attendanceTime, SIGNAL("valueChanged(double)"),
+			     self.overrideChanged)
+		self.overrideChangeBlocked = False
 
 		self.manageButton = QPushButton("Verwalten", self)
 		self.layout().addWidget(self.manageButton, 7, 0)
@@ -512,12 +618,7 @@ class MainWidget(QWidget):
 			self.doLoadFromFile(sys.argv[1])
 
 	def __resetParams(self):
-		self.workTime = 7.0
-		self.shiftSched = SHIFTSCHED_EARLY_NIGHT_LATE
-		self.earlyGain = 0.8
-		self.lateGain = 0.85
-		self.nightGain = 1.2
-		self.dayGain = 1.0
+		self.shiftConfig = defaultShiftConfig[:]
 
 	def resetParams(self):
 		self.__resetParams()
@@ -526,7 +627,11 @@ class MainWidget(QWidget):
 
 	def __resetCalendar(self):
 		self.snapshots = {}
-		self.attributes = {}
+		self.daytypeOverrides = {}
+		self.shiftOverrides = {}
+		self.workTimeOverrides = {}
+		self.breakTimeOverrides = {}
+		self.attendanceTimeOverrides = {}
 		self.comments = {}
 		self.setFilename(None)
 
@@ -535,64 +640,196 @@ class MainWidget(QWidget):
 		self.recalculate()
 		self.calendar.redraw()
 
+	def __genShiftCfgWeek(self, shift, workTime, workGain, breakTime):
+		attendanceTime = workTime + breakTime + workGain
+		shiftcfg = [
+			ShiftConfigItem("Montag", shift, workTime, breakTime, attendanceTime),
+			ShiftConfigItem("Dienstag", shift, workTime, breakTime, attendanceTime),
+			ShiftConfigItem("Mittwoch", shift, workTime, breakTime, attendanceTime),
+			ShiftConfigItem("Donnerstag", shift, workTime, breakTime, attendanceTime),
+			ShiftConfigItem("Freitag", shift, workTime, breakTime, attendanceTime),
+			ShiftConfigItem("Samstag", shift, 0.0, breakTime, 0.0),
+			ShiftConfigItem("Sonntag", shift, 0.0, 0.0, 0.0),
+		]
+		return shiftcfg
+
+	def __parseFile_ver1(self, p):
+		# ver1 compat import layer
+		defaultBreakTime = 0.5
+		workTime = p.getfloat("PARAMETERS", "workTime")
+		shiftcfgEarly = self.__genShiftCfgWeek(SHIFT_EARLY, workTime,
+					p.getfloat("PARAMETERS", "earlyGain"),
+					defaultBreakTime)
+		shiftcfgLate = self.__genShiftCfgWeek(SHIFT_LATE, workTime,
+					p.getfloat("PARAMETERS", "lateGain"),
+					defaultBreakTime)
+		shiftcfgNight = self.__genShiftCfgWeek(SHIFT_NIGHT, workTime,
+					p.getfloat("PARAMETERS", "nightGain"),
+					defaultBreakTime)
+		shiftcfgDay = self.__genShiftCfgWeek(SHIFT_DAY, workTime,
+					p.getfloat("PARAMETERS", "dayGain"),
+					defaultBreakTime)
+		earlyIndex = None
+		lateIndex = None
+		nightIndex = None
+		dayIndex = None
+		shiftSched = p.getint("PARAMETERS", "shiftSchedule")
+		if shiftSched == 0: # early only
+			self.shiftConfig = shiftcfgEarly[:]
+			earlyIndex = 0
+		elif shiftSched == 1: # late only
+			self.shiftConfig = shiftcfgLate[:]
+			lateIndex = 0
+		elif shiftSched == 2: # night only
+			self.shiftConfig = shiftcfgNight[:]
+			nightIndex = 0
+		elif shiftSched == 3: # day only
+			self.shiftConfig = shiftcfgDay[:]
+			dayIndex = 0
+		elif shiftSched == 4: # early->late
+			self.shiftConfig = shiftcfgEarly[:]
+			self.shiftConfig.extend(shiftcfgLate[:])
+			earlyIndex = 0
+			lateIndex = 7
+		elif shiftSched == 5: # early->night->late
+			self.shiftConfig = shiftcfgEarly[:]
+			self.shiftConfig.extend(shiftcfgNight[:])
+			self.shiftConfig.extend(shiftcfgLate[:])
+			earlyIndex = 0
+			nightIndex = 7
+			lateIndex = 14
+		else:
+			raise TsException("Unknown shift schedule")
+
+		for dateString in p.options("SNAPSHOTS"):
+			date = QDate.fromString(dateString, Qt.ISODate)
+			payload = p.get("SNAPSHOTS", dateString)
+			try:
+				elems = payload.split(",")
+				shift = int(elems[0])
+				accountValue = float(elems[1])
+			except (IndexError, ValueError):
+				raise TsException("Datei defekt (snapshot)")
+			dayOfWeek = date.dayOfWeek() - 1
+			shiftConfigIndexMap = {
+				SHIFT_EARLY	: earlyIndex,
+				SHIFT_LATE	: lateIndex,
+				SHIFT_NIGHT	: nightIndex,
+				SHIFT_DAY	: dayIndex,
+			}
+			try:
+				shiftConfigIndex = shiftConfigIndexMap[shift]
+				if shiftConfigIndex is None:
+					raise ValueError
+			except (IndexError, ValueError):
+				raise TsException("Datei defekt (snapshot shift)")
+			shiftConfigIndex += dayOfWeek
+			snapshot = Snapshot(date, shiftConfigIndex, accountValue)
+			self.__setSnapshot(snapshot)
+
+		for dateString in p.options("ATTRIBUTES"):
+			date = QDate.fromString(dateString, Qt.ISODate)
+			attrs = p.getint("ATTRIBUTES", dateString)
+			if attrs & (1 << 2):
+				self.setDayType(date, DTYPE_COMPTIME)
+			if attrs & (1 << 3):
+				self.setDayType(date, DTYPE_HOLIDAY)
+			if attrs & (1 << 4):
+				self.setDayType(date, DTYPE_SHORTTIME)
+			if attrs & (1 << 9):
+				self.setDayType(date, DTYPE_FEASTDAY)
+			if attrs & (1 << 5):
+				self.setShiftOverride(date, SHIFT_EARLY)
+			if attrs & (1 << 6):
+				self.setShiftOverride(date, SHIFT_LATE)
+			if attrs & (1 << 7):
+				self.setShiftOverride(date, SHIFT_NIGHT)
+			if attrs & (1 << 8):
+				self.setShiftOverride(date, SHIFT_DAY)
+
+		for comm in p.options("COMMENTS"):
+			date = QDate.fromString(comm, Qt.ISODate)
+			comment = base64ToQString(p.get("COMMENTS", comm))
+			self.setCommentFor(date, comment)
+
+	def __readOverrides(self, p, dateDict, section, floatFormat):
+		for date in p.options(section):
+			payload = p.get(section, date)
+			try:
+				if floatFormat:
+					payload = float(payload)
+				else:
+					payload = int(payload)
+			except (ValueError):
+				raise TsException("Datei defekt")
+			dateDict[QDateToId(QDate.fromString(date, Qt.ISODate))] = payload
+
+	def __parseFile_ver2(self, p):
+		self.shiftConfig = []
+		for count in range(0, MAX_SHIFTCONFIG_ITEMS):
+			try:
+				name = p.get("SHIFTCONFIG", "name%d" % count)
+			except (ConfigParser.Error), e:
+				break
+			shift = p.getint("SHIFTCONFIG", "shift%d" % count)
+			workTime = p.getfloat("SHIFTCONFIG", "workTime%d" % count)
+			breakTime = p.getfloat("SHIFTCONFIG", "breakTime%d" % count)
+			attendanceTime = p.getfloat("SHIFTCONFIG", "attendanceTime%d" % count)
+			self.shiftConfig.append(
+				ShiftConfigItem(name=base64ToQString(name),
+						shift=shift,
+						workTime=workTime, breakTime=breakTime,
+						attendanceTime=attendanceTime)
+			)
+			count += 1
+
+		for snap in p.options("SNAPSHOTS"):
+			date = QDate.fromString(snap, Qt.ISODate)
+			string = p.get("SNAPSHOTS", snap)
+			try:
+				elems = string.split(",")
+				shiftConfigIndex = int(elems[0])
+				accountValue = float(elems[1])
+			except (IndexError, ValueError):
+				raise TsException("Datei defekt")
+			snapshot = Snapshot(date, shiftConfigIndex, accountValue)
+			self.__setSnapshot(snapshot)
+
+		self.__readOverrides(p, self.daytypeOverrides, "DAYTYPE_OVERRIDES", False)
+		self.__readOverrides(p, self.shiftOverrides, "SHIFT_OVERRIDES", False)
+		self.__readOverrides(p, self.workTimeOverrides, "WORKTIME_OVERRIDES", True)
+		self.__readOverrides(p, self.breakTimeOverrides, "BREAKTIME_OVERRIDES", True)
+		self.__readOverrides(p, self.attendanceTimeOverrides, "ATTENDANCETIME_OVERRIDES", True)
+
+		for comm in p.options("COMMENTS"):
+			date = QDate.fromString(comm, Qt.ISODate)
+			comment = base64ToQString(p.get("COMMENTS", comm))
+			self.setCommentFor(date, comment)
+
 	def doLoadFromFile(self, filename):
 		try:
 			p = ConfigParser.SafeConfigParser()
 			p.read((filename,))
 
 			ver = p.getint("PARAMETERS", "fileversion")
-			verExpected = 1
-			if ver != verExpected:
-				raise TimeshiftException(
-					"Dateiversion unbekannt (ist %d, soll %d)" %\
-					(ver, verExpected))
+			if ver == 1:
+				parser = self.__parseFile_ver1
+			elif ver == 2:
+				parser = self.__parseFile_ver2
+			else:
+				raise TsException("Dateiversion nicht unterstuetzt")
 
 			self.__resetParams()
 			self.__resetCalendar()
 
-			self.workTime = p.getfloat("PARAMETERS", "workTime")
-			self.earlyGain = p.getfloat("PARAMETERS", "earlyGain")
-			self.lateGain = p.getfloat("PARAMETERS", "lateGain")
-			self.nightGain = p.getfloat("PARAMETERS", "nightGain")
-			try:
-				self.dayGain = p.getfloat("PARAMETERS", "dayGain")
-				self.shiftSched = p.getint("PARAMETERS", "shiftSchedule")
-			except (ConfigParser.Error), e:
-				pass # Fileversion compatibility
-
-			for attr in p.options("ATTRIBUTES"):
-				date = QDate.fromString(attr, Qt.ISODate)
-				self.__setAttributes(date, p.getint("ATTRIBUTES", attr))
-
-			for snap in p.options("SNAPSHOTS"):
-				date = QDate.fromString(snap, Qt.ISODate)
-				string = p.get("SNAPSHOTS", snap)
-				try:
-					elems = string.split(",")
-					shift = int(elems[0])
-					accountValue = float(elems[1])
-				except (IndexError, ValueError):
-					raise TimeshiftException("Datei defekt")
-				snapshot = Snapshot(date, shift, accountValue)
-				self.__setSnapshot(snapshot)
-
-			try:
-				for comm in p.options("COMMENTS"):
-					date = QDate.fromString(comm, Qt.ISODate)
-					comment = p.get("COMMENTS", comm)
-					comment = base64.standard_b64decode(comment)
-					comment = comment.decode("utf-8")
-					comment = QString(comment)
-					self.setCommentFor(date, comment)
-			except (ConfigParser.Error), e:
-				pass # Fileversion compatibility
+			parser(p)
 
 			self.dirty = False
 			self.setFilename(filename)
 			self.recalculate()
 			self.calendar.redraw()
 
-		except (ConfigParser.Error, TimeshiftException), e:
+		except (ConfigParser.Error, TsException), e:
 			QMessageBox.critical(self, "Laden fehlgeschlagen",
 					     "Laden fehlgeschlagen:\n" +\
 					     e.message)
@@ -607,41 +844,69 @@ class MainWidget(QWidget):
 		if fn:
 			self.doLoadFromFile(fn)
 
+	def __writeOverrides(self, fd, dateDict, section, floatFormat):
+		fd.write("\r\n[%s]\r\n" % section)
+		for date in dateDict:
+			payload = dateDict[date]
+			if floatFormat:
+				fmt = "%s=%f\r\n"
+			else:
+				fmt = "%s=%d\r\n"
+			fd.write(fmt % (IdToQDate(date).toString(Qt.ISODate),
+					payload))
+
 	def doSaveToFile(self, filename):
+		for i in range(0, 128):
+			tmpFilename = "%s.tmp%d" % (filename, i)
+			try:
+				os.stat(tmpFilename)
+			except (OSError), e:
+				if e.errno == errno.ENOENT:
+					break
+		else:
+			QMessageBox.critical(self, "Speichern fehlgeschlagen",
+					     "Speichern fehlgeschlagen:\n" +\
+					     "Tmp file error")
+			return False
 		try:
-			fd = file(filename, "w+b")
+			fd = file(tmpFilename, "w+b")
 
 			fd.write("[PARAMETERS]\r\n")
-			fd.write("fileversion=1\r\n")
-			fd.write("workTime=%f\r\n" % self.workTime)
-			fd.write("shiftSchedule=%d\r\n" % self.shiftSched)
-			fd.write("earlyGain=%f\r\n" % self.earlyGain)
-			fd.write("lateGain=%f\r\n" % self.lateGain)
-			fd.write("nightGain=%f\r\n" % self.nightGain)
-			fd.write("dayGain=%f\r\n" % self.dayGain)
+			fd.write("fileversion=2\r\n")
 
-			fd.write("\r\n[ATTRIBUTES]\r\n")
-			for attrKey in self.attributes:
-				attr = self.attributes[attrKey]
-				date = IdToQDate(attrKey)
-				fd.write("%s=%d\r\n" % (date.toString(Qt.ISODate), attr))
+			fd.write("\r\n[SHIFTCONFIG]\r\n")
+			count = 0
+			for cfg in self.shiftConfig:
+				fd.write("name%d=%s\r\n" % (count, QStringToBase64(cfg.name)))
+				fd.write("shift%d=%d\r\n" % (count, cfg.shift))
+				fd.write("workTime%d=%f\r\n" % (count, cfg.workTime))
+				fd.write("breakTime%d=%f\r\n" % (count, cfg.breakTime))
+				fd.write("attendanceTime%d=%f\r\n" % (count, cfg.attendanceTime))
+				count += 1
 
 			fd.write("\r\n[SNAPSHOTS]\r\n")
 			for snapKey in self.snapshots:
 				snapshot = self.snapshots[snapKey]
 				date = IdToQDate(snapKey)
-				shift = snapshot.shift
+				shift = snapshot.shiftConfigIndex
 				value = snapshot.accountValue
 				fd.write("%s=%d,%f\r\n" % (date.toString(Qt.ISODate), shift, value))
 
+			self.__writeOverrides(fd, self.daytypeOverrides, "DAYTYPE_OVERRIDES", False)
+			self.__writeOverrides(fd, self.shiftOverrides, "SHIFT_OVERRIDES", False)
+			self.__writeOverrides(fd, self.workTimeOverrides, "WORKTIME_OVERRIDES", True)
+			self.__writeOverrides(fd, self.breakTimeOverrides, "BREAKTIME_OVERRIDES", True)
+			self.__writeOverrides(fd, self.attendanceTimeOverrides, "ATTENDANCETIME_OVERRIDES", True)
+
 			fd.write("\r\n[COMMENTS]\r\n")
 			for commentKey in self.comments:
-				comment = self.comments[commentKey]
-				comment = comment.toUtf8()
-				comment = unicode(comment, "utf-8").encode("utf-8")
-				comment = base64.standard_b64encode(comment)
+				comment = QStringToBase64(self.comments[commentKey])
 				date = IdToQDate(commentKey)
 				fd.write("%s=%s\r\n" % (date.toString(Qt.ISODate), comment))
+
+			fd.flush()
+			fd.close()
+			os.rename(tmpFilename, filename)
 
 			self.dirty = False
 			self.setFilename(filename)
@@ -649,6 +914,10 @@ class MainWidget(QWidget):
 			QMessageBox.critical(self, "Speichern fehlgeschlagen",
 					     "Speichern fehlgeschlagen:\n" +\
 					     e.strerror)
+			try:
+				os.unlink(tmpFilename)
+			except (IOError):
+				pass
 			return False
 		return True
 
@@ -710,23 +979,27 @@ class MainWidget(QWidget):
 		self.dirty = True
 
 	def doSnapshot(self):
+		if not self.shiftConfig:
+			QMessageBox.critical(self, "Kein Schichtsystem",
+					     "Kein Schichtsystem konfiguriert")
+			return
 		date = self.calendar.selectedDate()
 		snapshot = self.getSnapshotFor(date)
-		shift = None
-		accountValue = None
+		shiftConfigIndex = 0
+		accountValue = 0.0
 		if snapshot is None:
 			# Calculate the account state w.r.t. the
 			# last shapshot.
 			snapshot = self.__findSnapshot(date)
 			if snapshot:
-				(shift, unused, startOfTheDay, endOfTheDay) = self.__calcAccountState(snapshot, date)
+				(shiftConfigIndex, startOfTheDay, endOfTheDay) = self.__calcAccountState(snapshot, date)
 				accountValue = startOfTheDay
 		else:
 			# We already have a snapshot on that day. Modify it.
-			shift = snapshot.shift
+			shiftConfigIndex = snapshot.shiftConfigIndex
 			accountValue = snapshot.accountValue
 		dlg = SnapshotDialog(self, date,
-				     shift, accountValue)
+				     shiftConfigIndex, accountValue)
 		if dlg.exec_():
 			self.__setSnapshot(dlg.getSnapshot())
 			self.recalculate()
@@ -740,103 +1013,45 @@ class MainWidget(QWidget):
 		except (KeyError):
 			return None
 
-	def __setAttributes(self, date, attributes):
-		if attributes:
-			self.attributes[QDateToId(date)] = attributes
-		else:
-			self.attributes.pop(QDateToId(date), None)
+	def overrideChanged(self):
+		if self.overrideChangeBlocked or not self.shiftConfig:
+			return
+		date = self.calendar.selectedDate()
+		shiftConfigIndex = self.__getShiftConfigIndexForDate(date)
+		if shiftConfigIndex < 0:
+			return #FIXME should disable controls, so that this does not happen.
+		shiftConfigItem = self.shiftConfig[shiftConfigIndex]
 
-	def setAttributes(self, date, attributes):
-		self.__setAttributes(date, attributes)
-		self.dirty = True
-		self.recalculate()
+		# Day type
+		index = self.typeCombo.currentIndex()
+		self.setDayType(date, self.typeCombo.itemData(index).toInt()[0])
+
+		# Shift override
+		index = self.shiftCombo.currentIndex()
+		shift = self.shiftCombo.itemData(index).toInt()[0]
+		if shift == shiftConfigItem.shift:
+			shift = None
+		self.setShiftOverride(date, shift)
+
+		# Work time override
+		workTime = self.workTime.value()
+		if floatEqual(workTime, shiftConfigItem.workTime):
+			workTime = None
+		self.setWorkTimeOverride(date, workTime)
+
+		# Break time override
+		breakTime = self.breakTime.value()
+		if floatEqual(breakTime, shiftConfigItem.breakTime):
+			breakTime = None
+		self.setBreakTimeOverride(date, breakTime)
+
+		# Attendance time override
+		attendanceTime = self.attendanceTime.value()
+		if floatEqual(attendanceTime, shiftConfigItem.attendanceTime):
+			attendanceTime = None
+		self.setAttendanceTimeOverride(date, attendanceTime)
+
 		self.calendar.redraw()
-
-	def getAttributes(self, date):
-		try:
-			return self.attributes[QDateToId(date)]
-		except (KeyError):
-			return 0
-
-	def toggleAttribute(self, date, mask, attribute):
-		attrs = self.getAttributes(date)
-		if attrs & attribute:
-			attrs &= ~mask
-		else:
-			attrs &= ~mask
-			attrs |= attribute
-		self.setAttributes(date, attrs)
-
-	def setShortTimeWork(self):
-		date = self.calendar.selectedDate()
-		self.toggleAttribute(date, DAYATTR_TYPE_MASK,
-				     DAYATTR_SHORTTIME)
-
-	def setCompensatoryTime(self):
-		date = self.calendar.selectedDate()
-		self.toggleAttribute(date, DAYATTR_TYPE_MASK,
-				     DAYATTR_COMPTIME)
-
-	def setHoliday(self):
-		date = self.calendar.selectedDate()
-		self.toggleAttribute(date, DAYATTR_TYPE_MASK,
-				     DAYATTR_HOLIDAY)
-
-	def setFeastday(self):
-		date = self.calendar.selectedDate()
-		self.toggleAttribute(date, DAYATTR_TYPE_MASK,
-				     DAYATTR_FEASTDAY)
-
-	def workOverride(self):
-		date = self.calendar.selectedDate()
-		weekday = date.dayOfWeek()
-		if weekday >= 6:
-			self.toggleAttribute(date, DAYATTR_TYPE_MASK,
-					     DAYATTR_WORKDAY)
-
-	def earlyOverride(self):
-		date = self.calendar.selectedDate()
-		self.toggleAttribute(date, DAYATTR_SHIFT_MASK,
-				     DAYATTR_SHIFT_EARLY)
-
-	def nightOverride(self):
-		date = self.calendar.selectedDate()
-		self.toggleAttribute(date, DAYATTR_SHIFT_MASK,
-				     DAYATTR_SHIFT_NIGHT)
-
-	def lateOverride(self):
-		date = self.calendar.selectedDate()
-		self.toggleAttribute(date, DAYATTR_SHIFT_MASK,
-				     DAYATTR_SHIFT_LATE)
-
-	def dayOverride(self):
-		date = self.calendar.selectedDate()
-		self.toggleAttribute(date, DAYATTR_SHIFT_MASK,
-				     DAYATTR_SHIFT_DAY)
-
-	def __nextShift(self, shift):
-		# Returns the shift next to "shift"
-		if self.shiftSched == SHIFTSCHED_EARLY:
-			return SHIFT_EARLY
-		if self.shiftSched == SHIFTSCHED_LATE:
-			return SHIFT_LATE
-		if self.shiftSched == SHIFTSCHED_NIGHT:
-			return SHIFT_NIGHT
-		if self.shiftSched == SHIFTSCHED_DAY:
-			return SHIFT_DAY
-		if self.shiftSched == SHIFTSCHED_EARLY_LATE:
-			if shift == SHIFT_EARLY:
-				return SHIFT_LATE
-			elif shift == SHIFT_LATE:
-				return SHIFT_EARLY
-		if self.shiftSched == SHIFTSCHED_EARLY_NIGHT_LATE:
-			if shift == SHIFT_EARLY:
-				return SHIFT_NIGHT
-			elif shift == SHIFT_LATE:
-				return SHIFT_EARLY
-			elif shift == SHIFT_NIGHT:
-				return SHIFT_LATE
-		return shift
 
 	def __findSnapshot(self, date):
 		# Find a snapshot relative to "date".
@@ -849,66 +1064,131 @@ class MainWidget(QWidget):
 					snapshot = s
 		return snapshot
 
+	def __getShiftConfigIndexForDate(self, date):
+		# Find the shift config index that's valid for the date.
+		# May return -1 on error.
+		snapshot = self.__findSnapshot(date)
+		if not snapshot:
+			return -1
+		daysBetween = snapshot.date.daysTo(date)
+		assert(daysBetween >= 0)
+		index = snapshot.shiftConfigIndex
+		index += daysBetween
+		index %= len(self.shiftConfig)
+		return index
+
+	def getDayType(self, date):
+		try:
+			return self.daytypeOverrides[QDateToId(date)]
+		except (KeyError):
+			return DTYPE_DEFAULT
+
+	def setDayType(self, date, dtype):
+		if dtype == DTYPE_DEFAULT:
+			self.daytypeOverrides.pop(QDateToId(date), None)
+		else:
+			self.daytypeOverrides[QDateToId(date)] = dtype
+		self.dirty = True
+
+	def setShiftOverride(self, date, shift):
+		if shift is None:
+			self.shiftOverrides.pop(QDateToId(date), None)
+		else:
+			self.shiftOverrides[QDateToId(date)] = shift
+		self.dirty = True
+
+	def __getRealShift(self, date, shiftConfigItem):
+		try: # Check for override
+			return self.shiftOverrides[QDateToId(date)]
+		except (KeyError): # Use standard schedule
+			return shiftConfigItem.shift
+
+	def setWorkTimeOverride(self, date, workTime):
+		if workTime is None:
+			self.workTimeOverrides.pop(QDateToId(date), None)
+		else:
+			self.workTimeOverrides[QDateToId(date)] = workTime
+		self.dirty = True
+
+	def __getRealWorkTime(self, date, shiftConfigItem):
+		try: # Check for override
+			return self.workTimeOverrides[QDateToId(date)]
+		except (KeyError): # Use standard schedule
+			return shiftConfigItem.workTime
+
+	def setBreakTimeOverride(self, date, breakTime):
+		if breakTime is None:
+			self.breakTimeOverrides.pop(QDateToId(date), None)
+		else:
+			self.breakTimeOverrides[QDateToId(date)] = breakTime
+		self.dirty = True
+
+	def __getRealBreakTime(self, date, shiftConfigItem):
+		try: # Check for override
+			return self.breakTimeOverrides[QDateToId(date)]
+		except (KeyError): # Use standard schedule
+			return shiftConfigItem.breakTime
+
+	def setAttendanceTimeOverride(self, date, attendanceTime):
+		if attendanceTime is None:
+			self.attendanceTimeOverrides.pop(QDateToId(date), None)
+		else:
+			self.attendanceTimeOverrides[QDateToId(date)] = attendanceTime
+		self.dirty = True
+
+	def __getRealAttendanceTime(self, date, shiftConfigItem):
+		try: # Check for override
+			return self.attendanceTimeOverrides[QDateToId(date)]
+		except (KeyError): # Use standard schedule
+			return shiftConfigItem.attendanceTime
+
 	def __calcAccountState(self, snapshot, endDate):
 		date = snapshot.date
-		shift = snapshot.shift
+		shiftConfigIndex = snapshot.shiftConfigIndex
 		startOfTheDay = snapshot.accountValue
 		endOfTheDay = startOfTheDay
 		while True:
 			assert(date <= endDate)
-			attrs = self.getAttributes(date)
-			weekday = date.dayOfWeek()
 
-			if weekday >= 1 and weekday <= 5:
-				attrs |= DAYATTR_WORKDAY
+			shiftConfigItem = self.shiftConfig[shiftConfigIndex]
+			currentShift = self.__getRealShift(date, shiftConfigItem)
+			workTime = self.__getRealWorkTime(date, shiftConfigItem)
+			breakTime = self.__getRealBreakTime(date, shiftConfigItem)
+			attendanceTime = self.__getRealAttendanceTime(date, shiftConfigItem)
+
+			dtype = self.getDayType(date)
+			if dtype == DTYPE_DEFAULT:
+				if attendanceTime:
+					endOfTheDay += attendanceTime
+					endOfTheDay -= workTime
+					endOfTheDay -= breakTime
+			elif dtype == DTYPE_COMPTIME:
+				endOfTheDay -= workTime
+			elif dtype == DTYPE_HOLIDAY:
+				pass#TODO calc holidays
+			elif dtype == DTYPE_FEASTDAY:
+				pass # no change
+			elif dtype == DTYPE_SHORTTIME:
+				pass # no change
 			else:
-				attrs |= DAYATTR_WEEKEND
-
-			if attrs & DAYATTR_SHIFT_EARLY:
-				currentShift = SHIFT_EARLY
-			elif attrs & DAYATTR_SHIFT_LATE:
-				currentShift = SHIFT_LATE
-			elif attrs & DAYATTR_SHIFT_NIGHT:
-				currentShift = SHIFT_NIGHT
-			elif attrs & DAYATTR_SHIFT_DAY:
-				currentShift = SHIFT_DAY
-			else:
-				# Standard shift schedule
-				currentShift = shift
-
-			if attrs & DAYATTR_COMPTIME:
-				# Compensatory time day
-				endOfTheDay -= self.workTime
-			elif attrs & DAYATTR_HOLIDAY or attrs & DAYATTR_FEASTDAY:
-				# Holidays, yay!
-				pass
-			elif attrs & DAYATTR_SHORTTIME:
-				# Shorttime work
-				pass
-			elif attrs & DAYATTR_WORKDAY:
-				# Workday as usual
-				if currentShift == SHIFT_EARLY:
-					endOfTheDay += self.earlyGain
-				elif currentShift == SHIFT_LATE:
-					endOfTheDay += self.lateGain
-				elif currentShift == SHIFT_NIGHT:
-					endOfTheDay += self.nightGain
-				elif currentShift == SHIFT_DAY:
-					endOfTheDay += self.dayGain
-				else:
-					assert(0)
+				assert(0)
 
 			if date == endDate:
 				break
 			date = date.addDays(1)
-			if date.dayOfWeek() == 1: # Monday
-				shift = self.__nextShift(shift)
+			shiftConfigIndex += 1
+			if shiftConfigIndex >= len(self.shiftConfig):
+				shiftConfigIndex = 0
 			startOfTheDay = endOfTheDay
 
-		return (shift, currentShift, startOfTheDay, endOfTheDay)
+		return (shiftConfigIndex, startOfTheDay, endOfTheDay)
 
 	def recalculate(self):
 		selDate = self.calendar.selectedDate()
+
+		if not self.shiftConfig:
+			self.output.setText("Kein Schichtsystem konfiguriert")
+			return
 
 		# First find the next snapshot.
 		snapshot = self.__findSnapshot(selDate)
@@ -918,53 +1198,27 @@ class MainWidget(QWidget):
 					    dateString)
 			return
 
-		# Then calculate the account
-		(shift, currentShift, startOfTheDay, endOfTheDay) = self.__calcAccountState(snapshot, selDate)
+		# Then calculate the account state
+		(shiftConfigIndex, startOfTheDay, endOfTheDay) = self.__calcAccountState(snapshot, selDate)
 
-		if currentShift == SHIFT_EARLY:
-			shift = "Fruehschicht"
-		elif currentShift == SHIFT_LATE:
-			shift = "Spaetschicht"
-		elif currentShift == SHIFT_NIGHT:
-			shift = "Nachtschicht"
-		elif currentShift == SHIFT_DAY:
-			shift = "Normalschicht"
-		else:
-			assert(0)
+		shiftConfigItem = self.shiftConfig[shiftConfigIndex]
+		dtype = self.getDayType(selDate)
+		shift = self.__getRealShift(selDate, shiftConfigItem)
+		workTime = self.__getRealWorkTime(selDate, shiftConfigItem)
+		breakTime = self.__getRealBreakTime(selDate, shiftConfigItem)
+		attendanceTime = self.__getRealAttendanceTime(selDate, shiftConfigItem)
+
+		self.overrideChangeBlocked = True
+		self.typeCombo.setCurrentIndex(self.typeCombo.findData(QVariant(dtype)))
+		self.shiftCombo.setCurrentIndex(self.shiftCombo.findData(QVariant(shift)))
+		self.workTime.setValue(workTime)
+		self.breakTime.setValue(breakTime)
+		self.attendanceTime.setValue(attendanceTime)
+		self.overrideChangeBlocked = False
+
 		dateString = selDate.toString("dd.MM.yyyy")
-		self.output.setText("Konto in Std am %s (%s):  Beginn: %.2f  Ende: %.2f" %\
-			(dateString, shift, startOfTheDay, endOfTheDay))
-
-	def keyPressEvent(self, e):
-		if e.modifiers() & Qt.ShiftModifier:
-			if e.key() == Qt.Key_F:
-				self.earlyOverride()
-				e.accept()
-			if e.key() == Qt.Key_N:
-				self.nightOverride()
-				e.accept()
-			if e.key() == Qt.Key_S:
-				self.lateOverride()
-				e.accept()
-			if e.key() == Qt.Key_O:
-				self.dayOverride()
-				e.accept()
-		else:
-			if e.key() == Qt.Key_Z:
-				self.setCompensatoryTime()
-				e.accept()
-			if e.key() == Qt.Key_U:
-				self.setHoliday()
-				e.accept()
-			if e.key() == Qt.Key_F:
-				self.setFeastday()
-				e.accept()
-			if e.key() == Qt.Key_C:
-				self.setShortTimeWork()
-				e.accept()
-			if e.key() == Qt.Key_A:
-				self.workOverride()
-				e.accept()
+		self.output.setText("Konto in Std am %s (shiftcfg %d):  Beginn: %.2f  Ende: %.2f" %\
+			(dateString, shiftConfigIndex + 1, startOfTheDay, endOfTheDay))
 
 	def askSaveToFile(self):
 		res = QMessageBox.question(self, "Ungespeicherte Daten",
@@ -992,7 +1246,7 @@ class MainWindow(QMainWindow):
 		self.setCentralWidget(MainWidget(self))
 
 	def setTitleSuffix(self, suffix):
-		title = "Zeitkontoberechnung"
+		title = "Zeitkonto"
 		if suffix:
 			title += " - " + suffix
 		self.setWindowTitle(title)
