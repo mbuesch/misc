@@ -166,7 +166,7 @@ class ShiftConfigDialog(QDialog):
 		self.itemList.clear()
 		count = 1
 		for cfg in self.mainWidget.shiftConfig:
-			name = "%d (%s)" % (count, cfg.name)
+			name = "%d \"%s\"" % (count, cfg.name)
 			count += 1
 			self.itemList.addItem(name)
 		if self.mainWidget.shiftConfig:
@@ -213,7 +213,7 @@ class ShiftConfigDialog(QDialog):
 		if index < 0:
 			return
 		self.updateItem(self.mainWidget.shiftConfig[index])
-		name = "%d (%s)" % (index + 1, self.mainWidget.shiftConfig[index].name)
+		name = "%d \"%s\"" % (index + 1, self.mainWidget.shiftConfig[index].name)
 		self.itemList.item(index).setText(name)
 
 	def addItem(self):
@@ -406,7 +406,7 @@ class SnapshotDialog(QDialog):
 		assert(mainWidget.shiftConfig)
 		index = 0
 		for cfg in mainWidget.shiftConfig:
-			name = "%d (%s)" % (index + 1, cfg.name)
+			name = "%d \"%s\"" % (index + 1, cfg.name)
 			self.shiftConfig.addItem(name, QVariant(index))
 			index += 1
 		self.layout().addWidget(self.shiftConfig, 1, 1)
@@ -642,14 +642,20 @@ class MainWidget(QWidget):
 
 	def __genShiftCfgWeek(self, shift, workTime, workGain, breakTime):
 		attendanceTime = workTime + breakTime + workGain
+		shiftstr = {
+			SHIFT_EARLY	: "Frueh",
+			SHIFT_LATE	: "Spaet",
+			SHIFT_NIGHT	: "Nacht",
+			SHIFT_DAY	: "Normal",
+		}[shift]
 		shiftcfg = [
-			ShiftConfigItem("Montag", shift, workTime, breakTime, attendanceTime),
-			ShiftConfigItem("Dienstag", shift, workTime, breakTime, attendanceTime),
-			ShiftConfigItem("Mittwoch", shift, workTime, breakTime, attendanceTime),
-			ShiftConfigItem("Donnerstag", shift, workTime, breakTime, attendanceTime),
-			ShiftConfigItem("Freitag", shift, workTime, breakTime, attendanceTime),
-			ShiftConfigItem("Samstag", shift, 0.0, breakTime, 0.0),
-			ShiftConfigItem("Sonntag", shift, 0.0, 0.0, 0.0),
+			ShiftConfigItem("Mo (%s)" % shiftstr, shift, workTime, breakTime, attendanceTime),
+			ShiftConfigItem("Di (%s)" % shiftstr, shift, workTime, breakTime, attendanceTime),
+			ShiftConfigItem("Mi (%s)" % shiftstr, shift, workTime, breakTime, attendanceTime),
+			ShiftConfigItem("Do (%s)" % shiftstr, shift, workTime, breakTime, attendanceTime),
+			ShiftConfigItem("Fr (%s)" % shiftstr, shift, workTime, breakTime, attendanceTime),
+			ShiftConfigItem("Sa (%s)" % shiftstr, shift, 0.0, breakTime, 0.0),
+			ShiftConfigItem("So (%s)" % shiftstr, shift, 0.0, 0.0, 0.0),
 		]
 		return shiftcfg
 
