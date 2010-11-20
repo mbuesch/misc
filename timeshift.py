@@ -235,6 +235,13 @@ class ShiftConfigDialog(QDialog):
 		index = self.itemList.currentRow()
 		if index < 0:
 			return
+		for snapshot in self.mainWidget.snapshots.values():
+			if snapshot.shiftConfigIndex >= self.itemList.count() - 1:
+				dateString = snapshot.date.toString("dd.MM.yyyy")
+				QMessageBox.critical(self, "Eintrag wird verwendet",
+					"Der Eintrag wird von einem Schnappschuss (%s) verwendet. "
+					"Loeschen nicht moeglich." % dateString)
+				return
 		res = QMessageBox.question(self, "Eintrag loeschen?",
 					   "'%s' loeschen?" % self.itemList.item(index).text(),
 					   QMessageBox.Yes | QMessageBox.No)
@@ -376,7 +383,6 @@ class ManageDialog(QDialog):
 	def doShiftConfig(self):
 		dlg = ShiftConfigDialog(self.mainWidget)
 		dlg.exec_()
-		#FIXME need to fixup (kill?) snapshots that have an out-of-range shiftConfigIndex
 		self.mainWidget.recalculate()
 		self.accept()
 
