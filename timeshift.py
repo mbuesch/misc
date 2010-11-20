@@ -498,7 +498,7 @@ class Calendar(QCalendarWidget):
 
 		if mainWidget.dateHasTimeOverrides(date):
 			pen = QPen(QColor("#9F9F9F"))
-			pen.setWidth(4)
+			pen.setWidth(5)
 			painter.setPen(pen)
 			painter.drawPoint(rect.x() + rect.width() - 8,
 					  rect.y() + 8)
@@ -1066,6 +1066,7 @@ class MainWidget(QWidget):
 			attendanceTime = None
 		self.setAttendanceTimeOverride(date, attendanceTime)
 
+		self.recalculate()
 		self.calendar.redraw()
 
 	def __findSnapshot(self, date):
