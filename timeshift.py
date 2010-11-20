@@ -1220,8 +1220,8 @@ class MainWidget(QWidget):
 		self.overrideChangeBlocked = False
 
 		dateString = selDate.toString("dd.MM.yyyy")
-		self.output.setText("Konto in Std am %s (shiftcfg %d):  Beginn: %.2f  Ende: %.2f" %\
-			(dateString, shiftConfigIndex + 1, startOfTheDay, endOfTheDay))
+		self.output.setText("Konto am %s:  Beginn: %.2f  Ende: %.2f" %\
+			(dateString, startOfTheDay, endOfTheDay))
 
 	def askSaveToFile(self):
 		res = QMessageBox.question(self, "Ungespeicherte Daten",
