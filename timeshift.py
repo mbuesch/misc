@@ -496,6 +496,13 @@ class Calendar(QCalendarWidget):
 			painter.drawRect(rect.x() + 3, rect.y() + 3,
 					 rect.width() - 3 - 3, rect.height() - 3 - 3)
 
+		if mainWidget.dateHasTimeOverrides(date):
+			pen = QPen(QColor("#9F9F9F"))
+			pen.setWidth(4)
+			painter.setPen(pen)
+			painter.drawPoint(rect.x() + rect.width() - 8,
+					  rect.y() + 8)
+
 		dtype = self.mainWidget.getDayType(date)
 		typeLetter = {
 			DTYPE_DEFAULT		: None,
@@ -1156,6 +1163,12 @@ class MainWidget(QWidget):
 			return self.attendanceTimeOverrides[QDateToId(date)]
 		except (KeyError): # Use standard schedule
 			return shiftConfigItem.attendanceTime
+
+	def dateHasTimeOverrides(self, date):
+		dateId = QDateToId(date)
+		return dateId in self.workTimeOverrides or \
+			dateId in self.breakTimeOverrides or \
+			dateId in self.attendanceTimeOverrides
 
 	def __calcAccountState(self, snapshot, endDate):
 		date = snapshot.date
