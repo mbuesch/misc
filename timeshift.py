@@ -200,7 +200,7 @@ class ShiftConfigDialog(QDialog):
 		item.workTime = self.workTime.value()
 		item.breakTime = self.breakTime.value()
 		item.attendanceTime = self.attendanceTime.value()
-		self.mainWidget.dirty = True
+		self.mainWidget.setDirty()
 
 	def itemChanged(self, row):
 		if row >= 0:
@@ -229,7 +229,7 @@ class ShiftConfigDialog(QDialog):
 		self.mainWidget.shiftConfig.insert(index, item)
 		self.loadConfig()
 		self.itemList.setCurrentRow(index)
-		self.mainWidget.dirty = True
+		self.mainWidget.setDirty()
 
 	def removeItem(self):
 		index = self.itemList.currentRow()
@@ -252,7 +252,7 @@ class ShiftConfigDialog(QDialog):
 		if index >= self.itemList.count() and index > 0:
 			index -= 1
 		self.itemList.setCurrentRow(index)
-		self.mainWidget.dirty = True
+		self.mainWidget.setDirty()
 
 class EnhancedDialog(QDialog):
 	def __init__(self, mainWidget):
@@ -347,7 +347,7 @@ class ManageDialog(QDialog):
 
 	def updateParams(self):
 		mainWidget = self.mainWidget
-		mainWidget.dirty = True
+		mainWidget.setDirty()
 		#TODO
 		mainWidget.recalculate()
 
@@ -622,7 +622,7 @@ class MainWidget(QWidget):
 		self.__resetParams()
 		self.__resetCalendar()
 		self.recalculate()
-		self.dirty = False
+		self.setDirty(False)
 
 		if len(sys.argv) == 2:
 			self.doLoadFromFile(sys.argv[1])
@@ -649,6 +649,10 @@ class MainWidget(QWidget):
 		self.__resetCalendar()
 		self.recalculate()
 		self.calendar.redraw()
+
+	def setDirty(self, dirty=True):
+		self.dirty = dirty
+		self.parent().setTitleDirty(dirty)
 
 	def __genShiftCfgWeek(self, shift, workTime, workGain, breakTime):
 		attendanceTime = workTime + breakTime + workGain
@@ -840,7 +844,7 @@ class MainWidget(QWidget):
 
 			parser(p)
 
-			self.dirty = False
+			self.setDirty(False)
 			self.setFilename(filename)
 			self.recalculate()
 			self.calendar.redraw()
@@ -924,7 +928,7 @@ class MainWidget(QWidget):
 			fd.close()
 			os.rename(tmpFilename, filename)
 
-			self.dirty = False
+			self.setDirty(False)
 			self.setFilename(filename)
 		except (IOError), e:
 			QMessageBox.critical(self, "Speichern fehlgeschlagen",
@@ -971,7 +975,7 @@ class MainWidget(QWidget):
 			self.comments[QDateToId(date)] = text
 		else:
 			self.comments.pop(QDateToId(date), None)
-		self.dirty = True
+		self.setDirty()
 
 	def doEnhanced(self):
 		dlg = EnhancedDialog(self)
@@ -983,7 +987,7 @@ class MainWidget(QWidget):
 
 	def __removeSnapshot(self, date):
 		self.snapshots.pop(QDateToId(date), None)
-		self.dirty = True
+		self.setDirty()
 
 	def removeSnapshot(self, date):
 		self.__removeSnapshot(date)
@@ -992,7 +996,7 @@ class MainWidget(QWidget):
 
 	def __setSnapshot(self, snapshot):
 		self.snapshots[QDateToId(snapshot.date)] = snapshot
-		self.dirty = True
+		self.setDirty()
 
 	def doSnapshot(self):
 		if not self.shiftConfig:
@@ -1111,14 +1115,14 @@ class MainWidget(QWidget):
 			self.daytypeOverrides.pop(QDateToId(date), None)
 		else:
 			self.daytypeOverrides[QDateToId(date)] = dtype
-		self.dirty = True
+		self.setDirty()
 
 	def setShiftOverride(self, date, shift):
 		if shift is None:
 			self.shiftOverrides.pop(QDateToId(date), None)
 		else:
 			self.shiftOverrides[QDateToId(date)] = shift
-		self.dirty = True
+		self.setDirty()
 
 	def __getRealShift(self, date, shiftConfigItem):
 		try: # Check for override
@@ -1131,7 +1135,7 @@ class MainWidget(QWidget):
 			self.workTimeOverrides.pop(QDateToId(date), None)
 		else:
 			self.workTimeOverrides[QDateToId(date)] = workTime
-		self.dirty = True
+		self.setDirty()
 
 	def __getRealWorkTime(self, date, shiftConfigItem):
 		try: # Check for override
@@ -1144,7 +1148,7 @@ class MainWidget(QWidget):
 			self.breakTimeOverrides.pop(QDateToId(date), None)
 		else:
 			self.breakTimeOverrides[QDateToId(date)] = breakTime
-		self.dirty = True
+		self.setDirty()
 
 	def __getRealBreakTime(self, date, shiftConfigItem):
 		try: # Check for override
@@ -1157,7 +1161,7 @@ class MainWidget(QWidget):
 			self.attendanceTimeOverrides.pop(QDateToId(date), None)
 		else:
 			self.attendanceTimeOverrides[QDateToId(date)] = attendanceTime
-		self.dirty = True
+		self.setDirty()
 
 	def __getRealAttendanceTime(self, date, shiftConfigItem):
 		try: # Check for override
@@ -1274,15 +1278,27 @@ class MainWidget(QWidget):
 class MainWindow(QMainWindow):
 	def __init__(self, parent=None):
 		QMainWindow.__init__(self, parent)
-		self.setTitleSuffix(None)
+		self.titleSuffix = None
+		self.titleDirty = False
+		self.__updateTitle()
 
 		self.setCentralWidget(MainWidget(self))
 
-	def setTitleSuffix(self, suffix):
+	def __updateTitle(self):
 		title = "Zeitkonto"
-		if suffix:
-			title += " - " + suffix
+		if self.titleSuffix:
+			title += " - " + self.titleSuffix
+		if self.titleDirty:
+			title += " *"
 		self.setWindowTitle(title)
+
+	def setTitleSuffix(self, suffix):
+		self.titleSuffix = suffix
+		self.__updateTitle()
+
+	def setTitleDirty(self, dirty):
+		self.titleDirty = dirty
+		self.__updateTitle()
 
 	def closeEvent(self, e):
 		if not self.centralWidget().shutdown():
