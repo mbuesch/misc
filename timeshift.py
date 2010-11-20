@@ -254,12 +254,9 @@ class EnhancedDialog(QDialog):
 		self.setWindowTitle("Erweitert")
 		self.setLayout(QGridLayout())
 
-		self.dayInfo = QLabel(self)#TODO
-		self.layout().addWidget(self.dayInfo, 0, 0, 1, 2)
-
 		self.commentGroup = QGroupBox("Kommentar", self)
 		self.commentGroup.setLayout(QGridLayout())
-		self.layout().addWidget(self.commentGroup, 1, 0, 1, 2)
+		self.layout().addWidget(self.commentGroup, 0, 0, 1, 2)
 
 		self.comment = QTextEdit(self)
 		self.commentGroup.layout().addWidget(self.comment, 0, 0)
@@ -267,12 +264,12 @@ class EnhancedDialog(QDialog):
 		self.comment.document().setPlainText(mainWidget.getCommentFor(date))
 
 		self.okButton = QPushButton("OK", self)
-		self.layout().addWidget(self.okButton, 2, 0)
+		self.layout().addWidget(self.okButton, 1, 0)
 		self.connect(self.okButton, SIGNAL("released()"),
 			     self.ok)
 
 		self.cancelButton = QPushButton("Abbrechen", self)
-		self.layout().addWidget(self.cancelButton, 2, 1)
+		self.layout().addWidget(self.cancelButton, 1, 1)
 		self.connect(self.cancelButton, SIGNAL("released()"),
 			     self.cancel)
 
