@@ -376,8 +376,8 @@ class ManageDialog(QDialog):
 	def doShiftConfig(self):
 		dlg = ShiftConfigDialog(self.mainWidget)
 		dlg.exec_()
-		self.mainWidget.recalculate()
 		#FIXME need to fixup (kill?) snapshots that have an out-of-range shiftConfigIndex
+		self.mainWidget.recalculate()
 		self.accept()
 
 class Snapshot:
@@ -1021,8 +1021,7 @@ class MainWidget(QWidget):
 			return
 		date = self.calendar.selectedDate()
 		shiftConfigIndex = self.__getShiftConfigIndexForDate(date)
-		if shiftConfigIndex < 0:
-			return #FIXME should disable controls, so that this does not happen.
+		assert(shiftConfigIndex >= 0)
 		shiftConfigItem = self.shiftConfig[shiftConfigIndex]
 
 		# Day type
@@ -1079,6 +1078,13 @@ class MainWidget(QWidget):
 		index += daysBetween
 		index %= len(self.shiftConfig)
 		return index
+
+	def enableOverrideControls(self, enable):
+		self.typeCombo.setEnabled(enable)
+		self.shiftCombo.setEnabled(enable)
+		self.workTime.setEnabled(enable)
+		self.breakTime.setEnabled(enable)
+		self.attendanceTime.setEnabled(enable)
 
 	def getDayType(self, date):
 		try:
@@ -1191,6 +1197,7 @@ class MainWidget(QWidget):
 
 		if not self.shiftConfig:
 			self.output.setText("Kein Schichtsystem konfiguriert")
+			self.enableOverrideControls(False)
 			return
 
 		# First find the next snapshot.
@@ -1199,7 +1206,10 @@ class MainWidget(QWidget):
 			dateString = selDate.toString("dd.MM.yyyy")
 			self.output.setText("Kein Schnappschuss vor dem %s gesetzt" %\
 					    dateString)
+			self.enableOverrideControls(False)
 			return
+
+		self.enableOverrideControls(True)
 
 		# Then calculate the account state
 		(shiftConfigIndex, startOfTheDay, endOfTheDay) = self.__calcAccountState(snapshot, selDate)
