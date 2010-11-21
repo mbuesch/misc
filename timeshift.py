@@ -65,6 +65,7 @@ class TimeSpinBox(QDoubleSpinBox):
 		self.setMaximum(maxVal)
 		self.setValue(val)
 		self.setSingleStep(step)
+		self.setAccelerated(True)
 		if suffix:
 			self.setSuffix(" " + suffix)
 		if prefix:
@@ -337,6 +338,7 @@ class ManageDialog(QDialog):
 		self.holidays.setMinimum(0)
 		self.holidays.setMaximum(1024)
 		self.holidays.setSingleStep(1)
+		self.holidays.setAccelerated(True)
 		self.holidays.setPrefix("Urlaub/a = ")
 		self.holidays.setSuffix(" Tage")
 		self.paramsGroup.layout().addWidget(self.holidays, 0, 0, 1, 2)
@@ -416,12 +418,8 @@ class SnapshotDialog(QDialog):
 
 		l = QLabel("Kontostand:", self)
 		self.layout().addWidget(l, 2, 0)
-		self.accountValue = QDoubleSpinBox(self)
-		self.accountValue.setMinimum(-1000.0)
-		self.accountValue.setMaximum(1000.0)
-		self.accountValue.setValue(accountValue)
-		self.accountValue.setSuffix(" h")
-		self.accountValue.setSingleStep(0.1)
+		self.accountValue = TimeSpinBox(self, val=accountValue,
+				minVal=-1000.0, maxVal=1000.0, step=0.1)
 		self.layout().addWidget(self.accountValue, 2, 1)
 
 		self.removeButton = QPushButton("Schnappschuss loeschen", self)
