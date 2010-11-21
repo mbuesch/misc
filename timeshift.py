@@ -1193,7 +1193,7 @@ class MainWidget(QWidget):
 			elif dtype == DTYPE_COMPTIME:
 				endOfTheDay -= workTime
 			elif dtype == DTYPE_HOLIDAY:
-				pass#TODO calc holidays
+				pass # no change
 			elif dtype == DTYPE_FEASTDAY:
 				pass # no change
 			elif dtype == DTYPE_SHORTTIME:
@@ -1210,6 +1210,18 @@ class MainWidget(QWidget):
 			startOfTheDay = endOfTheDay
 
 		return (shiftConfigIndex, startOfTheDay, endOfTheDay)
+
+	def __holidaysLeft(self, date):
+
+		def daytypeOverridesFilterFunc(key):
+			itemDate = IdToQDate(key)
+			return itemDate.year() == date.year() and \
+			       itemDate <= date and \
+			       self.daytypeOverrides[key] == DTYPE_HOLIDAY
+
+		keys = filter(daytypeOverridesFilterFunc,
+			      self.daytypeOverrides.keys())
+		return self.holidays - len(keys)
 
 	def recalculate(self):
 		selDate = self.calendar.selectedDate()
@@ -1232,6 +1244,7 @@ class MainWidget(QWidget):
 
 		# Then calculate the account state
 		(shiftConfigIndex, startOfTheDay, endOfTheDay) = self.__calcAccountState(snapshot, selDate)
+		holidaysLeft = self.__holidaysLeft(selDate)
 
 		shiftConfigItem = self.shiftConfig[shiftConfigIndex]
 		dtype = self.getDayType(selDate)
@@ -1249,8 +1262,8 @@ class MainWidget(QWidget):
 		self.overrideChangeBlocked = False
 
 		dateString = selDate.toString("dd.MM.yyyy")
-		self.output.setText("Konto am %s:  Beginn: %.2f  Ende: %.2f" %\
-			(dateString, startOfTheDay, endOfTheDay))
+		self.output.setText("Konto am %s:  Beginn: %.2f  Ende: %.2f  Urlaub: %d" %\
+			(dateString, startOfTheDay, endOfTheDay, holidaysLeft))
 
 	def askSaveToFile(self):
 		res = QMessageBox.question(self, "Ungespeicherte Daten",
