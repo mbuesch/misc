@@ -66,6 +66,7 @@ class TimeSpinBox(QDoubleSpinBox):
 		self.setValue(val)
 		self.setSingleStep(step)
 		self.setAccelerated(True)
+		self.setKeyboardTracking(False)
 		if suffix:
 			self.setSuffix(" " + suffix)
 		if prefix:
