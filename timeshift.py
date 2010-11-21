@@ -827,7 +827,14 @@ class MainWidget(QWidget):
 			p = ConfigParser.SafeConfigParser()
 			p.read((filename,))
 
-			ver = p.getint("PARAMETERS", "fileversion")
+			ver = None
+			try:
+				ver = p.getint("TIMESHIFT_FILE", "version")
+			except (ConfigParser.Error):
+				try:
+					ver = p.getint("PARAMETERS", "fileversion")
+				except (ConfigParser.Error):
+					pass
 			if ver == 1:
 				parser = self.__parseFile_ver1
 			elif ver == 2:
@@ -847,8 +854,7 @@ class MainWidget(QWidget):
 
 		except (ConfigParser.Error, TsException), e:
 			QMessageBox.critical(self, "Laden fehlgeschlagen",
-					     "Laden fehlgeschlagen:\n" +\
-					     e.message)
+					     "Laden fehlgeschlagen:\n" + str(e))
 
 	def loadFromFile(self):
 		if self.dirty:
@@ -887,8 +893,10 @@ class MainWidget(QWidget):
 		try:
 			fd = file(tmpFilename, "w+b")
 
-			fd.write("[PARAMETERS]\r\n")
-			fd.write("fileversion=2\r\n")
+			fd.write("[TIMESHIFT_FILE]\r\n")
+			fd.write("version=2\r\n")
+
+			fd.write("\r\n[PARAMETERS]\r\n")
 			fd.write("holidaysPerYear=%d\r\n" % self.holidays)
 
 			fd.write("\r\n[SHIFTCONFIG]\r\n")
