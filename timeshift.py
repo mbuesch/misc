@@ -333,32 +333,28 @@ class ManageDialog(QDialog):
 		self.paramsGroup.setLayout(QGridLayout())
 		self.layout().addWidget(self.paramsGroup, 0, 2)
 
-		#TODO holiday
-
-		self.resetParamsButton = QPushButton("Parameter ruecksetzen", self)
-		self.paramsGroup.layout().addWidget(self.resetParamsButton, 6, 0, 1, 2)
-		self.connect(self.resetParamsButton, SIGNAL("released()"),
-			     self.resetParams)
+		self.holidays = QSpinBox(self)
+		self.holidays.setMinimum(0)
+		self.holidays.setMaximum(1024)
+		self.holidays.setSingleStep(1)
+		self.holidays.setPrefix("Urlaub/a = ")
+		self.holidays.setSuffix(" Tage")
+		self.paramsGroup.layout().addWidget(self.holidays, 0, 0, 1, 2)
 
 		self.loadParams()
 
+		self.connect(self.holidays, SIGNAL("valueChanged(int)"),
+			     self.updateParams)
+
 	def loadParams(self):
-		pass#TODO
+		mainWidget = self.mainWidget
+		self.holidays.setValue(mainWidget.holidays)
 
 	def updateParams(self):
 		mainWidget = self.mainWidget
 		mainWidget.setDirty()
-		#TODO
+		mainWidget.holidays = self.holidays.value()
 		mainWidget.recalculate()
-
-	def resetParams(self):
-		res = QMessageBox.question(self, "Alle Parameter ruecksetzen?",
-					   "Wollen Sie wirklich alle Parameter auf die " +\
-					   "Standardwerte zuruecksetzen?",
-					   QMessageBox.Yes | QMessageBox.No)
-		if res == QMessageBox.Yes:
-			self.mainWidget.resetParams()
-			self.loadParams()
 
 	def load(self):
 		self.mainWidget.loadFromFile()
@@ -374,10 +370,11 @@ class ManageDialog(QDialog):
 
 	def resetCalendar(self):
 		res = QMessageBox.question(self, "Kalender loeschen?",
-					   "Wollen Sie wirklich alle Kalendereintraege loeschen?",
+					   "Wollen Sie wirklich alle Kalendereintraege "
+					   "und Parameter loeschen?",
 					   QMessageBox.Yes | QMessageBox.No)
 		if res == QMessageBox.Yes:
-			self.mainWidget.resetCalendar()
+			self.mainWidget.resetState()
 			self.accept()
 
 	def doShiftConfig(self):
@@ -628,12 +625,8 @@ class MainWidget(QWidget):
 			self.doLoadFromFile(sys.argv[1])
 
 	def __resetParams(self):
+		self.holidays = 30
 		self.shiftConfig = defaultShiftConfig[:]
-
-	def resetParams(self):
-		self.__resetParams()
-		self.recalculate()
-		self.calendar.redraw()
 
 	def __resetCalendar(self):
 		self.snapshots = {}
@@ -645,8 +638,10 @@ class MainWidget(QWidget):
 		self.comments = {}
 		self.setFilename(None)
 
-	def resetCalendar(self):
+	def resetState(self):
 		self.__resetCalendar()
+		self.__resetParams()
+		self.setDirty()
 		self.recalculate()
 		self.calendar.redraw()
 
