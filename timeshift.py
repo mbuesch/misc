@@ -779,6 +779,8 @@ class MainWidget(QWidget):
 			dateDict[QDateToId(QDate.fromString(date, Qt.ISODate))] = payload
 
 	def __parseFile_ver2(self, p):
+		self.holidays = p.getint("PARAMETERS", "holidaysPerYear")
+
 		self.shiftConfig = []
 		for count in range(0, MAX_SHIFTCONFIG_ITEMS):
 			try:
@@ -887,6 +889,7 @@ class MainWidget(QWidget):
 
 			fd.write("[PARAMETERS]\r\n")
 			fd.write("fileversion=2\r\n")
+			fd.write("holidaysPerYear=%d\r\n" % self.holidays)
 
 			fd.write("\r\n[SHIFTCONFIG]\r\n")
 			count = 0
