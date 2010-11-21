@@ -10,6 +10,7 @@ import os
 import errno
 import ConfigParser
 import base64
+import gzip
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 
@@ -824,8 +825,15 @@ class MainWidget(QWidget):
 
 	def doLoadFromFile(self, filename):
 		try:
+			fd = gzip.GzipFile(filename, "rb")
+			try:
+				fd.read(1)
+				fd.rewind()
+			except (IOError):
+				fd = file(filename, "rb")
+
 			p = ConfigParser.SafeConfigParser()
-			p.read((filename,))
+			p.readfp(fd, filename)
 
 			ver = None
 			try:
@@ -852,7 +860,7 @@ class MainWidget(QWidget):
 			self.recalculate()
 			self.calendar.redraw()
 
-		except (ConfigParser.Error, TsException), e:
+		except (ConfigParser.Error, TsException, IOError), e:
 			QMessageBox.critical(self, "Laden fehlgeschlagen",
 					     "Laden fehlgeschlagen:\n" + str(e))
 
@@ -861,7 +869,7 @@ class MainWidget(QWidget):
 			if not self.askSaveToFile():
 				return
 		fn = QFileDialog.getOpenFileName(self, "Laden", "",
-						 "Timeshift Dateien (*.tms)\n" +\
+						 "Timeshift Dateien (*.tms *.tmz);;"
 						 "Alle Dateien (*)")
 		if fn:
 			self.doLoadFromFile(fn)
@@ -878,6 +886,7 @@ class MainWidget(QWidget):
 					payload))
 
 	def doSaveToFile(self, filename):
+		compressed = str(filename).endswith(".tmz")
 		for i in range(0, 128):
 			tmpFilename = "%s.tmp%d" % (filename, i)
 			try:
@@ -892,6 +901,8 @@ class MainWidget(QWidget):
 			return False
 		try:
 			fd = file(tmpFilename, "w+b")
+			if compressed:
+				fd = gzip.GzipFile(filename="", compresslevel=9, fileobj=fd)
 
 			fd.write("[TIMESHIFT_FILE]\r\n")
 			fd.write("version=2\r\n")
@@ -947,12 +958,16 @@ class MainWidget(QWidget):
 		return True
 
 	def saveToFile(self):
+		selectedFilter = QString()
 		fn = QFileDialog.getSaveFileName(self, "Speichern", "",
-						 "Timeshift Dateien (*.tms)")
+						 "Komprimierte timeshift Dateien (*.tmz);;"
+						 "Timeshift Dateien (*.tms)",
+						 selectedFilter=selectedFilter)
 		if not fn:
 			return True
-		if not str(fn).endswith(".tms"):
-			fn += ".tms"
+		extension = str(selectedFilter).split("(")[1].strip()[1:-1]
+		if not fn.endsWith(extension):
+			fn += extension
 		return self.doSaveToFile(fn)
 
 	def setFilename(self, filename):
