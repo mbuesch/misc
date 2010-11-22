@@ -621,9 +621,6 @@ class MainWidget(QWidget):
 		self.recalculate()
 		self.setDirty(False)
 
-		if len(sys.argv) == 2:
-			self.doLoadFromFile(sys.argv[1])
-
 	def __resetParams(self):
 		self.holidays = 30
 		self.shiftConfig = defaultShiftConfig[:]
@@ -863,6 +860,8 @@ class MainWidget(QWidget):
 		except (ConfigParser.Error, TsException, IOError), e:
 			QMessageBox.critical(self, "Laden fehlgeschlagen",
 					     "Laden fehlgeschlagen:\n" + str(e))
+			return False
+		return True
 
 	def loadFromFile(self):
 		if self.dirty:
@@ -1317,6 +1316,9 @@ class MainWindow(QMainWindow):
 
 		self.setCentralWidget(MainWidget(self))
 
+	def loadFile(self, filename):
+		return self.centralWidget().doLoadFromFile(filename)
+
 	def __updateTitle(self):
 		title = "Zeitkonto"
 		if self.titleSuffix:
@@ -1340,6 +1342,9 @@ class MainWindow(QMainWindow):
 def main(argv):
 	app = QApplication(argv)
 	mainwnd = MainWindow()
+	if len(argv) == 2:
+		if not mainwnd.loadFile(argv[1]):
+			return 1
 	mainwnd.show()
 	return app.exec_()
 
