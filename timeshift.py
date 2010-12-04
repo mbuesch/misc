@@ -541,6 +541,7 @@ class PresetDialog(QDialog):
 		preset.workTime = self.workTime.value()
 		preset.breakTime = self.breakTime.value()
 		preset.attendanceTime = self.attendanceTime.value()
+		self.mainWidget.setDirty()
 
 	def addPreset(self):
 		if len(self.mainWidget.presets) >= MAX_PRESETS:
