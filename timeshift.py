@@ -16,6 +16,7 @@ from PyQt4.QtGui import *
 
 
 MAX_SHIFTCONFIG_ITEMS	= 1024
+MAX_PRESETS		= 1024
 
 # Shift types
 SHIFT_EARLY		= 0
@@ -387,6 +388,205 @@ class ManageDialog(QDialog):
 		self.mainWidget.recalculate()
 		self.accept()
 
+class Preset:
+	def __init__(self, name, dayType, shift, workTime, breakTime, attendanceTime):
+		self.name = name
+		self.dayType = dayType
+		self.shift = shift
+		self.workTime = workTime
+		self.breakTime = breakTime
+		self.attendanceTime = attendanceTime
+
+class PresetDialog(QDialog):
+	def __init__(self, mainWidget):
+		QDialog.__init__(self, mainWidget)
+		self.setWindowTitle("Vorgaben")
+		self.setLayout(QGridLayout())
+		self.mainWidget = mainWidget
+
+		self.presetList = QListWidget(self)
+		self.layout().addWidget(self.presetList, 0, 0, 4, 2)
+
+		self.addButton = QPushButton("Neu", self)
+		self.layout().addWidget(self.addButton, 4, 0)
+
+		self.removeButton = QPushButton("Loeschen", self)
+		self.layout().addWidget(self.removeButton, 4, 1)
+
+		self.commitButton = QPushButton("Vorgabe uebernehmen", self)
+		self.layout().addWidget(self.commitButton, 5, 0, 1, 2)
+
+		self.nameEdit = QLineEdit(self)
+		self.layout().addWidget(self.nameEdit, 0, 2)
+
+		self.typeCombo = QComboBox(self)
+		self.typeCombo.addItem("---", QVariant(DTYPE_DEFAULT))
+		self.typeCombo.addItem("Zeitausgleich", QVariant(DTYPE_COMPTIME))
+		self.typeCombo.addItem("Urlaub", QVariant(DTYPE_HOLIDAY))
+		self.typeCombo.addItem("Feiertag", QVariant(DTYPE_FEASTDAY))
+		self.typeCombo.addItem("Kurzarbeit", QVariant(DTYPE_SHORTTIME))
+		self.layout().addWidget(self.typeCombo, 1, 2)
+
+		self.shiftCombo = QComboBox(self)
+		self.shiftCombo.addItem("Fruehschicht", QVariant(SHIFT_EARLY))
+		self.shiftCombo.addItem("Nachtschicht", QVariant(SHIFT_NIGHT))
+		self.shiftCombo.addItem("Spaetschicht", QVariant(SHIFT_LATE))
+		self.shiftCombo.addItem("Normalschicht", QVariant(SHIFT_DAY))
+		self.layout().addWidget(self.shiftCombo, 2, 2)
+
+		self.workTime = TimeSpinBox(self, prefix="Arb.zeit")
+		self.layout().addWidget(self.workTime, 3, 2)
+
+		self.breakTime = TimeSpinBox(self, prefix="Pause")
+		self.layout().addWidget(self.breakTime, 4, 2)
+
+		self.attendanceTime = TimeSpinBox(self, prefix="Anwes.")
+		self.layout().addWidget(self.attendanceTime, 5, 2)
+
+		self.presetChangeBlocked = False
+
+		self.loadPresets()
+		self.presetSelectionChanged()
+
+		self.connect(self.presetList, SIGNAL("currentRowChanged(int)"),
+			     self.presetSelectionChanged)
+		self.connect(self.addButton, SIGNAL("released()"),
+			     self.addPreset)
+		self.connect(self.removeButton, SIGNAL("released()"),
+			     self.removePreset)
+		self.connect(self.commitButton, SIGNAL("released()"),
+			     self.commitPressed)
+
+		self.connect(self.nameEdit, SIGNAL("textChanged(QString)"),
+			     self.presetChanged)
+		self.connect(self.typeCombo, SIGNAL("currentIndexChanged(int)"),
+			     self.presetChanged)
+		self.connect(self.shiftCombo, SIGNAL("currentIndexChanged(int)"),
+			     self.presetChanged)
+		self.connect(self.workTime, SIGNAL("valueChanged(double)"),
+			     self.presetChanged)
+		self.connect(self.breakTime, SIGNAL("valueChanged(double)"),
+			     self.presetChanged)
+		self.connect(self.attendanceTime, SIGNAL("valueChanged(double)"),
+			     self.presetChanged)
+
+	def __addPreset(self, preset):
+		item = QListWidgetItem(preset.name)
+		item.setData(Qt.UserRole, QVariant(preset))
+		self.presetList.addItem(item)
+
+	def loadPresets(self):
+		date = self.mainWidget.calendar.selectedDate()
+		shiftConfigItem = self.mainWidget.getShiftConfigItemForDate(date)
+		assert(shiftConfigItem)
+		self.presetList.clear()
+		self.__addPreset( # index0 => special for reset
+			Preset(name="--- zuruecksetzen ---",
+				dayType=DTYPE_DEFAULT,
+				shift=shiftConfigItem.shift,
+				workTime=shiftConfigItem.workTime,
+				breakTime=shiftConfigItem.breakTime,
+				attendanceTime=shiftConfigItem.attendanceTime
+			)
+		)
+		for preset in self.mainWidget.presets:
+			self.__addPreset(preset)
+		self.presetList.setCurrentRow(0)
+
+	def commitPreset(self, preset):
+		mainWidget = self.mainWidget
+		mainWidget.typeCombo.setCurrentIndex(mainWidget.typeCombo.findData(preset.dayType))
+		mainWidget.shiftCombo.setCurrentIndex(mainWidget.shiftCombo.findData(preset.shift))
+		mainWidget.workTime.setValue(preset.workTime)
+		mainWidget.breakTime.setValue(preset.breakTime)
+		mainWidget.attendanceTime.setValue(preset.attendanceTime)
+
+	def __enableEdit(self, enable):
+		self.nameEdit.setEnabled(enable)
+		self.typeCombo.setEnabled(enable)
+		self.shiftCombo.setEnabled(enable)
+		self.workTime.setEnabled(enable)
+		self.breakTime.setEnabled(enable)
+		self.attendanceTime.setEnabled(enable)
+
+	def presetSelectionChanged(self):
+		index = self.presetList.currentRow()
+		self.__enableEdit(index > 0)
+		self.removeButton.setEnabled(index > 0)
+		self.commitButton.setEnabled(index >= 0)
+		item = self.presetList.currentItem()
+		if not item:
+			return
+		preset = item.data(Qt.UserRole).toPyObject()
+		self.presetChangeBlocked = True
+		self.nameEdit.setText(preset.name)
+		self.typeCombo.setCurrentIndex(self.typeCombo.findData(preset.dayType))
+		self.shiftCombo.setCurrentIndex(self.shiftCombo.findData(preset.shift))
+		self.workTime.setValue(preset.workTime)
+		self.breakTime.setValue(preset.breakTime)
+		self.attendanceTime.setValue(preset.attendanceTime)
+		self.presetChangeBlocked = False
+
+	def presetChanged(self):
+		if self.presetChangeBlocked:
+			return
+		item = self.presetList.currentItem()
+		if not item:
+			return
+		item.setText(self.nameEdit.text())
+		preset = item.data(Qt.UserRole).toPyObject()
+		preset.name = self.nameEdit.text()
+		preset.dayType = self.typeCombo.itemData(self.typeCombo.currentIndex()).toInt()[0]
+		preset.shift = self.shiftCombo.itemData(self.shiftCombo.currentIndex()).toInt()[0]
+		preset.workTime = self.workTime.value()
+		preset.breakTime = self.breakTime.value()
+		preset.attendanceTime = self.attendanceTime.value()
+
+	def addPreset(self):
+		if len(self.mainWidget.presets) >= MAX_PRESETS:
+			return
+		index = self.presetList.currentRow()
+		if index <= 0:
+			index = 1
+		else:
+			index += 1
+		date = self.mainWidget.calendar.selectedDate()
+		shiftConfigItem = self.mainWidget.getShiftConfigItemForDate(date)
+		preset = Preset(name="Unbenannt",
+				dayType=DTYPE_DEFAULT,
+				shift=shiftConfigItem.shift,
+				workTime=shiftConfigItem.workTime,
+				breakTime=shiftConfigItem.breakTime,
+				attendanceTime=shiftConfigItem.attendanceTime
+			)
+		self.mainWidget.presets.insert(index - 1, preset)
+		self.loadPresets()
+		self.presetList.setCurrentRow(index)
+		self.mainWidget.setDirty()
+
+	def removePreset(self):
+		index = self.presetList.currentRow()
+		if index <= 0:
+			return
+		res = QMessageBox.question(self, "Vorgabe loeschen?",
+					   "'%s' loeschen?" % self.presetList.item(index).text(),
+					   QMessageBox.Yes | QMessageBox.No)
+		if res != QMessageBox.Yes:
+			return
+		self.mainWidget.presets.pop(index - 1)
+		self.loadPresets()
+		if index >= self.presetList.count() and index > 0:
+			index -= 1
+		self.presetList.setCurrentRow(index)
+		self.mainWidget.setDirty()
+
+	def commitPressed(self):
+		item = self.presetList.currentItem()
+		if item:
+			preset = item.data(Qt.UserRole).toPyObject()
+			self.commitPreset(preset)
+			self.accept()
+
 class Snapshot:
 	def __init__(self, date, shiftConfigIndex, accountValue):
 		self.date = date
@@ -555,7 +755,7 @@ class MainWidget(QWidget):
 		self.setLayout(QGridLayout())
 
 		self.calendar = Calendar(self)
-		self.layout().addWidget(self.calendar, 0, 0, 7, 3)
+		self.layout().addWidget(self.calendar, 0, 0, 5, 3)
 
 		self.typeCombo = QComboBox(self)
 		self.typeCombo.addItem("---", QVariant(DTYPE_DEFAULT))
@@ -581,6 +781,11 @@ class MainWidget(QWidget):
 		self.attendanceTime = TimeSpinBox(self, prefix="Anwes.")
 		self.layout().addWidget(self.attendanceTime, 4, 4)
 
+		self.presetButton = QPushButton("Vorgaben", self)
+		self.layout().addWidget(self.presetButton, 5, 4)
+		self.connect(self.presetButton, SIGNAL("released()"),
+			     self.doPresets)
+
 		self.connect(self.calendar, SIGNAL("selectionChanged()"),
 			     self.recalculate)
 		self.connect(self.typeCombo, SIGNAL("currentIndexChanged(int)"),
@@ -596,17 +801,17 @@ class MainWidget(QWidget):
 		self.overrideChangeBlocked = False
 
 		self.manageButton = QPushButton("Verwalten", self)
-		self.layout().addWidget(self.manageButton, 7, 0)
+		self.layout().addWidget(self.manageButton, 5, 0)
 		self.connect(self.manageButton, SIGNAL("released()"),
 			     self.doManage)
 
 		self.snapshotButton = QPushButton("Schnappschuss", self)
-		self.layout().addWidget(self.snapshotButton, 7, 1)
+		self.layout().addWidget(self.snapshotButton, 5, 1)
 		self.connect(self.snapshotButton, SIGNAL("released()"),
 			     self.doSnapshot)
 
 		self.enhancedButton = QPushButton("Erweitert", self)
-		self.layout().addWidget(self.enhancedButton, 7, 2)
+		self.layout().addWidget(self.enhancedButton, 5, 2)
 		self.connect(self.enhancedButton, SIGNAL("released()"),
 			     self.doEnhanced)
 
@@ -624,6 +829,7 @@ class MainWidget(QWidget):
 	def __resetParams(self):
 		self.holidays = 30
 		self.shiftConfig = defaultShiftConfig[:]
+		self.presets = []
 
 	def __resetCalendar(self):
 		self.snapshots = {}
@@ -795,7 +1001,22 @@ class MainWidget(QWidget):
 						workTime=workTime, breakTime=breakTime,
 						attendanceTime=attendanceTime)
 			)
-			count += 1
+
+		for count in range(0, MAX_PRESETS):
+			try:
+				name = p.get("PRESETS", "name%d" % count)
+			except (ConfigParser.Error), e:
+				break
+			dayType = p.getint("PRESETS", "dayType%d" % count)
+			shift = p.getint("PRESETS", "shift%d" % count)
+			workTime = p.getfloat("PRESETS", "workTime%d" % count)
+			breakTime = p.getfloat("PRESETS", "breakTime%d" % count)
+			attendanceTime = p.getfloat("PRESETS", "attendanceTime%d" % count)
+			self.presets.append(
+				Preset(name=base64ToQString(name),
+					dayType=dayType, shift=shift, workTime=workTime,
+					breakTime=breakTime, attendanceTime=attendanceTime)
+			)
 
 		for snap in p.options("SNAPSHOTS"):
 			date = QDate.fromString(snap, Qt.ISODate)
@@ -919,6 +1140,17 @@ class MainWidget(QWidget):
 				fd.write("attendanceTime%d=%f\r\n" % (count, cfg.attendanceTime))
 				count += 1
 
+			fd.write("\r\n[PRESETS]\r\n")
+			count = 0
+			for preset in self.presets:
+				fd.write("name%d=%s\r\n" % (count, QStringToBase64(preset.name)))
+				fd.write("dayType%d=%d\r\n" % (count, preset.dayType))
+				fd.write("shift%d=%d\r\n" % (count, preset.shift))
+				fd.write("workTime%d=%f\r\n" % (count, preset.workTime))
+				fd.write("breakTime%d=%f\r\n" % (count, preset.breakTime))
+				fd.write("attendanceTime%d=%f\r\n" % (count, preset.attendanceTime))
+				count += 1
+
 			fd.write("\r\n[SNAPSHOTS]\r\n")
 			for snapKey in self.snapshots:
 				snapshot = self.snapshots[snapKey]
@@ -1004,6 +1236,10 @@ class MainWidget(QWidget):
 		dlg = ManageDialog(self)
 		dlg.exec_()
 
+	def doPresets(self):
+		dlg = PresetDialog(self)
+		dlg.exec_()
+
 	def __removeSnapshot(self, date):
 		self.snapshots.pop(QDateToId(date), None)
 		self.setDirty()
@@ -1056,9 +1292,8 @@ class MainWidget(QWidget):
 		if self.overrideChangeBlocked or not self.shiftConfig:
 			return
 		date = self.calendar.selectedDate()
-		shiftConfigIndex = self.__getShiftConfigIndexForDate(date)
-		assert(shiftConfigIndex >= 0)
-		shiftConfigItem = self.shiftConfig[shiftConfigIndex]
+		shiftConfigItem = self.getShiftConfigItemForDate(date)
+		assert(shiftConfigItem)
 
 		# Day type
 		index = self.typeCombo.currentIndex()
@@ -1103,7 +1338,7 @@ class MainWidget(QWidget):
 					snapshot = s
 		return snapshot
 
-	def __getShiftConfigIndexForDate(self, date):
+	def getShiftConfigIndexForDate(self, date):
 		# Find the shift config index that's valid for the date.
 		# May return -1 on error.
 		snapshot = self.__findSnapshot(date)
@@ -1116,12 +1351,19 @@ class MainWidget(QWidget):
 		index %= len(self.shiftConfig)
 		return index
 
+	def getShiftConfigItemForDate(self, date):
+		index = self.getShiftConfigIndexForDate(date)
+		if index >= 0:
+			return self.shiftConfig[index]
+		return None
+
 	def enableOverrideControls(self, enable):
 		self.typeCombo.setEnabled(enable)
 		self.shiftCombo.setEnabled(enable)
 		self.workTime.setEnabled(enable)
 		self.breakTime.setEnabled(enable)
 		self.attendanceTime.setEnabled(enable)
+		self.presetButton.setEnabled(enable)
 
 	def getDayType(self, date):
 		try:
