@@ -671,21 +671,44 @@ class Calendar(QCalendarWidget):
 		self.connect(self, SIGNAL("selectionChanged()"),
 			     self.selChanged)
 
+		self.today = QDate.currentDate()
+		self.armTodayTimer()
+
+	def todayTimer(self):
+		self.armTodayTimer()
+		self.today = self.today.addDays(1)
+		self.redraw()
+
+	def armTodayTimer(self):
+		tomorrow = QDateTime(self.today)
+		tomorrow = tomorrow.addDays(1)
+		tomorrow.setTime(QTime(0, 0, 0))
+		secs = QDateTime.currentDateTime().secsTo(tomorrow)
+		QTimer.singleShot(secs * 1000, self.todayTimer)
+
 	def paintCell(self, painter, rect, date):
 		QCalendarWidget.paintCell(self, painter, rect, date)
 
 		painter.save()
-
 		mainWidget = self.mainWidget
 
 		if mainWidget.dateHasSnapshot(date):
 			pen = QPen(QColor("#007FFF"))
 			pen.setWidth(5)
-			painter.setPen(pen)
 		else:
-			painter.setPen(QPen(QColor("#000000")))
+			pen = QPen(QColor("#006400"))
+		painter.setPen(pen)
 		painter.drawRect(rect.x(), rect.y(),
 				 rect.width() - 1, rect.height() - 1)
+
+		if date == self.today:
+			pen = QPen(QColor("#006400"))
+			pen.setWidth(6)
+			painter.setPen(pen)
+			for (x, y) in ((3, 3), (rect.width() - 3, 3),
+				       (3, rect.height() - 3),
+				       (rect.width() - 3, rect.height() - 3)):
+				painter.drawPoint(rect.x() + x, rect.y() + y)
 
 		if mainWidget.dateHasComment(date):
 			pen = QPen(QColor("#FF0000"))
@@ -745,8 +768,9 @@ class Calendar(QCalendarWidget):
 		self.mainWidget.recalculate()
 
 	def redraw(self):
-		self.hide()
-		self.show()
+		if self.isVisible():
+			self.hide()
+			self.show()
 
 class MainWidget(QWidget):
 	def __init__(self, parent=None):
