@@ -709,6 +709,21 @@ class Calendar(QCalendarWidget):
 		self.lowerRightPen = QPen(QColor("#304F7F"))
 		self.lowerRightPen.setWidth(1)
 
+	typeLetter = {
+		DTYPE_DEFAULT		: None,
+		DTYPE_COMPTIME		: "Z",
+		DTYPE_HOLIDAY		: "U",
+		DTYPE_SHORTTIME		: "C",
+		DTYPE_FEASTDAY		: "F",
+	}
+
+	shiftLetter = {
+		SHIFT_EARLY	: "F",
+		SHIFT_LATE	: "S",
+		SHIFT_NIGHT	: "N",
+		SHIFT_DAY	: "O",
+	}
+
 	def paintCell(self, painter, rect, date):
 		QCalendarWidget.paintCell(self, painter, rect, date)
 		painter.save()
@@ -738,43 +753,25 @@ class Calendar(QCalendarWidget):
 			painter.drawPoint(rect.x() + rect.width() - 8,
 					  rect.y() + 8)
 
-		dtype = self.mainWidget.getDayType(date)
-		typeLetter = {
-			DTYPE_DEFAULT		: None,
-			DTYPE_COMPTIME		: "Z",
-			DTYPE_HOLIDAY		: "U",
-			DTYPE_SHORTTIME		: "C",
-			DTYPE_FEASTDAY		: "F",
-		}
-		lowerLeft = typeLetter[dtype]
-
-		lowerRight = None
-		try:
-			shiftOverride = self.mainWidget.shiftOverrides[QDateToId(date)]
-			shiftLetter = {
-				SHIFT_EARLY	: "F",
-				SHIFT_LATE	: "S",
-				SHIFT_NIGHT	: "N",
-				SHIFT_DAY	: "O",
-			}
-			lowerRight = shiftLetter[shiftOverride]
-		except (KeyError):
-			pass
-
 		font = painter.font()
 		font.setBold(True)
 		painter.setFont(font)
 
-		if lowerLeft:
+		text = self.typeLetter[self.mainWidget.getDayType(date)]
+		if text:
 			painter.setPen(self.lowerLeftPen)
-			painter.drawText(rect.x() + 4, rect.y() + rect.height() - 4, lowerLeft)
+			painter.drawText(rect.x() + 4, rect.y() + rect.height() - 4, text)
 
-		if lowerRight:
+		try:
+			shiftOverride = self.mainWidget.shiftOverrides[QDateToId(date)]
+			text = self.shiftLetter[shiftOverride]
 			painter.setPen(self.lowerRightPen)
 			metrics = QFontMetrics(painter.font())
-			painter.drawText(rect.x() + rect.width() - metrics.width(lowerRight) - 4,
+			painter.drawText(rect.x() + rect.width() - metrics.width(text) - 4,
 					 rect.y() + rect.height() - 4,
-					 lowerRight)
+					 text)
+		except (KeyError):
+			pass
 
 		painter.restore()
 
