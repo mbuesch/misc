@@ -676,14 +676,13 @@ class Calendar(QCalendarWidget):
 		self.armTodayTimer()
 
 	def todayTimer(self):
-		self.armTodayTimer()
 		self.today = self.today.addDays(1)
+		self.armTodayTimer()
 		self.redraw()
 
 	def armTodayTimer(self):
 		tomorrow = QDateTime(self.today)
 		tomorrow = tomorrow.addDays(1)
-		tomorrow.setTime(QTime(0, 0, 0))
 		secs = QDateTime.currentDateTime().secsTo(tomorrow)
 		QTimer.singleShot(secs * 1000, self.todayTimer)
 
