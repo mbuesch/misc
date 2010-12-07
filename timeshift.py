@@ -664,6 +664,7 @@ class SnapshotDialog(QDialog):
 
 class Calendar(QCalendarWidget):
 	def __init__(self, mainWidget):
+		self.__initPens()
 		QCalendarWidget.__init__(self, mainWidget)
 		self.mainWidget = mainWidget
 
@@ -686,41 +687,54 @@ class Calendar(QCalendarWidget):
 		secs = QDateTime.currentDateTime().secsTo(tomorrow)
 		QTimer.singleShot(secs * 1000, self.todayTimer)
 
+	def __initPens(self):
+		self.snapshotPen = QPen(QColor("#007FFF"))
+		self.snapshotPen.setWidth(5)
+
+		self.framePen = QPen(QColor("#006400"))
+		self.framePen.setWidth(1)
+
+		self.todayPen = QPen(QColor("#006400"))
+		self.todayPen.setWidth(6)
+
+		self.commentPen = QPen(QColor("#FF0000"))
+		self.commentPen.setWidth(2)
+
+		self.overridesPen = QPen(QColor("#9F9F9F"))
+		self.overridesPen.setWidth(5)
+
+		self.lowerLeftPen = QPen(QColor("#FF0000"))
+		self.lowerLeftPen.setWidth(1)
+
+		self.lowerRightPen = QPen(QColor("#304F7F"))
+		self.lowerRightPen.setWidth(1)
+
 	def paintCell(self, painter, rect, date):
 		QCalendarWidget.paintCell(self, painter, rect, date)
-
 		painter.save()
 		mainWidget = self.mainWidget
 
 		if mainWidget.dateHasSnapshot(date):
-			pen = QPen(QColor("#007FFF"))
-			pen.setWidth(5)
+			painter.setPen(self.snapshotPen)
 		else:
-			pen = QPen(QColor("#006400"))
-		painter.setPen(pen)
+			painter.setPen(self.framePen)
 		painter.drawRect(rect.x(), rect.y(),
 				 rect.width() - 1, rect.height() - 1)
 
 		if date == self.today:
-			pen = QPen(QColor("#006400"))
-			pen.setWidth(6)
-			painter.setPen(pen)
+			painter.setPen(self.todayPen)
 			for (x, y) in ((3, 3), (rect.width() - 3, 3),
 				       (3, rect.height() - 3),
 				       (rect.width() - 3, rect.height() - 3)):
 				painter.drawPoint(rect.x() + x, rect.y() + y)
 
 		if mainWidget.dateHasComment(date):
-			pen = QPen(QColor("#FF0000"))
-			pen.setWidth(2)
-			painter.setPen(pen)
+			painter.setPen(self.commentPen)
 			painter.drawRect(rect.x() + 3, rect.y() + 3,
 					 rect.width() - 3 - 3, rect.height() - 3 - 3)
 
 		if mainWidget.dateHasTimeOverrides(date):
-			pen = QPen(QColor("#9F9F9F"))
-			pen.setWidth(5)
-			painter.setPen(pen)
+			painter.setPen(self.overridesPen)
 			painter.drawPoint(rect.x() + rect.width() - 8,
 					  rect.y() + 8)
 
@@ -752,11 +766,11 @@ class Calendar(QCalendarWidget):
 		painter.setFont(font)
 
 		if lowerLeft:
-			painter.setPen(QPen(QColor("#FF0000")))
+			painter.setPen(self.lowerLeftPen)
 			painter.drawText(rect.x() + 4, rect.y() + rect.height() - 4, lowerLeft)
 
 		if lowerRight:
-			painter.setPen(QPen(QColor("#304F7F")))
+			painter.setPen(self.lowerRightPen)
 			metrics = QFontMetrics(painter.font())
 			painter.drawText(rect.x() + rect.width() - metrics.width(lowerRight) - 4,
 					 rect.y() + rect.height() - 4,
