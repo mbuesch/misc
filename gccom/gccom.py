@@ -60,7 +60,7 @@ class GC:
 			self.cookie = self.__requestCookie()
 			self.__login(user, password)
 
-	def __printDebug(self.string):
+	def __printDebug(self, string):
 		if self.debug:
 			print string
 
