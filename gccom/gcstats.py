@@ -749,10 +749,10 @@ def createHtmlStats(foundCaches, hiddenCaches, outdir):
 	except (IOError), e:
 		raise gccom.GCException("Failed to write HTML stats: " + e.strerror)
 
-def createStats(user, password, outdir):
+def createStats(user, password, outdir, debug):
 	gc = None
 	if not opt_offline:
-		gc = gccom.GC(user, password)
+		gc = gccom.GC(user, password, debug=debug)
 
 	homeCoord = getHomeCoordinates(gc)
 	found = getAllFound(gc, homeCoord)
@@ -781,6 +781,7 @@ def main():
 	opt_user = None
 	opt_password = None
 	opt_outdir = "."
+	opt_debug = False
 
 	try:
 		(opts, args) = getopt.getopt(sys.argv[1:],
@@ -792,7 +793,7 @@ def main():
 		return 1
 	for (o, v) in opts:
 		if o == "--debug":
-			gccom.opt_debug = True
+			opt_debug = True
 		if o in ("-h", "--help"):
 			usage()
 			return 0
@@ -818,7 +819,7 @@ def main():
 	mkdir_recursive(opt_localstorage)
 
 	try:
-		createStats(opt_user, opt_password, opt_outdir)
+		createStats(opt_user, opt_password, opt_outdir, opt_debug)
 	except gccom.GCException, e:
 		print e
 		return 1

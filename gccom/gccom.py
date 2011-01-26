@@ -14,9 +14,6 @@ import urllib
 import re
 import time
 
-opt_debug = False
-opt_useHTTPS = True
-
 
 hostname = "www.geocaching.com"
 
@@ -46,28 +43,36 @@ class VerifiedHTTPSConnection(httplib.HTTPSConnection):
 					    cert_reqs=ssl.CERT_REQUIRED,
 					    ca_certs="trusted_root_certs")
 
-def httpConnect():
-	if opt_useHTTPS:
-		return httplib.HTTPSConnection(hostname)
-	return httplib.HTTPConnection(hostname)
-
-def printDebug(string):
-	if opt_debug:
-		print string
-
 class GCException(Exception): pass
 
 class GC:
-	def __init__(self, user, password, predefinedCookie=None):
+	HTTPS_NONE	= 0
+	HTTPS_LOGIN	= 1
+	HTTPS_FULL	= 2
+
+	def __init__(self, user, password, predefinedCookie=None,
+		     httpsMode=HTTPS_LOGIN, debug=False):
+		self.httpsMode = httpsMode
+		self.debug = debug
 		if predefinedCookie:
 			self.cookie = predefinedCookie
 		else:
 			self.cookie = self.__requestCookie()
 			self.__login(user, password)
 
+	def __printDebug(self.string):
+		if self.debug:
+			print string
+
+	def __httpConnect(self, inLogin=False):
+		if self.httpsMode == self.HTTPS_NONE or\
+		   (self.httpsMode == self.HTTPS_LOGIN and not inLogin):
+			return httplib.HTTPConnection(hostname)
+		return httplib.HTTPSConnection(hostname)
+
 	def __requestCookie(self):
-		printDebug("Requesting fresh cookie")
-		http = httpConnect()
+		self.__printDebug("Requesting fresh cookie")
+		http = self.__httpConnect(inLogin=True)
 		http.request("GET", "/")
 		resp = http.getresponse()
 		cookie = resp.getheader("set-cookie")
@@ -80,8 +85,8 @@ class GC:
 
 	def __login(self, user, password):
 		"Login the cookie"
-		printDebug("Logging into geocaching.com...")
-		http = httpConnect()
+		self.__printDebug("Logging into geocaching.com...")
+		http = self.__httpConnect(inLogin=True)
 		body = self.__getHiddenFormsUrlencoded("/login/default.aspx") + "&" +\
 			"ctl00%24ContentBody%24myUsername=" + urllib.quote_plus(user) + "&" +\
 			"ctl00%24ContentBody%24myPassword=" + urllib.quote_plus(password) + "&" +\
@@ -97,19 +102,19 @@ class GC:
 		if resp.read().find("combination does not match") >= 0:
 			raise GCException("Invalid username and/or password")
 		time.sleep(1) # Server doesn't like other requests right after login.
-		printDebug("Login success")
+		self.__printDebug("Login success")
 
 	def logout(self):
 		"Logout the cookie"
-		printDebug("Logout from geocaching.com...")
-		http = httpConnect()
+		self.__printDebug("Logout from geocaching.com...")
+		http = self.__httpConnect()
 		header = defaultHttpHeader.copy()
 		header["Host"] = hostname
 		header["Cookie"] = self.cookie
 		http.request("GET", "/login/default.aspx?RESET=Y&redir=http%3a%2f%2fwww.geocaching.com%2fdefault.aspx",
 			     None, header)
 		http.getresponse()
-		printDebug("Logout success")
+		self.__printDebug("Logout success")
 
 	@staticmethod
 	def __removeChars(string, template):
@@ -144,10 +149,12 @@ class GC:
 		p = self.__removeChars(p, "\r\n")
 		return re.findall(r'<input\s+type="hidden"\s+name="\w*"\s+id="(\w+)"\s+value="([/%=\w\+]*)"\s*/>', p)
 
-	def __getHiddenFormsUrlencoded(self, page):
+	def __getHiddenFormsUrlencoded(self, page, omitForms=[]):
 		"Get all hidden forms on a page. Returns an URL-encoded string"
 		forms = []
 		for (formId, formValue) in self.__getHiddenForms(page):
+			if formId in omitForms:
+				continue
 			form = formId + "="
 			if formValue:
 				form += urllib.quote_plus(formValue)
@@ -156,7 +163,7 @@ class GC:
 
 	def getPage(self, page):
 		"Download a page. Returns the html code of the page."
-		http = httpConnect()
+		http = self.__httpConnect()
 		header = defaultHttpHeader.copy()
 		header["Host"] = hostname
 		header["Cookie"] = self.cookie
@@ -166,7 +173,7 @@ class GC:
 
 	def getLOC(self, page):
 		"Download the LOC file from a page"
-		http = httpConnect()
+		http = self.__httpConnect()
 		body = self.__getHiddenFormsUrlencoded(page) + "&" +\
 			"&ctl00%24ContentBody%24btnLocDL=LOC+Waypoint+File"
 		header = defaultHttpHeader.copy()
@@ -182,7 +189,7 @@ class GC:
 
 	def getGPX(self, page):
 		"Download the GPX file from a page. (Needs account support)"
-		http = httpConnect()
+		http = self.__httpConnect()
 		body = self.__getHiddenFormsUrlencoded(page) + "&" +\
 			"&ctl00%24ContentBody%24btnGPXDL=GPX+eXchange+File"
 		header = defaultHttpHeader.copy()
@@ -206,10 +213,25 @@ class GC:
 		id = m.group(1).strip()
 		return id
 
+	def getCacheLocation(self, page):
+		"Get the location of a cache. Returns a tuple of (latitude, longitude)."
+		p = self.getPage(page)
+		p = self.__removeChars(p, "\r\n")
+		m = re.compile(r'.*title="Other Conversions"\s+href="/wpt/\?' +
+			       r'lat=([\d\.]+)&amp;lon=([\d\.]+)&amp;detail=.*').match(p)
+		if not m:
+			raise GCException("Failed to get cache location from " + page)
+		try:
+			lat = float(m.group(1))
+			lng = float(m.group(2))
+		except ValueError:
+			raise GCException("Failed to convert cache location from " + page)
+		return (lat, lng)
+
 	def setProfile(self, profileData):
 		"Upload new public profile data to the account"
 		page = "/account/editprofiledetails.aspx"
-		http = httpConnect()
+		http = self.__httpConnect()
 		body = self.__getHiddenFormsUrlencoded(page) + "&" +\
 			"ctl00%24ContentBody%24uxProfileDetails=" + urllib.quote_plus(profileData) + "&" +\
 			"ctl00%24ContentBody%24uxSave=Save+Changes"
@@ -222,6 +244,45 @@ class GC:
 		resp = http.getresponse().read()
 		if resp.find("Your Account Details") < 0:
 			raise GCException("Failed to upload profile data to the account")
+
+	def findCaches(self, centerLatitude, centerLongitude, radiusMiles,
+		       maxNrCaches=100, findCallback=None):
+		"Get a list of caches at position"
+		#FIXME miles/km?
+		cachesList = []
+		page = "/seek/nearest.aspx" + "?" +\
+			"origin_lat=%f" % centerLatitude + "&" +\
+			"origin_long=%f" % centerLongitude + "&" +\
+			"dist=%f" % radiusMiles + "&" +\
+			"submit3=Search"
+		hiddenForms = self.__getHiddenFormsUrlencoded(page,
+				omitForms=("__EVENTTARGET", "__EVENTARGUMENT"))
+		http = self.__httpConnect()
+		for pageNr in range(1, maxNrCaches // 20 + 1 + 1):
+			if pageNr == 1:
+				body = ""
+			else:
+				body = "__EVENTTARGET=ctl00%24ContentBody%24pgrTop%24lbGoToPage_" +\
+					str(pageNr) + "&" +\
+					"__EVENTARGUMENT=" + "&" +\
+					hiddenForms
+			header = defaultHttpHeader.copy()
+			header["Host"] = hostname
+			header["Cookie"] = self.cookie
+			header["Content-Type"] = "application/x-www-form-urlencoded"
+			header["Content-Length"] = str(len(body))
+			http.request("POST", self.__pageSanitize(page), body, header)
+			resp = http.getresponse().read()
+			resp = self.__removeChars(resp, "\r\n")
+			regex = r'<a\s+href="/seek/cache_details\.aspx\?guid=(' + guidRegex +\
+				r')"\s+class="lnk"><img\s+src='
+			foundGuids = re.findall(regex, resp)
+			if findCallback:
+				findCallback(foundGuids)
+			print foundGuids#XXX
+			cachesList.extend(foundGuids)
+		#TODO limit count
+		return cachesList
 
 def printOutput(fileName, string):
 	if not fileName:
@@ -251,7 +312,7 @@ def usage():
 	print ""
 	print "-u|--user USER             The gc.com username"
 	print "-p|--password PASS         The gc.com password"
-	print "-H|--http                  Use HTTP instead of HTTPS"
+	print "-H|--https MODE            0->HTTP, 1->HTTPS login (default), 2->full HTTPS"
 	print "-f|--file FILE             Specify an output/input file. Default is stdout/stdin"
 	print ""
 	print "-c|--getcookie             Retrieve a logged-in cookie"
@@ -285,18 +346,18 @@ def usage():
 def main():
 	actions = []
 
-	global opt_debug
-	global opt_useHTTPS
+	opt_debug = False
+	opt_HTTPS = GC.HTTPS_LOGIN
 	opt_user = None
 	opt_password = None
 	opt_cookie = None
 
 	try:
 		(opts, args) = getopt.getopt(sys.argv[1:],
-			"hu:p:f:P:l:g:cC:Li:rH",
+			"hu:p:f:P:l:g:cC:Li:rH:",
 			[ "help", "user=", "password=", "file=", "getpage=", "getloc=",
 			  "getgpx=", "getcookie", "usecookie=", "logout", "getcacheid=",
-			  "setprofile", "http",
+			  "setprofile", "https=",
 			  "debug", ])
 	except getopt.GetoptError:
 		usage()
@@ -332,8 +393,16 @@ def main():
 			actions.append(["getcacheid", v, currentFile])
 		if o in ("-r", "--setprofile"):
 			actions.append(["setprofile", None, currentFile])
-		if o in ("-H", "--http"):
-			opt_useHTTPS = False;
+		if o in ("-H", "--https"):
+			try:
+				opt_HTTPS = {
+					0 : GC.HTTPS_NONE,
+					1 : GC.HTTPS_LOGIN,
+					2 : GC.HTTPS_FULL,
+				}[v]
+			except KeyError:
+				print "Error: Invalid HTTPS mode selection"
+				return 1
 	if not actions:
 		print "Error: No actions specified\n"
 		usage()
@@ -345,7 +414,9 @@ def main():
 			opt_password = raw_input("Geocaching.com password: ")
 
 	try:
-		gc = GC(opt_user, opt_password, opt_cookie)
+		gc = GC(user=opt_user, password=opt_password,
+			predefinedCookie=opt_cookie, httpsMode=opt_HTTPS,
+			debug=opt_debug)
 
 		autoLogout = True
 		if opt_cookie:
