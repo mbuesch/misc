@@ -135,7 +135,7 @@ typedef struct track {
 	unsigned long size;	/* track size in bytes */
 } tTrack;
 
-int buffered_fread(unsigned char *array, unsigned int size)
+static int buffered_fread(unsigned char *array, unsigned int size)
 {
 	unsigned int i;
 
@@ -166,7 +166,7 @@ int buffered_fread(unsigned char *array, unsigned int size)
 
 }
 
-void buffered_fwrite(unsigned char *array, unsigned int size)
+static void buffered_fwrite(unsigned char *array, unsigned int size)
 {
 	unsigned int idx;
 	unsigned long int readpos = 0;
@@ -213,7 +213,7 @@ void buffered_fwrite(unsigned char *array, unsigned int size)
 
 }
 
-void flush_buffers(void)
+static void flush_buffers(void)
 {
 	unsigned long int readpos = 0;
 
@@ -231,7 +231,7 @@ void flush_buffers(void)
 		// remove(sOutFilename);
 		exit(1);
 	}
-//   printf("\nWrote %d bytes          \n", OUTBUF_IDX);
+//	printf("\nWrote %d bytes          \n", OUTBUF_IDX);
 	OUTBUF_IDX = 0;
 	INBUF_RIDX = 0;
 	INBUF_WIDX = 0;
@@ -247,9 +247,9 @@ void flush_buffers(void)
 }
 
 // presumes Line is preloaded with the "current" line of the file
-int getTrackinfo(char *Line, tTrack * track)
+static int getTrackinfo(char *Line, tTrack * track)
 {
-//   char tnum[3];
+//	char tnum[3];
 	char inum[3];
 	char min;
 	char sec;
@@ -333,7 +333,7 @@ int getTrackinfo(char *Line, tTrack * track)
 	return (0);
 }
 
-void dotrack(short mode, long preidx, long startidx, long endidx, unsigned long offset)
+static void dotrack(short mode, long preidx, long startidx, long endidx, unsigned long offset)
 {
 	unsigned char buf[SIZERAW + 100];
 	unsigned long blockswritten = 0;
@@ -400,7 +400,7 @@ void dotrack(short mode, long preidx, long startidx, long endidx, unsigned long 
 		if (NULL == (fdOutFile = fopen(sOutFilename, "wb"))) {
 			perror("bin2iso(fopen)");
 		}
-// printf("\nOpened File %s: %d\n", sOutFilename, fdOutFile);
+//	printf("\nOpened File %s: %d\n", sOutFilename, fdOutFile);
 
 	} else {
 		fdOutFile = fdBinFile;
@@ -454,7 +454,7 @@ void dotrack(short mode, long preidx, long startidx, long endidx, unsigned long 
 			}
 			if ((M & 0xF) == 0xA)
 				M += 6;
-//         printf("\n%x:%x:%x", M, S, F);
+//			printf("\n%x:%x:%x", M, S, F);
 
 			buffered_fwrite(buf, SIZERAW);
 			uiLastIndex++;
@@ -591,7 +591,7 @@ void dotrack(short mode, long preidx, long startidx, long endidx, unsigned long 
 	fclose(fdOutFile);
 }
 
-void doCueFile(void)
+static void doCueFile(void)
 {
 	int track = 1;
 	unsigned long int binIndex = 0;
@@ -639,13 +639,13 @@ void doCueFile(void)
 		for (i = 0; i < SIZERAW; i += 2) {
 			value = buf[i + 1];
 			value = ((value << 8) | buf[i]);
-//         printf("%f %i\n",(1.0/75)*binIndex, value);
+//			printf("%f %i\n",(1.0/75)*binIndex, value);
 			if (abs(value) > valueThreshold) {
 				blank = 0;
 				break;
 			}
 		}
-//      if(i == SIZERAW) printf("%f ~blank~\n", (1.0/75)*binIndex);
+//		if(i == SIZERAW) printf("%f ~blank~\n", (1.0/75)*binIndex);
 		if (blank == 1)
 			count++;
 		else if (gapon == 1) {
@@ -674,7 +674,7 @@ void doCueFile(void)
 }
 
 // return 0 to when no data found, 1 when there is.
-int checkGaps(FILE * fdBinFile, tTrack tracks[], int nTracks)
+static int checkGaps(FILE * fdBinFile, tTrack tracks[], int nTracks)
 {
 	int i, k;
 	unsigned long int j;
@@ -1169,5 +1169,6 @@ int main(int argc, char **argv)
 	}
 	fclose(fdCueFile);
 	fclose(fdBinFile);
-	return (0);
+
+	return 0;
 }
