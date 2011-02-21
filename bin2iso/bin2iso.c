@@ -10,6 +10,9 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <limits.h>
+#include <libgen.h>
+#include <ctype.h>
 
 #define DEBUG 0
 #define CHECK 1
@@ -109,8 +112,8 @@ void unIndex(unsigned long int index, char *ptr)
 static FILE *fdBinFile;
 static FILE *fdCueFile;
 static FILE *fdOutFile;
-static char sBinFilename[256];
-static char sOutFilename[256];
+static char sBinFilename[PATH_MAX];
+static char sOutFilename[PATH_MAX];
 
 static unsigned long int writepos = 0;	// for inplace conversions...
 
@@ -725,6 +728,84 @@ static int checkGaps(FILE * fdBinFile, tTrack tracks[], int nTracks)
 	return writegap;
 }
 
+static void string_tolower(char *str, size_t len)
+{
+	while (len && *str) {
+		*str = tolower(*str);
+		str++;
+		len--;
+	}
+}
+
+static void string_toupper(char *str, size_t len)
+{
+	while (len && *str) {
+		*str = toupper(*str);
+		str++;
+		len--;
+	}
+}
+
+static FILE * fopen_filecase(const char *path, const char *file, const char *openmode)
+{
+	char filename[PATH_MAX] = { 0, };
+	char final[PATH_MAX] = { 0, };
+	FILE *fd;
+	char *pos;
+
+	/* Try original */
+	strncpy(filename, file, sizeof(filename) - 1);
+	snprintf(final, sizeof(final), "%s/%s", path, filename);
+	fd = fopen(final, openmode);
+	if (fd)
+		goto ok;
+
+	/* Try lower.lower */
+	strncpy(filename, file, sizeof(filename) - 1);
+	string_tolower(filename, (size_t)-1);
+	snprintf(final, sizeof(final), "%s/%s", path, filename);
+	fd = fopen(final, openmode);
+	if (fd)
+		goto ok;
+
+	/* Try UPPER.UPPER */
+	strncpy(filename, file, sizeof(filename) - 1);
+	string_toupper(filename, (size_t)-1);
+	snprintf(final, sizeof(final), "%s/%s", path, filename);
+	fd = fopen(final, openmode);
+	if (fd)
+		goto ok;
+
+	/* Try lower.UPPER */
+	strncpy(filename, file, sizeof(filename) - 1);
+	string_tolower(filename, (size_t)-1);
+	pos = strrchr(filename, '.');
+	if (pos)
+		string_toupper(pos, (size_t)-1);
+	snprintf(final, sizeof(final), "%s/%s", path, filename);
+	fd = fopen(final, openmode);
+	if (fd)
+		goto ok;
+
+	/* Try UPPER.lower */
+	strncpy(filename, file, sizeof(filename) - 1);
+	string_toupper(filename, (size_t)-1);
+	pos = strrchr(filename, '.');
+	if (pos)
+		string_tolower(pos, (size_t)-1);
+	snprintf(final, sizeof(final), "%s/%s", path, filename);
+	fd = fopen(final, openmode);
+	if (fd)
+		goto ok;
+
+	return NULL;
+
+ok:
+	printf("%s: Opening file %s\n", file, final);
+
+	return fd;
+}
+
 /* /\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/\/ */
 
 int main(int argc, char **argv)
@@ -748,7 +829,10 @@ int main(int argc, char **argv)
 	tTrack tracks[100];
 	int nTracks = 0;
 
-	char sOutdir[192];
+	char sOutdir[PATH_MAX];
+	const char *cueFilename;
+	char cuePathBuf[PATH_MAX];
+	char *cuePath;
 
 	sOutFilename[0] = '\0';
 
@@ -825,6 +909,9 @@ int main(int argc, char **argv)
 			strcpy(sOutdir, argv[2]);
 		}
 	}
+	cueFilename = argv[1];
+	strcpy(cuePathBuf, cueFilename);
+	cuePath = dirname(cuePathBuf);
 
 	if (createCue == 1) {
 		fdBinFile = fopen(sBinFilename, "rb");
@@ -832,9 +919,9 @@ int main(int argc, char **argv)
 			printf("Unable to open %s\n", sBinFilename);
 			exit(1);
 		}
-		fdCueFile = fopen(argv[1], "w");
+		fdCueFile = fopen(cueFilename, "w");
 		if (fdCueFile == NULL) {
-			printf("Unable to create %s\n", argv[1]);
+			printf("Unable to create %s\n", cueFilename);
 			exit(1);
 		}
 
@@ -847,9 +934,9 @@ int main(int argc, char **argv)
 		doCueFile();
 
 	} else {
-		fdCueFile = fopen(argv[1], "r");
+		fdCueFile = fopen(cueFilename, "r");
 		if (fdCueFile == NULL) {
-			printf("Unable to open %s\n", argv[1]);
+			printf("Unable to open %s\n", cueFilename);
 			exit(1);
 		}
 		// get bin filename from cuefile... why? why not.
@@ -877,10 +964,6 @@ int main(int argc, char **argv)
 			//bug?? Why did a trailing space show up??
 			while (sBinFilename[--j] == ' ')
 				sBinFilename[j] = '\0';
-
-// do not need to convert to lower case on unix system
-//         strlwr(sBinFilename);
-
 		} else {
 			printf("Error: Filename not found on first line of cuefile.\n");
 			exit(1);
@@ -888,9 +971,9 @@ int main(int argc, char **argv)
 
 		// Open the bin file
 		if (doInPlace == 1) {
-			fdBinFile = fopen(sBinFilename, "rb+");
+			fdBinFile = fopen_filecase(cuePath, sBinFilename, "rb+");
 		} else {
-			fdBinFile = fopen(sBinFilename, "rb");
+			fdBinFile = fopen_filecase(cuePath, sBinFilename, "rb");
 		}
 		if (fdBinFile == NULL) {
 			printf("Unable to open %s\n", sBinFilename);
