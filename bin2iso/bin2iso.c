@@ -106,23 +106,23 @@ void unIndex(unsigned long int index, char *ptr)
 }
 
 // global variables
-FILE *fdBinFile;
-FILE *fdCueFile;
-FILE *fdOutFile;
-char sBinFilename[256];
-char sOutFilename[256];
+static FILE *fdBinFile;
+static FILE *fdCueFile;
+static FILE *fdOutFile;
+static char sBinFilename[256];
+static char sOutFilename[256];
 
-unsigned long int writepos = 0;	// for inplace conversions...
+static unsigned long int writepos = 0;	// for inplace conversions...
 
 #define OUTBUF_SIZE 4*1024*1024
 #define INBUF_SIZE 4*1024*1024
-unsigned char OUTBUF[OUTBUF_SIZE];
-unsigned int OUTBUF_IDX = 0;
-unsigned char INBUF[INBUF_SIZE];
-unsigned int INBUF_RIDX = 0;
-unsigned int INBUF_WIDX = 0;
+static unsigned char OUTBUF[OUTBUF_SIZE];
+static unsigned int OUTBUF_IDX = 0;
+static unsigned char INBUF[INBUF_SIZE];
+static unsigned int INBUF_RIDX = 0;
+static unsigned int INBUF_WIDX = 0;
 
-int mode2to1 = 0;
+static int mode2to1 = 0;
 
 typedef struct track {
 	unsigned short mode;
