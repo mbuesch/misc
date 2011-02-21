@@ -2,12 +2,14 @@
  *  - 64-bit fixes
  *  - BigEndian fixes
  *  - Enable sanity checking
+ *  - Various bugfixes
  */
 
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <unistd.h>
 
 #define DEBUG 0
 #define CHECK 1
@@ -126,14 +128,14 @@ typedef struct track {
 	unsigned short mode;
 	unsigned long idx0;
 	unsigned long idx1;
-	unsigned char num[3];
-	unsigned char name[80];
+	char num[3];
+	char name[80];
 	unsigned long offset0;
 	unsigned long offset1;
 	unsigned long size;	/* track size in bytes */
 } tTrack;
 
-buffered_fread(unsigned char *array, unsigned int size)
+int buffered_fread(unsigned char *array, unsigned int size)
 {
 	unsigned int i;
 
@@ -149,7 +151,7 @@ buffered_fread(unsigned char *array, unsigned int size)
 		if ((INBUF_RIDX == INBUF_WIDX) && (i < (size - 1))) {
 			printf("   Warning: Premature EOF\n");
 			while (i++ < size) {
-				array[i] == 0;
+				array[i] = 0;
 			}	/* zero fill the rest */
 			break;
 		}
@@ -167,7 +169,7 @@ buffered_fread(unsigned char *array, unsigned int size)
 void buffered_fwrite(unsigned char *array, unsigned int size)
 {
 	unsigned int idx;
-	unsigned long int readpos;
+	unsigned long int readpos = 0;
 
 	if (OUTBUF_IDX + size >= OUTBUF_SIZE) {
 
@@ -213,7 +215,7 @@ void buffered_fwrite(unsigned char *array, unsigned int size)
 
 void flush_buffers(void)
 {
-	unsigned long int readpos;
+	unsigned long int readpos = 0;
 
 	if (fdOutFile == fdBinFile) {
 		readpos = ftell(fdOutFile);
@@ -288,7 +290,7 @@ int getTrackinfo(char *Line, tTrack * track)
 	} else if (track->mode == AUDIO) {
 		strcat(track->name, ".wav");
 	} else {
-		printf("Track %d Unsupported mode\n", track->num);
+		printf("Track %s Unsupported mode\n", track->num);
 		return (1);
 	}
 
@@ -305,9 +307,9 @@ int getTrackinfo(char *Line, tTrack * track)
 		if (strncmp(&Line[4], "INDEX ", 6) == 0) {
 			strncpy(inum, &Line[10], 2);
 			inum[2] = '\0';
-			min = ((Line[13] - '0') << 4) | Line[14] - '0';
-			sec = ((Line[16] - '0') << 4) | Line[17] - '0';
-			block = ((Line[19] - '0') << 4) | Line[20] - '0';
+			min = ((Line[13] - '0') << 4) | (Line[14] - '0');
+			sec = ((Line[16] - '0') << 4) | (Line[17] - '0');
+			block = ((Line[19] - '0') << 4) | (Line[20] - '0');
 
 			if (strcmp(inum, "00") == 0)
 				track->idx0 = Index(min, sec, block);
@@ -359,15 +361,15 @@ void dotrack(short mode, long preidx, long startidx, long endidx, unsigned long 
 	uiLastIndex = startidx - 1;
 	// Input -- process -- Output 
 	if (startidx != 0)
-		printf("\nNote: PreGap = %d frames\n", startidx - preidx);
+		printf("\nNote: PreGap = %ld frames\n", startidx - preidx);
 	else
 		printf("\nNote: PreGap = %d frames\n", OFFSET);	// cd standard: starting offset
 	// - of course this isn't true for bootable cd's...
 
 	if (sOutFilename[0] != '\0') {
-		printf("Creating %s (%06d,%06d) ", sOutFilename, startidx, endidx - 1);
+		printf("Creating %s (%06ld,%06ld) ", sOutFilename, startidx, endidx - 1);
 	} else {
-		printf("Converting (%06d,%06d) ", startidx, endidx - 1);
+		printf("Converting (%06ld,%06ld) ", startidx, endidx - 1);
 	}
 	switch (mode) {
 	case AUDIO:
@@ -458,7 +460,7 @@ void dotrack(short mode, long preidx, long startidx, long endidx, unsigned long 
 			uiLastIndex++;
 			memset(&buf[0], '\0', sizeof(buf));
 			if (startidx % PROG_INTERVAL == 0) {
-				printf("\b\b\b\b\b\b%06d", startidx);
+				printf("\b\b\b\b\b\b%06ld", startidx);
 			}
 			if (++startidx == endidx) {
 				printf("\b\b\b\b\b\bComplete\n");
@@ -470,7 +472,7 @@ void dotrack(short mode, long preidx, long startidx, long endidx, unsigned long 
 			buffered_fwrite(buf, SIZEISO_MODE1);
 			uiLastIndex++;
 			if (startidx % PROG_INTERVAL == 0) {
-				printf("\b\b\b\b\b\b%06d", startidx);
+				printf("\b\b\b\b\b\b%06ld", startidx);
 			}
 			if (++startidx == endidx) {
 				printf("\b\b\b\b\b\bComplete\n");
@@ -564,7 +566,7 @@ void dotrack(short mode, long preidx, long startidx, long endidx, unsigned long 
 
 			memset(&buf[0], '\0', sizeof(buf));
 			if (startidx % PROG_INTERVAL == 0) {
-				printf("\b\b\b\b\b\b%06d", startidx);
+				printf("\b\b\b\b\b\b%06ld", startidx);
 			}
 			if (++startidx == endidx) {
 				printf("\b\b\b\b\b\bComplete\n");
@@ -677,7 +679,6 @@ int checkGaps(FILE * fdBinFile, tTrack tracks[], int nTracks)
 	int i, k;
 	unsigned long int j;
 	unsigned char buf[SIZERAW];
-	int c = 0;
 	int writegap = 0;
 	short value;
 	int count;
@@ -728,13 +729,12 @@ int checkGaps(FILE * fdBinFile, tTrack tracks[], int nTracks)
 
 int main(int argc, char **argv)
 {
-	unsigned long int count = 0;
-//   int printon = 0;
+//	int printon = 0;
 
 	char sLine[256];
 	int i, j, q;
 
-//   int writegap = -1;   // auto detect pregap data action by default. 
+//	int writegap = -1;   // auto detect pregap data action by default. 
 	int writegap = 1;	// keep pregap data by default. 
 	int no_overburn = 0;
 	int createCue = 0;
@@ -777,7 +777,7 @@ int main(int argc, char **argv)
 		printf("                  truncates the binfile after each track is      \n");
 		printf("                  created to minimize diskspace requirements.    \n");
 		printf("                  [not valid with -t]                            \n");
-		printf("   -nob         - Doesn't use overburn data past %ld sectors.    \n",
+		printf("   -nob         - Doesn't use overburn data past %d sectors.     \n",
 		       CD74_MAX_SECTORS);
 		printf("                  This of course presumes that the data is not   \n");
 		printf("                  useful.                                        \n");
@@ -882,7 +882,7 @@ int main(int argc, char **argv)
 //         strlwr(sBinFilename);
 
 		} else {
-			printf("Error: Filename not found on first line of cuefile.\n", argv[1]);
+			printf("Error: Filename not found on first line of cuefile.\n");
 			exit(1);
 		}
 
@@ -1060,7 +1060,7 @@ int main(int argc, char **argv)
 
 		printf("\n");
 		for (i = 0; i <= nTracks - 1; i++) {
-			printf("%s (%3d Mb) - sectors %06ld:%06ld (offset %09ld:%09ld)\n",
+			printf("%s (%3ld Mb) - sectors %06ld:%06ld (offset %09ld:%09ld)\n",
 			       tracks[i].name,
 			       tracks[i].size / (1024 * 1024),
 			       tracks[i].idx1,
