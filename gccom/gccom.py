@@ -61,7 +61,7 @@ class GCPageStorage:
 			self.database = sql.connect(self.databasePath)
 			self.database.text_factory = str
 			c = self.database.cursor()
-			c.execute("CREATE TABLE IF NOT EXISTS pages(path text, data text);")
+			c.execute("CREATE TABLE IF NOT EXISTS pages(path text, data text, time integer);")
 		except (sql.Error), e:
 			raise GCException("SQL database error: " + str(e))
 
@@ -79,7 +79,7 @@ class GCPageStorage:
 			return
 		try:
 			c = self.database.cursor()
-			c.execute("INSERT INTO pages VALUES(?, ?);", (path, data))
+			c.execute("INSERT INTO pages VALUES(?, ?, strftime('%s', 'now'));", (path, data))
 		except (sql.Error), e:
 			raise GCException("SQL database error: " + str(e))
 		self.__printDebug("store " + path)
@@ -99,9 +99,20 @@ class GCPageStorage:
 		return data
 
 	def closeDatabase(self):
+		self.cleanDatabase()
 		self.database.commit()
 		self.database.close()
 		self.__printDebug("Database closed")
+
+	def cleanDatabase(self, ageMinutes=60*24):
+		try:
+			ageMinutes = -abs(ageMinutes)
+			self.__printDebug("Database cleanup (age %d minutes)..." % ageMinutes)
+			c = self.database.cursor()
+			c.execute("DELETE FROM pages WHERE time < "
+				  "strftime('%s', 'now', '" + str(ageMinutes) + " minutes');")
+		except (sql.Error), e:
+			raise GCException("SQL database error: " + str(e))
 
 class GC:
 	HTTPS_NONE	= 0
