@@ -48,10 +48,14 @@ class VerifiedHTTPSConnection(httplib.HTTPSConnection):
 class GCException(Exception): pass
 
 class GCPageStorage:
-	def __init__(self, debug=False,
+	def __init__(self, debug=False, enabled=True,
 		     basePath=os.path.expanduser("~/.gccom")):
 		self.debug = debug
+		self.enabled = enabled
 		self.databasePath = basePath + "/pagestorage.db"
+
+		if not enabled:
+			return
 
 		try:
 			os.mkdir(basePath)
@@ -74,9 +78,17 @@ class GCPageStorage:
 			return True
 		return False
 
-	def store(self, path, data):
+	def __makeIndex(self, index):
+		if index:
+			return "___:INDEX:_" + str(index)
+		return ""
+
+	def store(self, path, data, index=None):
+		if not self.enabled:
+			return
 		if self.__isBlacklisted(path):
 			return
+		path += self.__makeIndex(index)
 		try:
 			c = self.database.cursor()
 			c.execute("INSERT INTO pages VALUES(?, ?, strftime('%s', 'now'));", (path, data))
@@ -84,9 +96,12 @@ class GCPageStorage:
 			raise GCException("SQL database error: " + str(e))
 		self.__printDebug("store " + path)
 
-	def get(self, path):
+	def get(self, path, index=None):
+		if not self.enabled:
+			return None
 		if self.__isBlacklisted(path):
 			return None
+		path += self.__makeIndex(index)
 		try:
 			c = self.database.cursor()
 			c.execute("SELECT data FROM pages WHERE path=?", (path,))
@@ -99,12 +114,16 @@ class GCPageStorage:
 		return data
 
 	def closeDatabase(self):
+		if not self.enabled:
+			return
 		self.cleanDatabase()
 		self.database.commit()
 		self.database.close()
 		self.__printDebug("Database closed")
 
 	def cleanDatabase(self, ageMinutes=60*24):
+		if not self.enabled:
+			return
 		try:
 			ageMinutes = -abs(ageMinutes)
 			self.__printDebug("Database cleanup (age %d minutes)..." % ageMinutes)
@@ -120,10 +139,10 @@ class GC:
 	HTTPS_FULL	= 2
 
 	def __init__(self, user, password, predefinedCookie=None,
-		     httpsMode=HTTPS_LOGIN, debug=False):
+		     httpsMode=HTTPS_LOGIN, debug=False, storage=False):
 		self.httpsMode = httpsMode
 		self.debug = debug
-		self.pageStorage = GCPageStorage(debug=debug)
+		self.pageStorage = GCPageStorage(debug=debug, enabled=storage)
 		if predefinedCookie:
 			self.cookie = predefinedCookie
 		else:
@@ -325,6 +344,9 @@ class GC:
 	def findCaches(self, centerLatitude, centerLongitude, radiusMiles,
 		       maxNrCaches=100, findCallback=None):
 		"Get a list of caches at position"
+		centerLatitude = round(centerLatitude, 3)
+		centerLongitude = round(centerLongitude, 3)
+		radiusMiles = round(radiusMiles, 2)
 		#FIXME miles/km?
 		cachesList = []
 		page = "/seek/nearest.aspx" + "?" +\
@@ -336,9 +358,7 @@ class GC:
 				omitForms=("__EVENTTARGET", "__EVENTARGUMENT"))
 		http = self.__httpConnect()
 		for pageNr in range(1, maxNrCaches // 20 + 1 + 1):
-			# Make a pseudo identifier just for the page storage
-			pseudoPage = page + "___@@@_PAGENR_%d_@@@___" % pageNr
-			data = self.pageStorage.get(pseudoPage)
+			data = self.pageStorage.get(page, pageNr)
 			if not data:
 				# Nope, not in the storage. Fetch it.
 				if pageNr == 1:
@@ -355,7 +375,7 @@ class GC:
 				header["Content-Length"] = str(len(body))
 				http.request("POST", self.__pageSanitize(page), body, header)
 				data = http.getresponse().read()
-				self.pageStorage.store(pseudoPage, data)
+				self.pageStorage.store(page, data, pageNr)
 			data = self.__removeChars(data, "\r\n")
 			regex = r'<a\s+href="/seek/cache_details\.aspx\?guid=(' + guidRegex +\
 				r')"\s+class="lnk"><img\s+src='
