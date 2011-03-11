@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 """
 # Geocaching.com tool
-# (c) Copyright 2010 Michael Buesch
+# (c) Copyright 2010-2011 Michael Buesch
 # Licensed under the GNU/GPL version 2 or later.
 """
 
 import sys
+import os
 import getopt
 import httplib
 import socket
@@ -13,6 +14,7 @@ import urllib
 #import ssl
 import re
 import time
+import sqlite3 as sql
 
 
 hostname = "www.geocaching.com"
@@ -45,6 +47,62 @@ class VerifiedHTTPSConnection(httplib.HTTPSConnection):
 
 class GCException(Exception): pass
 
+class GCPageStorage:
+	def __init__(self, debug=False,
+		     basePath=os.path.expanduser("~/.gccom")):
+		self.debug = debug
+		self.databasePath = basePath + "/pagestorage.db"
+
+		try:
+			os.mkdir(basePath)
+		except (OSError), e:
+			pass
+		try:
+			self.database = sql.connect(self.databasePath)
+			self.database.text_factory = str
+			c = self.database.cursor()
+			c.execute("CREATE TABLE IF NOT EXISTS pages(path text, data text);")
+		except (sql.Error), e:
+			raise GCException("SQL database error: " + str(e))
+
+	def __printDebug(self, string):
+		if self.debug:
+			print "PageStorage:", string
+
+	def __isBlacklisted(self, path):
+		if path.startswith("/login"):
+			return True
+		return False
+
+	def store(self, path, data):
+		if self.__isBlacklisted(path):
+			return
+		try:
+			c = self.database.cursor()
+			c.execute("INSERT INTO pages VALUES(?, ?);", (path, data))
+		except (sql.Error), e:
+			raise GCException("SQL database error: " + str(e))
+		self.__printDebug("store " + path)
+
+	def get(self, path):
+		if self.__isBlacklisted(path):
+			return None
+		try:
+			c = self.database.cursor()
+			c.execute("SELECT data FROM pages WHERE path=?", (path,))
+			data = c.fetchone()
+			if data:
+				data = data[0]
+				self.__printDebug("get " + path)
+		except (sql.Error), e:
+			raise GCException("SQL database error: " + str(e))
+		return data
+
+	def closeDatabase(self):
+		self.database.commit()
+		self.database.close()
+		self.__printDebug("Database closed")
+
 class GC:
 	HTTPS_NONE	= 0
 	HTTPS_LOGIN	= 1
@@ -54,6 +112,7 @@ class GC:
 		     httpsMode=HTTPS_LOGIN, debug=False):
 		self.httpsMode = httpsMode
 		self.debug = debug
+		self.pageStorage = GCPageStorage(debug=debug)
 		if predefinedCookie:
 			self.cookie = predefinedCookie
 		else:
@@ -115,6 +174,7 @@ class GC:
 			     None, header)
 		http.getresponse()
 		self.__printDebug("Logout success")
+		self.pageStorage.closeDatabase()
 
 	@staticmethod
 	def __removeChars(string, template):
@@ -163,13 +223,19 @@ class GC:
 
 	def getPage(self, page):
 		"Download a page. Returns the html code of the page."
+		page = self.__pageSanitize(page)
+		data = self.pageStorage.get(page)
+		if data:
+			return data
 		http = self.__httpConnect()
 		header = defaultHttpHeader.copy()
 		header["Host"] = hostname
 		header["Cookie"] = self.cookie
-		http.request("GET", self.__pageSanitize(page), None, header)
+		http.request("GET", page, None, header)
 		resp = http.getresponse()
-		return resp.read()
+		data = resp.read()
+		self.pageStorage.store(page, data)
+		return data
 
 	def getLOC(self, page):
 		"Download the LOC file from a page"
@@ -259,24 +325,30 @@ class GC:
 				omitForms=("__EVENTTARGET", "__EVENTARGUMENT"))
 		http = self.__httpConnect()
 		for pageNr in range(1, maxNrCaches // 20 + 1 + 1):
-			if pageNr == 1:
-				body = ""
-			else:
-				body = "__EVENTTARGET=ctl00%24ContentBody%24pgrTop%24lbGoToPage_" +\
-					str(pageNr) + "&" +\
-					"__EVENTARGUMENT=" + "&" +\
-					hiddenForms
-			header = defaultHttpHeader.copy()
-			header["Host"] = hostname
-			header["Cookie"] = self.cookie
-			header["Content-Type"] = "application/x-www-form-urlencoded"
-			header["Content-Length"] = str(len(body))
-			http.request("POST", self.__pageSanitize(page), body, header)
-			resp = http.getresponse().read()
-			resp = self.__removeChars(resp, "\r\n")
+			# Make a pseudo identifier just for the page storage
+			pseudoPage = page + "___@@@_PAGENR_%d_@@@___" % pageNr
+			data = self.pageStorage.get(pseudoPage)
+			if not data:
+				# Nope, not in the storage. Fetch it.
+				if pageNr == 1:
+					body = ""
+				else:
+					body = "__EVENTTARGET=ctl00%24ContentBody%24pgrTop%24lbGoToPage_" +\
+						str(pageNr) + "&" +\
+						"__EVENTARGUMENT=" + "&" +\
+						hiddenForms
+				header = defaultHttpHeader.copy()
+				header["Host"] = hostname
+				header["Cookie"] = self.cookie
+				header["Content-Type"] = "application/x-www-form-urlencoded"
+				header["Content-Length"] = str(len(body))
+				http.request("POST", self.__pageSanitize(page), body, header)
+				data = http.getresponse().read()
+				self.pageStorage.store(pseudoPage, data)
+			data = self.__removeChars(data, "\r\n")
 			regex = r'<a\s+href="/seek/cache_details\.aspx\?guid=(' + guidRegex +\
 				r')"\s+class="lnk"><img\s+src='
-			foundGuids = re.findall(regex, resp)
+			foundGuids = re.findall(regex, data)
 			if findCallback:
 				findCallback(foundGuids)
 			print foundGuids#XXX
