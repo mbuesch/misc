@@ -116,7 +116,8 @@ class GCPageStorage:
 	def closeDatabase(self):
 		if not self.enabled:
 			return
-		self.cleanDatabase()
+		if 0: #TODO
+			self.cleanDatabase()
 		self.database.commit()
 		self.database.close()
 		self.__printDebug("Database closed")
@@ -341,18 +342,17 @@ class GC:
 		if resp.find("Your Account Details") < 0:
 			raise GCException("Failed to upload profile data to the account")
 
-	def findCaches(self, centerLatitude, centerLongitude, radiusMiles,
+	def findCaches(self, centerLatitude, centerLongitude, radiusKM,
 		       maxNrCaches=100, findCallback=None):
 		"Get a list of caches at position"
 		centerLatitude = round(centerLatitude, 3)
 		centerLongitude = round(centerLongitude, 3)
-		radiusMiles = round(radiusMiles, 2)
-		#FIXME miles/km?
+		radiusKM = round(radiusKM, 2)
 		cachesList = []
 		page = "/seek/nearest.aspx" + "?" +\
 			"origin_lat=%f" % centerLatitude + "&" +\
 			"origin_long=%f" % centerLongitude + "&" +\
-			"dist=%f" % radiusMiles + "&" +\
+			"dist=%f" % radiusKM + "&" +\
 			"submit3=Search"
 		hiddenForms = self.__getHiddenFormsUrlencoded(page,
 				omitForms=("__EVENTTARGET", "__EVENTARGUMENT"))
@@ -377,12 +377,15 @@ class GC:
 				data = http.getresponse().read()
 				self.pageStorage.store(page, data, pageNr)
 			data = self.__removeChars(data, "\r\n")
+			if data.find("Distance Measured in Kilometers") < 0:
+				raise GCException("findCaches(): distance not measured in km")
 			regex = r'<a\s+href="/seek/cache_details\.aspx\?guid=(' + guidRegex +\
 				r')"\s+class="lnk"><img\s+src='
 			foundGuids = re.findall(regex, data)
+			if not foundGuids:
+				break
 			if findCallback:
 				findCallback(foundGuids)
-			print foundGuids#XXX
 			cachesList.extend(foundGuids)
 		#TODO limit count
 		return cachesList
