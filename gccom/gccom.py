@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# vim: set fileencoding=UTF-8 :
 """
 # Geocaching.com tool
 # (c) Copyright 2010-2011 Michael Buesch
@@ -310,6 +311,19 @@ class GC:
 		id = m.group(1).strip()
 		return id
 
+	def getCacheTitle(self, page):
+		"Get the cache title"
+		p = self.getPage(page)
+		startstr = '<meta name="og:title" content="'
+		begin = p.find(startstr)
+		if begin < 0:
+			raise GCException("Failed to get cache title from " + page)
+		begin += len(startstr)
+		end = p.find('"', begin)
+		if end < 0:
+			raise GCException("Failed to get cache title from " + page)
+		return p[begin:end]
+
 	def getCacheLocation(self, page):
 		"Get the location of a cache. Returns a tuple of (latitude, longitude)."
 		p = self.getPage(page)
@@ -357,7 +371,9 @@ class GC:
 		hiddenForms = self.__getHiddenFormsUrlencoded(page,
 				omitForms=("__EVENTTARGET", "__EVENTARGUMENT"))
 		http = self.__httpConnect()
-		for pageNr in range(1, maxNrCaches // 20 + 1 + 1):
+		count = 0
+		pageNr = 1
+		while count < maxNrCaches:
 			data = self.pageStorage.get(page, pageNr)
 			if not data:
 				# Nope, not in the storage. Fetch it.
@@ -384,11 +400,12 @@ class GC:
 			foundGuids = re.findall(regex, data)
 			if not foundGuids:
 				break
+			count += len(foundGuids)
 			if findCallback:
-				findCallback(foundGuids)
+				findCallback(foundGuids) #FIXME truncate if more than maxNrCaches
 			cachesList.extend(foundGuids)
-		#TODO limit count
-		return cachesList
+			pageNr += 1
+		return cachesList[0:maxNrCaches]
 
 def printOutput(fileName, string):
 	if not fileName:
