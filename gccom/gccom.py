@@ -49,7 +49,7 @@ class VerifiedHTTPSConnection(httplib.HTTPSConnection):
 class GCException(Exception): pass
 
 class GCPageStorage:
-	def __init__(self, debug=False, enabled=True,
+	def __init__(self, debug=0, enabled=True,
 		     basePath=os.path.expanduser("~/.gccom")):
 		self.debug = debug
 		self.enabled = enabled
@@ -71,7 +71,7 @@ class GCPageStorage:
 			raise GCException("SQL database error: " + str(e))
 
 	def __printDebug(self, string):
-		if self.debug:
+		if self.debug >= 2:
 			print "PageStorage:", string
 
 	def __isBlacklisted(self, path):
@@ -141,7 +141,7 @@ class GC:
 	HTTPS_FULL	= 2
 
 	def __init__(self, user, password, predefinedCookie=None,
-		     httpsMode=HTTPS_LOGIN, debug=False, storage=False):
+		     httpsMode=HTTPS_LOGIN, debug=0, storage=False):
 		self.httpsMode = httpsMode
 		self.debug = debug
 		self.pageStorage = GCPageStorage(debug=debug, enabled=storage)
@@ -357,7 +357,7 @@ class GC:
 			raise GCException("Failed to upload profile data to the account")
 
 	def findCaches(self, centerLatitude, centerLongitude, radiusKM,
-		       maxNrCaches=100, findCallback=None):
+		       maxNrCaches=100):
 		"Get a list of caches at position"
 		centerLatitude = round(centerLatitude, 3)
 		centerLongitude = round(centerLongitude, 3)
@@ -401,8 +401,6 @@ class GC:
 			if not foundGuids:
 				break
 			count += len(foundGuids)
-			if findCallback:
-				findCallback(foundGuids) #FIXME truncate if more than maxNrCaches
 			cachesList.extend(foundGuids)
 			pageNr += 1
 		return cachesList[0:maxNrCaches]
@@ -469,7 +467,7 @@ def usage():
 def main():
 	actions = []
 
-	opt_debug = False
+	opt_debug = 0
 	opt_HTTPS = GC.HTTPS_LOGIN
 	opt_user = None
 	opt_password = None
@@ -491,7 +489,7 @@ def main():
 			usage()
 			return 0
 		if o == "--debug":
-			opt_debug = True
+			opt_debug += 1
 		if o in ("-u", "--user"):
 			opt_user = v
 		if o in ("-p", "--password"):
