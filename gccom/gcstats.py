@@ -2,7 +2,7 @@
 # vim: set fileencoding=UTF-8 :
 """
 # Geocaching.com stats tool
-# (c) Copyright 2010 Michael Buesch
+# (c) Copyright 2010-2011 Michael Buesch
 # Licensed under the GNU/GPL version 2 or later.
 """
 
