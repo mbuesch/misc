@@ -446,10 +446,12 @@ def getAllFound(gc, homeCoord):
 	else:
 		foundit = gc.getPage("/my/logs.aspx?s=1&lt=2")
 		localCacheinfoPut("found", "index", foundit)
-	matches = re.findall(r"<td>\s*(\d\d/\d\d/\d\d\d\d)\s*</td>\s*<td>[\s\w=<>\"]*" \
-			r"<a href=\"http://www\.geocaching\.com/seek/cache_details\.aspx" \
-			r"\?guid=(" + gccom.guidRegex + r")\" class=\"lnk\">",
-			foundit, re.DOTALL)
+	matches = re.findall(r'<td>\s*(\d\d/\d\d/\d\d\d\d)\s*</td>\s*'
+			     r'<td>\s*'
+			     r'<a href="http://www.geocaching.com/seek/cache_details.aspx'
+			     r'\?guid=(' + gccom.guidRegex + r')"'
+			     r'\s*class="ImageLink">',
+			     foundit, re.DOTALL)
 	print "Got %d found caches." % len(matches)
 	found = []
 	for (foundDate, foundGuid) in matches:
@@ -485,8 +487,7 @@ def getAllHidden(gc, homeCoord):
 		localCacheinfoPut("hidden", "index", hiddenIndex)
 	matches = re.findall(r'<td><a href="'
 			     r'http://www\.geocaching\.com/seek/cache_details\.aspx\?guid='
-			     r'(' + gccom.guidRegex + r')">[\w\s\-,&#;]+'
-			     r'</a></td>\s*<td>Found: \d\d/\d\d/\d\d\d\d</td>',
+			     r'(' + gccom.guidRegex + r')"\s*title="',
 			     hiddenIndex, re.DOTALL)
 	print "Got %d hidden caches." % len(matches)
 	hidden = []
