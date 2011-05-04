@@ -71,6 +71,9 @@ class Coordinate:
 	def distanceInKm(self, coord):
 		return self.__distance(coord) * 6371.0
 
+	def __repr__(self):
+		return "latitude: %f  longitude: %f" % (self.lat, self.lon)
+
 class IntRange:
 	UNLIMITED = "nan"
 
@@ -512,6 +515,7 @@ def getHomeCoordinates(gc):
 	lat = m.group(1)
 	lon = m.group(2)
 	homeCoord = Coordinate(latString=lat, lonString=lon)
+	print "Home:", homeCoord
 	return homeCoord
 
 class HtmlTable:
