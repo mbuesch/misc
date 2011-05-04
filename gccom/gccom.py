@@ -136,9 +136,8 @@ class GCPageStorage:
 			raise GCException("SQL database error: " + str(e))
 
 class GC:
-	HTTPS_NONE	= 0
-	HTTPS_LOGIN	= 1
-	HTTPS_FULL	= 2
+	HTTPS_LOGIN	= 0
+	HTTPS_FULL	= 1
 
 	def __init__(self, user, password, predefinedCookie=None,
 		     httpsMode=HTTPS_LOGIN, debug=0, storage=False):
@@ -156,10 +155,9 @@ class GC:
 			print string
 
 	def __httpConnect(self, inLogin=False):
-		if self.httpsMode == self.HTTPS_NONE or\
-		   (self.httpsMode == self.HTTPS_LOGIN and not inLogin):
-			return httplib.HTTPConnection(hostname)
-		return httplib.HTTPSConnection(hostname)
+		if self.httpsMode == self.HTTPS_FULL or inLogin:
+			return httplib.HTTPSConnection(hostname)
+		return httplib.HTTPConnection(hostname)
 
 	def __requestCookie(self):
 		self.__printDebug("Requesting fresh cookie")
@@ -178,16 +176,17 @@ class GC:
 		"Login the cookie"
 		self.__printDebug("Logging into geocaching.com...")
 		http = self.__httpConnect(inLogin=True)
-		body = self.__getHiddenFormsUrlencoded("/login/default.aspx") + "&" +\
-			"ctl00%24ContentBody%24myUsername=" + urllib.quote_plus(user) + "&" +\
-			"ctl00%24ContentBody%24myPassword=" + urllib.quote_plus(password) + "&" +\
-			"ctl00%24ContentBody%24Button1=Login"
+		body = self.__getHiddenFormsUrlencoded("/login/default.aspx", inLogin=True) + "&" +\
+			"ctl00%24SiteContent%24tbUsername=" + urllib.quote_plus(user) + "&" +\
+			"ctl00%24SiteContent%24tbPassword=" + urllib.quote_plus(password) + "&" +\
+			"ctl00%24SiteContent%24cbRememberMe=Checked&" +\
+			"ctl00%24SiteContent%24btnSignIn=Login"
 		header = defaultHttpHeader.copy()
 		header["Host"] = hostname
 		header["Cookie"] = self.cookie
 		header["Content-Type"] = "application/x-www-form-urlencoded"
 		header["Content-Length"] = str(len(body))
-		http.request("POST", "/login/default.aspx?RESET=Y&redir=http%3a%2f%2fwww.geocaching.com%2fdefault.aspx",
+		http.request("POST", "/login/default.aspx?RESETCOMPLETE=Y",
 			     body, header)
 		resp = http.getresponse()
 		if resp.read().find("combination does not match") >= 0:
@@ -235,16 +234,16 @@ class GC:
 			raise GCException("Invalid page/guid identifier: %s" % pageOrig)
 		return page
 
-	def __getHiddenForms(self, page):
+	def __getHiddenForms(self, page, inLogin=False):
 		"Get all hidden forms on a page. Returns a list of tuples of (id, value)"
-		p = self.getPage(page)
-		p = self.__removeChars(p, "\r\n")
-		return re.findall(r'<input\s+type="hidden"\s+name="\w*"\s+id="(\w+)"\s+value="([/%=\w\+]*)"\s*/>', p)
+		p = self.getPage(page, inLogin=inLogin)
+		return re.findall(r'<input\s+type="hidden"\s+name="\w*"\s+id="(\w+)"\s+value="([/%=\w\+]*)"\s*/>',
+				  p, re.DOTALL)
 
-	def __getHiddenFormsUrlencoded(self, page, omitForms=[]):
+	def __getHiddenFormsUrlencoded(self, page, omitForms=[], inLogin=False):
 		"Get all hidden forms on a page. Returns an URL-encoded string"
 		forms = []
-		for (formId, formValue) in self.__getHiddenForms(page):
+		for (formId, formValue) in self.__getHiddenForms(page, inLogin=inLogin):
 			if formId in omitForms:
 				continue
 			form = formId + "="
@@ -253,13 +252,13 @@ class GC:
 			forms.append(form)
 		return "&".join(forms)
 
-	def getPage(self, page):
+	def getPage(self, page, inLogin=False):
 		"Download a page. Returns the html code of the page."
 		page = self.__pageSanitize(page)
 		data = self.pageStorage.get(page)
 		if data:
 			return data
-		http = self.__httpConnect()
+		http = self.__httpConnect(inLogin)
 		header = defaultHttpHeader.copy()
 		header["Host"] = hostname
 		header["Cookie"] = self.cookie
@@ -433,7 +432,7 @@ def usage():
 	print ""
 	print "-u|--user USER             The gc.com username"
 	print "-p|--password PASS         The gc.com password"
-	print "-H|--https MODE            0->HTTP, 1->HTTPS login (default), 2->full HTTPS"
+	print "-H|--https MODE            0->HTTPS login (default), 1->full HTTPS"
 	print "-f|--file FILE             Specify an output/input file. Default is stdout/stdin"
 	print ""
 	print "-c|--getcookie             Retrieve a logged-in cookie"
@@ -468,7 +467,7 @@ def main():
 	actions = []
 
 	opt_debug = 0
-	opt_HTTPS = GC.HTTPS_LOGIN
+	opt_HTTPS = 0
 	opt_user = None
 	opt_password = None
 	opt_cookie = None
@@ -517,9 +516,8 @@ def main():
 		if o in ("-H", "--https"):
 			try:
 				opt_HTTPS = {
-					0 : GC.HTTPS_NONE,
-					1 : GC.HTTPS_LOGIN,
-					2 : GC.HTTPS_FULL,
+					0 : GC.HTTPS_LOGIN,
+					1 : GC.HTTPS_FULL,
 				}[v]
 			except KeyError:
 				print "Error: Invalid HTTPS mode selection"
