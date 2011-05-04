@@ -26,8 +26,12 @@ if [ "$new_stats_sha1" = "$old_stats_sha1" ]; then
 	echo "Upload not necessary. Profile data unchanged."
 else
 	echo "Uploading profile..."
-	$GCCOM --user "$user" --password "$password" -f "$html_template" --setprofile || \
-		die "Failed to upload statistics"
+	if [ "$1" = "--dry-run" ]; then
+		echo "Dry-run. Not updating."
+	else
+		$GCCOM --user "$user" --password "$password" -f "$html_template" --setprofile || \
+			die "Failed to upload statistics"
+	fi
 fi
 
 exit 0
