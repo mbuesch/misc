@@ -529,7 +529,8 @@ class HtmlTable:
 		styleWidth = ""
 		if width >= 0:
 			styleWidth = "width: %dpx;" % width
-		fd.write('<table border="0" style="%s">' % styleWidth)
+		fd.write('<table border="1" '
+			 'style="margin: 5px; border: 1px solid #FFFFFF; %s">' % styleWidth)
 		if headline:
 			fd.write('<th colspan="%d" ' \
 				 'style="%s background: %s; font-weight: bold; ' \
@@ -542,7 +543,7 @@ class HtmlTable:
 	def addRow(self, *columns):
 		assert(len(columns) == self.nrColumns)
 		style = 'text-align: left; background: %s; ' % htmlBgColor +\
-			'font-size: 13px; color: black; '
+			'font-size: 13px; color: black;'
 		self.fd.write('<tr style="%s">' % style)
 		for column in columns:
 			if not column.startswith('<td'):
