@@ -370,7 +370,7 @@ class GC:
 		header["Content-Length"] = str(len(body))
 		http.request("POST", self.__pageSanitize(page), body, header)
 		resp = http.getresponse().read()
-		if resp.find("Your Account Details") < 0:
+		if resp.find('Object moved to <a href="/account/default.aspx"') < 0:
 			raise GCException("Failed to upload profile data to the account")
 
 	def findCaches(self, centerLatitude, centerLongitude, radiusKM,
