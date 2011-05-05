@@ -197,13 +197,18 @@ class GC:
 	def logout(self):
 		"Logout the cookie"
 		self.__printDebug("Logout from geocaching.com...")
-		http = self.__httpConnect()
+		http = self.__httpConnect(inLogin=True)
 		header = defaultHttpHeader.copy()
 		header["Host"] = hostname
 		header["Cookie"] = self.cookie
-		http.request("GET", "/login/default.aspx?RESET=Y&redir=http%3a%2f%2fwww.geocaching.com%2fdefault.aspx",
+		http.request("GET", "/login/default.aspx?RESET=Y"
+			"&amp;redir=http%3a%2f%2fwww.geocaching.com%2fseek%2fdefault.aspx%3f",
 			     None, header)
-		http.getresponse()
+		http.getresponse().read()
+		http.request("GET", "/login/default.aspx?RESETCOMPLETE=Y"
+			"&amp;amp;redir=http%3a%2f%2fwww.geocaching.com%2fseek%2fdefault.aspx%3f",
+			     None, header)
+		http.getresponse().read()
 		self.__printDebug("Logout success")
 		self.pageStorage.closeDatabase()
 
