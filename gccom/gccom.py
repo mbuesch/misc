@@ -21,6 +21,7 @@ import sqlite3 as sql
 hostname = "www.geocaching.com"
 
 guidRegex = r'\w{8,8}-\w{4,4}-\w{4,4}-\w{4,4}-\w{12,12}'
+gcidRegex = r'GC\w\w\w\w\w?'
 
 defaultHttpHeader = {
 	"User-Agent" : "User-Agent: Mozilla/5.0 (Windows; U; " +\
@@ -226,6 +227,10 @@ class GC:
 		if m:
 			# This is a GUID. Extend it to a valid page path.
 			page = "/seek/cache_details.aspx?guid=" + page
+		m = re.compile(r'^' + gcidRegex + r'$').match(page)
+		if m:
+			# This is a GC.... ID. Extend it to a valid page path.
+			page = "/seek/cache_details.aspx?wp=" + page
 		if page.startswith("http://"):
 			page = page[7:].strip()
 		if page.startswith("www."):
@@ -308,12 +313,20 @@ class GC:
 	def getCacheId(self, page):
 		"Get the GCxxxx cache ID"
 		p = self.getPage(page)
-		p = self.__removeChars(p, "\r\n")
-		m = re.compile(r'.*<title>\s*(GC\w+)\s.*</title>.*').match(p)
+		m = re.compile(r'.*<title>\s*(GC\w+)\s+.*', re.DOTALL).match(p)
 		if not m:
 			raise GCException("Failed to get cache ID from " + page)
 		id = m.group(1).strip()
 		return id
+
+	def getGuid(self, page):
+		"Get the GUID for a page"
+		p = self.getPage(page)
+		m = re.compile(r'.*wid=(' + guidRegex + r').*', re.DOTALL).match(p)
+		if not m:
+			raise GCException("Failed to get cache GUID from " + page)
+		guid = m.group(1).strip()
+		return guid
 
 	def getCacheTitle(self, page):
 		"Get the cache title"
@@ -448,6 +461,7 @@ def usage():
 	print "-P|--getpage PAGE          Download a random page from gc.com"
 	print "-l|--getloc GUID           Download a LOC file"
 	print "-g|--getgpx GUID           Download a GPX file (Need premium account)"
+	print "-G|--getguid PAGE          Get the GUID for a page"
 	print "-i|--getcacheid GUID       Get the GCxxxx cache ID"
 	print ""
 	print "-r|--setprofile            Upload the public account profile data."
@@ -479,9 +493,9 @@ def main():
 
 	try:
 		(opts, args) = getopt.getopt(sys.argv[1:],
-			"hu:p:f:P:l:g:cC:Li:rH:",
+			"hu:p:f:P:l:g:cC:Li:rH:G:",
 			[ "help", "user=", "password=", "file=", "getpage=", "getloc=",
-			  "getgpx=", "getcookie", "usecookie=", "logout", "getcacheid=",
+			  "getgpx=", "getcookie", "usecookie=", "logout", "getcacheid=", "getguid=",
 			  "setprofile", "https=",
 			  "debug", ])
 	except getopt.GetoptError:
@@ -516,6 +530,8 @@ def main():
 			actions.append(["getgpx", v, currentFile])
 		if o in ("-i", "--getcacheid"):
 			actions.append(["getcacheid", v, currentFile])
+		if o in ("-G", "--getguid"):
+			actions.append(["getguid", v, currentFile])
 		if o in ("-r", "--setprofile"):
 			actions.append(["setprofile", None, currentFile])
 		if o in ("-H", "--https"):
@@ -563,6 +579,8 @@ def main():
 				printOutput(fileName, gc.getGPX(value))
 			if request == "getcacheid":
 				printOutput(fileName, gc.getCacheId(value))
+			if request == "getguid":
+				printOutput(fileName, gc.getGuid(value))
 			if request == "setprofile":
 				gc.setProfile(fetchInput(fileName))
 			if request == "logout":

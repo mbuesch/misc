@@ -36,7 +36,7 @@ gccom_download_recursive() # $1=target_dir $2=URL
 {
 	local origin="$PWD"
 	cd "$1"
-	wget -qrkl1 --no-cookies --header "Cookie: $cookie" "$2" || die "Recursive wget FAILED"
+	wget -qrkl1 --no-cookies --header "Cookie: $cookie" "$2" #FIXME|| die "Recursive wget FAILED with $?"
 	cd "$origin"
 }
 
@@ -52,5 +52,16 @@ extract_guid() # $1=string
 {
 	code="import gccom, re;"
 	code="$code print re.match(r'.*(' + gccom.guidRegex + r').*', r'$1', re.DOTALL).group(1)"
-	python -c "$code" || die "Failed to extract GUID"
+	python -c "$code" 2>/dev/null && {
+		return
+	}
+	code="import gccom, re;"
+	code="$code print re.match(r'.*cache_details.aspx\?wp=(' + gccom.gcidRegex + r').*', r'$1', re.DOTALL).group(1)"
+	gcid="$(python -c "$code" 2>/dev/null)"
+	[ -n "$gcid" ] && {
+		gccom --usecookie "$cookie" --getguid "$gcid" && {
+			return
+		}
+	}
+	die "Failed to extract GUID"
 }
