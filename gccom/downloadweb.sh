@@ -27,12 +27,15 @@ printpage_get() # $1=target_dir $2=guid $3=cacheid $4=URL-suffix
 	fi
 
 	# Patch the page
-	if [ "x$(grep -e '<div id="div_hint' "$file")" != "x" ]; then
-		sed -i -e 's/<\/body>/<script type="text\/javascript"> dht(); <\/script><\/body>/' \
+	if [ "x$(grep -e 'class="hint-encrypted"' "$file")" != "x" ]; then
+		# Decrypt hint. The class names are backwards...
+		sed -i -e 's/class="hint-encrypted" style="display:none;"/class="hint-encrypted"/' \
 			"$file" || die "Patching print page failed (1)"
+		sed -i -e 's/class="hint-decrypted"/class="hint-decrypted" style="display:none;"/' \
+			"$file" || die "Patching print page failed (2)"
+		sed -i -e 's/Decrypt<\/a>/...is autodecrypted...<\/a>/' \
+			"$file" || die "Patching print page failed (3)"
 	fi
-	sed -i -e 's/<head>/<head><meta http-equiv="Content-Type" content="text\/html; charset=UTF-8" \/>/' \
-		"$file" || die "Patching print page failed (2)"
 
 	# Creating a convenience link
 	clink="$target_dir/www.geocaching.com/seek/$id.html"
