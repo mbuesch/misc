@@ -448,6 +448,7 @@ def getAllFound(gc, homeCoord):
 		localCacheinfoPut("found", "index", foundit)
 	matches = re.findall(r'<td>\s*(\d\d/\d\d/\d\d\d\d)\s*</td>\s*'
 			     r'<td>\s*'
+			     r'(?:<span class="Strike OldWarning">)?'
 			     r'<a href="http://www.geocaching.com/seek/cache_details.aspx'
 			     r'\?guid=(' + gccom.guidRegex + r')"'
 			     r'\s*class="ImageLink">',
