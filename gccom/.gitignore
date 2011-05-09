@@ -1,7 +1,9 @@
 account
-print_templates
-locs
 sync.sh
+
+print
+locs
+web
 
 gcstats
 gcstats.html

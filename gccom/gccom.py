@@ -17,6 +17,9 @@ import re
 import time
 import sqlite3 as sql
 
+import geopy as geo
+from geopy.distance import VincentyDistance as Distance
+
 
 hostname = "www.geocaching.com"
 
@@ -339,6 +342,7 @@ class GC:
 		end = p.find('"', begin)
 		if end < 0:
 			raise GCException("Failed to get cache title from " + page)
+		#TODO Fixup HTML codes
 		return p[begin:end]
 
 	def getCacheLocation(self, page):
@@ -373,18 +377,42 @@ class GC:
 		if resp.find('Object moved to <a href="/account/default.aspx"') < 0:
 			raise GCException("Failed to upload profile data to the account")
 
-	def findCaches(self, centerLatitude, centerLongitude, radiusKM,
-		       maxNrCaches=100):
-		"Get a list of caches at position"
-		centerLatitude = round(centerLatitude, 3)
-		centerLongitude = round(centerLongitude, 3)
+	def getMyFoundCaches(self):
+		p = self.getPage("/my/logs.aspx?s=1&lt=2")
+		matches = re.findall(r'<td>\s*(\d\d/\d\d/\d\d\d\d)\s*</td>\s*'
+			     r'<td>\s*'
+			     r'(?:<span class="Strike OldWarning">)?'
+			     r'<a href="http://www.geocaching.com/seek/cache_details.aspx'
+			     r'\?guid=(' + guidRegex + r')"'
+			     r'\s*class="ImageLink">',
+			     p, re.DOTALL)
+		return matches # (foundDate, foundGuid)
+
+	def findCaches(self, NEpoint, SWpoint,
+			     maxNrCaches=100):
+		"Get a list of caches in a bounding frame"
+		radiusKM = Distance(NEpoint, SWpoint).km / 3#FIXME
 		radiusKM = round(radiusKM, 2)
+		centerLat = NEpoint.latitude + (SWpoint.latitude - NEpoint.latitude) / 2
+		centerLat = round(centerLat, 3)
+		centerLatDegree = int(centerLat)
+		centerLatMinutes = (centerLat - int(centerLat)) * 60
+		centerLon = NEpoint.longitude + (SWpoint.longitude - NEpoint.longitude) / 2
+		centerLon = round(centerLon, 3)
+		centerLonDegree = int(centerLon)
+		centerLonMinutes = (centerLon - int(centerLon)) * 60
+		#TODO need better rounding for caching
+
 		cachesList = []
-		page = "/seek/nearest.aspx" + "?" +\
-			"origin_lat=%f" % centerLatitude + "&" +\
-			"origin_long=%f" % centerLongitude + "&" +\
-			"dist=%f" % radiusKM + "&" +\
-			"submit3=Search"
+		page = '/seek/nearest.aspx?' +\
+			'lat_ns=1&' +\
+			'lat_h=%d&' % centerLatDegree +\
+			'lat_mmss=%f&' % centerLatMinutes +\
+			'long_ew=1&' +\
+			'long_h=%d&' % centerLonDegree +\
+			'long_mmss=%f&' % centerLonMinutes +\
+			'dist=%f&' % radiusKM +\
+			'submit8=Search'
 		hiddenForms = self.__getHiddenFormsUrlencoded(page,
 				omitForms=("__EVENTTARGET", "__EVENTARGUMENT"))
 		http = self.__httpConnect()
@@ -410,8 +438,8 @@ class GC:
 				data = http.getresponse().read()
 				self.pageStorage.store(page, data, pageNr)
 			data = self.__removeChars(data, "\r\n")
-			if data.find("Distance Measured in Kilometers") < 0:
-				raise GCException("findCaches(): distance not measured in km")
+#FIXME			if data.find("Distance Measured in Kilometers") < 0:
+#FIXME				raise GCException("findCaches(): distance not measured in km")
 			regex = r'<a\s+href="/seek/cache_details\.aspx\?guid=(' + guidRegex +\
 				r')"\s+class="lnk"><img\s+src='
 			foundGuids = re.findall(regex, data)
