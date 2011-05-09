@@ -26,7 +26,7 @@ googleMapsHtmlCode = """
 <title></title>
 
 <script type="text/javascript"
-	src="http://maps.google.com/maps/api/js?sensor=false">
+	src="http://maps.google.com/maps/api/js?sensor=true&language=en&libraries=geometry&indexing=false">
 </script>
 
 <script type="text/javascript">
@@ -35,6 +35,10 @@ googleMapsHtmlCode = """
 			zoom: 15,
 			center: new google.maps.LatLng(0, 0),
 			mapTypeId: google.maps.MapTypeId.ROADMAP,
+			panControl: true,
+			rotateControl: false,
+			scaleControl: true,
+			zoomControl: true,
 		}
 		markers = new Object();
 		map = new google.maps.Map(document.getElementById("map_canvas"), mapOptions);

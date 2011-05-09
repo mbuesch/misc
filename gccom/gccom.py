@@ -391,27 +391,25 @@ class GC:
 	def findCaches(self, NEpoint, SWpoint,
 			     maxNrCaches=100):
 		"Get a list of caches in a bounding frame"
-		radiusKM = Distance(NEpoint, SWpoint).km / 3#FIXME
-		radiusKM = round(radiusKM, 2)
+		radius = round(Distance(NEpoint, SWpoint).miles / 2, 1)
 		centerLat = NEpoint.latitude + (SWpoint.latitude - NEpoint.latitude) / 2
-		centerLat = round(centerLat, 3)
+		centerLat = round(centerLat, 2)
 		centerLatDegree = int(centerLat)
 		centerLatMinutes = (centerLat - int(centerLat)) * 60
 		centerLon = NEpoint.longitude + (SWpoint.longitude - NEpoint.longitude) / 2
-		centerLon = round(centerLon, 3)
+		centerLon = round(centerLon, 2)
 		centerLonDegree = int(centerLon)
 		centerLonMinutes = (centerLon - int(centerLon)) * 60
-		#TODO need better rounding for caching
 
 		cachesList = []
 		page = '/seek/nearest.aspx?' +\
 			'lat_ns=1&' +\
 			'lat_h=%d&' % centerLatDegree +\
-			'lat_mmss=%f&' % centerLatMinutes +\
+			'lat_mmss=%.2f&' % centerLatMinutes +\
 			'long_ew=1&' +\
 			'long_h=%d&' % centerLonDegree +\
-			'long_mmss=%f&' % centerLonMinutes +\
-			'dist=%f&' % radiusKM +\
+			'long_mmss=%.2f&' % centerLonMinutes +\
+			'dist=%.1f&' % radius +\
 			'submit8=Search'
 		hiddenForms = self.__getHiddenFormsUrlencoded(page,
 				omitForms=("__EVENTTARGET", "__EVENTARGUMENT"))
@@ -437,12 +435,9 @@ class GC:
 				http.request("POST", self.__pageSanitize(page), body, header)
 				data = http.getresponse().read()
 				self.pageStorage.store(page, data, pageNr)
-			data = self.__removeChars(data, "\r\n")
-#FIXME			if data.find("Distance Measured in Kilometers") < 0:
-#FIXME				raise GCException("findCaches(): distance not measured in km")
 			regex = r'<a\s+href="/seek/cache_details\.aspx\?guid=(' + guidRegex +\
 				r')"\s+class="lnk"><img\s+src='
-			foundGuids = re.findall(regex, data)
+			foundGuids = re.findall(regex, data, re.DOTALL)
 			if not foundGuids:
 				break
 			count += len(foundGuids)
