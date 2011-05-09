@@ -37,6 +37,37 @@ def printVerbose(message):
 	if DEBUG >= 2:
 		print message
 
+def replaceAll(string, chars, by):
+	def __replace(c):
+		if c in chars:
+			return by
+		return c
+	return "".join(map(__replace, string))
+
+def parseCoord(string):
+	string = replaceAll(str(string), "NEO*\'\"", "")
+	values = string.split()
+	try:
+		if len(values) == 3:
+			# 00 00 00		(degree, minutes, seconds)
+			degree = float(values[0])
+			minutes = float(values[1])
+			seconds = float(values[2])
+			degree = degree + (minutes / 60) + (seconds / 3600)
+		elif len(values) == 2:
+			# 00 00.000		(degree, fractional minutes)
+			degree = float(values[0])
+			minutes = float(values[1])
+			degree = degree + (minutes / 60)
+		elif len(values) == 1:
+			# 00.000		(factional degrees)
+			degree = float(values[0])
+		else:
+			return None
+	except ValueError:
+		return None
+	return degree
+
 class TaskContext:
 	def __init__(self, name, parameters=(),
 		     userid=None, userdata=None):
@@ -355,6 +386,60 @@ class GCMapWidget(MapWidget):
 		self.__updateCachesList(self.currentCenter, self.currentZoom,
 					self.currentNorthEast, self.currentSouthWest)
 
+class CoordEntryDialog(QDialog):
+	def __init__(self, point=None, title=None, parent=None):
+		QDialog.__init__(self, parent)
+		if title:
+			self.setWindowTitle(title)
+		self.setLayout(QGridLayout(self))
+
+		self.point = point
+
+		label = QLabel("Latitude:", self)
+		self.layout().addWidget(label, 0, 0)
+		self.latInput = QLineEdit(self)
+		self.layout().addWidget(self.latInput, 0, 1)
+
+		label = QLabel("Longitude:", self)
+		self.layout().addWidget(label, 1, 0)
+		self.lonInput = QLineEdit(self)
+		self.layout().addWidget(self.lonInput, 1, 1)
+
+		self.okButton = QPushButton("&Ok")
+		self.layout().addWidget(self.okButton, 2, 0)
+
+		self.cancelButton = QPushButton("&Cancel")
+		self.layout().addWidget(self.cancelButton, 2, 1)
+
+		if point:
+			lat = "N %d* %.3f" %\
+				(int(point.latitude),
+				 (point.latitude - int(point.latitude)) * 60)
+			lon = "E %d* %.3f" %\
+				(int(point.longitude),
+				 (point.longitude - int(point.longitude)) * 60)
+			self.latInput.setText(lat)
+			self.lonInput.setText(lon)
+
+		self.connect(self.okButton, SIGNAL("released()"), self.__ok)
+		self.connect(self.cancelButton, SIGNAL("released()"), self.__cancel)
+
+	def __ok(self):
+		lat = parseCoord(self.latInput.text())
+		lon = parseCoord(self.lonInput.text())
+		if lat is None or lon is None:
+			QMessageBox.critical(self, "Input error",
+				"Input value error: The coordinates are invalid")
+			return
+		self.point = geo.Point(lat, lon)
+		self.accept()
+
+	def __cancel(self):
+		self.reject()
+
+	def getCoord(self):
+		return self.point
+
 class ControlWidget(QWidget):
 	def __init__(self, parent=None):
 		QWidget.__init__(self, parent)
@@ -367,11 +452,16 @@ class ControlWidget(QWidget):
 		self.showFound = QCheckBox("Show found geocaches", self)
 		self.layout().addWidget(self.showFound, 0, 0)
 
+		self.gotoButton = QPushButton("Go to...", self)
+		self.layout().addWidget(self.gotoButton, 0, 1)
+
 		self.status = QLabel(self)
 		self.layout().addWidget(self.status, 1, 0)
 
 		self.connect(self.showFound, SIGNAL("stateChanged(int)"),
 			     self.__showFoundChanged)
+		self.connect(self.gotoButton, SIGNAL("released()"),
+			     self.__gotoPressed)
 
 	def __updateStatus(self):
 		pending = ""
@@ -395,6 +485,13 @@ class ControlWidget(QWidget):
 
 	def __showFoundChanged(self):
 		self.mapWidget.triggerMapUpdate()
+
+	def __gotoPressed(self):
+		dlg = CoordEntryDialog(self.mapWidget.currentCenter,
+				       "Go to location", self)
+		if dlg.exec_() == QDialog.Accepted:
+			coord = dlg.getCoord()
+			self.mapWidget.setCenter(coord)
 
 class MainWidget(QWidget):
 	def __init__(self, gcsub, parent=None):
