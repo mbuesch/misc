@@ -26,6 +26,7 @@ DEBUG			= 1
 
 EVENT_TASKFINISHED	= QEvent.User + 0
 
+CACHECOUNT_LIMIT	= 200	# 200 is gc.com max
 CACHEICON_URL		= "http://www.geocaching.com/images/wpttypes/sm/2.gif"
 
 
@@ -176,7 +177,7 @@ class GCSubprocess(QObject):
 
 	def __newTaskID(self):
 		taskID = self.taskCounter
-		self.taskCounter += 1
+		self.taskCounter = (self.taskCounter + 1) & 0x7FFFFFFF
 		return taskID
 
 	def executeSync(self, taskContext):
@@ -272,10 +273,11 @@ class GCMapWidget(MapWidget):
 	TASKID_GETID		= 902
 	TASKID_GETTITLE		= 903
 
-	def __init__(self, gcsub, ctlWidget, parent=None):
+	def __init__(self, gcsub, ctlWidget, statusBar, parent=None):
 		MapWidget.__init__(self, parent)
 		self.gcsub = gcsub
 		self.ctlWidget = ctlWidget
+		self.statusBar = statusBar
 
 		self.details = {}
 		self.currentCenter = None
@@ -336,6 +338,14 @@ class GCMapWidget(MapWidget):
 	def gotCachesList(self, guids):
 		self.ctlWidget.setCacheListFetching(False)
 
+		if len(guids) >= CACHECOUNT_LIMIT:
+			self.statusBar.message(
+				"WARNING: Cache count limit of %d caches reached. "
+				"Zoom in, please." %\
+				CACHECOUNT_LIMIT, 20000)
+		else:
+			self.statusBar.message()
+
 		details = {}
 		for guid in guids:
 			if not self.ctlWidget.mustShowFound():
@@ -374,7 +384,7 @@ class GCMapWidget(MapWidget):
 		self.gcsub.cancelTasks( ("gccom.findCaches(...)",
 					 "gccom.getCacheLocation(...)") )
 		self.gcsub.execute(TaskContext("gccom.findCaches(...)",
-					       (northEast, southWest),
+					       (northEast, southWest, CACHECOUNT_LIMIT),
 					       userid=self.TASKID_GETLIST))
 
 		self.ctlWidget.setNrTasksPending(self.gcsub.nrTasksPending())
@@ -498,9 +508,11 @@ class MainWidget(QWidget):
 		QWidget.__init__(self, parent)
 		self.setLayout(QGridLayout(self))
 		self.gcsub = gcsub
+		self.statusBar = parent.statusBar()
 
 		self.ctlWidget = ControlWidget(self)
-		self.mapWidget = GCMapWidget(gcsub, self.ctlWidget, self)
+		self.mapWidget = GCMapWidget(gcsub, self.ctlWidget,
+					     self.statusBar, self)
 		self.ctlWidget.mapWidget = self.mapWidget
 
 		self.layout().addWidget(self.mapWidget, 0, 0)
@@ -515,8 +527,9 @@ class MainWidget(QWidget):
 				break
 			(retval, exception) = taskContext.retval
 			if exception:
-				QMessageBox.critical(self, "Task failed",
-						     "task: " + taskContext.name + "\n" + str(exception))
+				print "Task failed: ", str(exception)
+				self.statusBar.message("WARNING: task failed: " +\
+						       taskContext.name)
 				continue
 			if taskContext.userid == self.mapWidget.TASKID_GETLIST:
 				self.mapWidget.gotCachesList(retval)
@@ -533,6 +546,15 @@ class MainWidget(QWidget):
 				print taskContext.name
 				assert(0)
 
+class StatusBar(QStatusBar):
+	def __init__(self, parent=None):
+		QStatusBar.__init__(self, parent)
+
+	def message(self, message="", timeout=-1):
+		if timeout < 0:
+			timeout = 5000
+		self.showMessage(message, timeout)
+
 class MainWindow(QMainWindow):
 	def __init__(self, parent=None):
 		QMainWindow.__init__(self, parent)
@@ -540,6 +562,7 @@ class MainWindow(QMainWindow):
 		self.gcsub = GCSubprocess(self)
 		self.__login()
 
+		self.setStatusBar(StatusBar(self))
 		self.setCentralWidget(MainWidget(self.gcsub, self))
 
 	def event(self, e):

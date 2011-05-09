@@ -96,7 +96,8 @@ class GCPageStorage:
 		path += self.__makeIndex(index)
 		try:
 			c = self.database.cursor()
-			c.execute("INSERT INTO pages VALUES(?, ?, strftime('%s', 'now'));", (path, data))
+			c.execute("INSERT INTO pages(path, data, time) "
+				  "VALUES(?, ?, strftime('%s', 'now'));", (path, data))
 		except (sql.Error), e:
 			raise GCException("SQL database error: " + str(e))
 		self.__printDebug("store " + path)
@@ -389,7 +390,7 @@ class GC:
 		return matches # (foundDate, foundGuid)
 
 	def findCaches(self, NEpoint, SWpoint,
-			     maxNrCaches=100):
+			     maxNrCaches=200):
 		"Get a list of caches in a bounding frame"
 		radius = round(Distance(NEpoint, SWpoint).miles / 2, 1)
 		centerLat = NEpoint.latitude + (SWpoint.latitude - NEpoint.latitude) / 2
@@ -443,7 +444,7 @@ class GC:
 			count += len(foundGuids)
 			cachesList.extend(foundGuids)
 			pageNr += 1
-		return cachesList[0:maxNrCaches]
+		return cachesList[:maxNrCaches]
 
 def printOutput(fileName, string):
 	if not fileName:
