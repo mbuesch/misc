@@ -353,7 +353,6 @@ class GCMapWidget(MapWidget):
 			d.title = "\n%s\n%s" % (formatCoord("N", point.latitude),
 					        formatCoord("E", point.longitude))
 			details[guid] = d
-			self.__addCache(d)
 
 		# Remove outdated markers
 		removeGuids = filter(lambda guid: guid not in details,
@@ -369,7 +368,10 @@ class GCMapWidget(MapWidget):
 				newDetails[guid] = details[guid]
 		for d in newDetails.values():
 			if d.guid.startswith("custom"):
+				# Got all information. Add it now.
+				self.__addCache(d)
 				continue
+			# Fetch remaining information
 			self.details[d.guid] = d
 			self.gcsub.execute(
 				TaskContext("gccom.getCacheDetails(...)", (d.guid,),
