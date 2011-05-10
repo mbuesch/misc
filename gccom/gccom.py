@@ -201,6 +201,8 @@ class GCCacheInfo:
 	TYPE_EARTH		= 3
 	TYPE_VIRTUAL		= 4
 	TYPE_EVENT		= 5
+	TYPE_LETTERBOXHYBRID	= 6
+	TYPE_WHERIGO		= 7
 
 	CONTAINER_NOTCHOSEN	= 0
 	CONTAINER_MICRO		= 1
@@ -463,6 +465,8 @@ class GC:
 				"earthcache"		: GCCacheInfo.TYPE_EARTH,
 				"virtual cache"		: GCCacheInfo.TYPE_VIRTUAL,
 				"event cache"		: GCCacheInfo.TYPE_EVENT,
+				"letterbox hybrid"	: GCCacheInfo.TYPE_LETTERBOXHYBRID,
+				"wherigo cache"		: GCCacheInfo.TYPE_WHERIGO,
 			}
 			cacheType = typeMap[m.group(1).lower()]
 		except (KeyError):

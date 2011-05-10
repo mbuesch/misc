@@ -303,17 +303,6 @@ class GCMapWidget(MapWidget):
 	def __getDetails(self, guid):
 		return self.details.get(guid, None)
 
-	def __mayShowCache(self, guid):
-		details = self.__getDetails(guid)
-		if not details:
-			return
-		if not details.position or\
-		   not details.cacheID or\
-		   not details.title:
-			return
-		text = "%s - %s" % (details.cacheID, details.title)
-		self.addMarker(guid, text, CACHEICON_URL, details.position)
-
 	def gotCacheInfo(self, guid, info):
 		details = self.__getDetails(guid)
 		if not details:
@@ -321,7 +310,9 @@ class GCMapWidget(MapWidget):
 		details.cacheID = info.gcID
 		details.title = info.title
 		details.position = info.location
-		self.__mayShowCache(guid)
+
+		text = "%s - %s" % (details.cacheID, details.title)
+		self.addMarker(guid, text, CACHEICON_URL, details.position)
 
 	def gotCachesList(self, guids):
 		self.ctlWidget.setCacheListFetching(False)
