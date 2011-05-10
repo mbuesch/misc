@@ -31,7 +31,7 @@ gcidRegex = r'GC\w\w\w\w\w?'
 urlRegex = r'[\w\.\-:&%=\?/]+'
 dateRegex = r'(?:\d\d/\d\d/\d\d\d\d)|' \
 	    r'(?:\w+\s*\,\s*\w+\s*\d+\s*\,\s*\d+)'
-coordRegex = r'([NSEOW])\s+(\d+)\s*°?\s+([\d+\.]+)\s*\'?'
+coordRegex = r'([NSEOWnseow])\s+(\d+)\s*[^\w\d\s]*\s+([\d\.]+)\s*[^\w\d\s]*'
 coordRegexRaw = coordRegex.replace('(', '').replace(')', '')
 
 

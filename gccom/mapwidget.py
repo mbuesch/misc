@@ -165,6 +165,8 @@ class MapWidget(QWebView):
 		def filterchar(c):
 			if c in allowedChars:
 				return c
+			if c == "\n":
+				return "\\n"
 			if c.isspace():
 				return " "
 			return ""

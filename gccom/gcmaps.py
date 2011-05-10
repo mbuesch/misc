@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# vim: set fileencoding=UTF-8 :
 """
 # Tiny Geocaching mapping tool
 # (c) Copyright 2011 Michael Buesch
@@ -9,6 +10,7 @@ import sys
 import os
 import time
 import multiprocessing
+import re
 
 from mapwidget import *
 from geopy.distance import VincentyDistance as Distance
@@ -67,6 +69,12 @@ def parseCoord(string):
 	except ValueError:
 		return None
 	return degree
+
+def formatCoord(prefix, degree):
+	return "%s %d* %.3f" %\
+		(prefix,
+		 int(degree),
+		 (degree - int(degree)) * 60)
 
 class GpsWrapper:
 	def __init__(self):
@@ -284,6 +292,7 @@ class GCMapWidget(MapWidget):
 
 		self.details = {}
 		self.currentCenter = None
+		self.customPoints = []
 
 		print "Fetching found caches..."
 		taskContext = gcsub.executeSync(TaskContext("gccom.getMyFoundCaches()"))
@@ -303,6 +312,10 @@ class GCMapWidget(MapWidget):
 	def __getDetails(self, guid):
 		return self.details.get(guid, None)
 
+	def __addCache(self, details):
+		text = "%s - %s" % (details.cacheID, details.title)
+		self.addMarker(details.guid, text, CACHEICON_URL, details.position)
+
 	def gotCacheInfo(self, guid, info):
 		details = self.__getDetails(guid)
 		if not details:
@@ -310,9 +323,7 @@ class GCMapWidget(MapWidget):
 		details.cacheID = info.gcID
 		details.title = info.title
 		details.position = info.location
-
-		text = "%s - %s" % (details.cacheID, details.title)
-		self.addMarker(guid, text, CACHEICON_URL, details.position)
+		self.__addCache(details)
 
 	def gotCachesList(self, guids):
 		self.ctlWidget.setCacheListFetching(False)
@@ -326,12 +337,23 @@ class GCMapWidget(MapWidget):
 			self.statusBar.message()
 
 		details = {}
+		# Add caches from the list to the details
 		for guid in guids:
 			if not self.ctlWidget.mustShowFound():
 				# Filter my found caches
 				if guid in self.foundGuids:
 					continue
 			details[guid] = CacheDetails(guid)
+		# Add custom points to the details
+		for (i, point) in enumerate(self.customPoints):
+			guid = "custom-%f-%f" % (point.latitude, point.longitude)
+			d = CacheDetails(guid)
+			d.position = point
+			d.cacheID = "Custom_%d" % i
+			d.title = "\n%s\n%s" % (formatCoord("N", point.latitude),
+					        formatCoord("E", point.longitude))
+			details[guid] = d
+			self.__addCache(d)
 
 		# Remove outdated markers
 		removeGuids = filter(lambda guid: guid not in details,
@@ -346,6 +368,8 @@ class GCMapWidget(MapWidget):
 			if guid not in self.details.keys():
 				newDetails[guid] = details[guid]
 		for d in newDetails.values():
+			if d.guid.startswith("custom"):
+				continue
 			self.details[d.guid] = d
 			self.gcsub.execute(
 				TaskContext("gccom.getCacheDetails(...)", (d.guid,),
@@ -373,6 +397,78 @@ class GCMapWidget(MapWidget):
 		self.__updateCachesList(self.currentCenter, self.currentZoom,
 					self.currentNorthEast, self.currentSouthWest)
 
+	def getCustomPoints(self):
+		return self.customPoints
+
+	def setCustomPoints(self, points):
+		self.customPoints = points
+		self.triggerMapUpdate()
+
+class CoordListDialog(QDialog):
+	def __init__(self, points=[], title=None, parent=None):
+		QDialog.__init__(self, parent)
+		if title:
+			self.setWindowTitle(title)
+		self.setLayout(QGridLayout(self))
+
+		self.points = points
+
+		self.pointList = QTextEdit(self)
+		text = [ "# Example:",
+			 "# N 50 12.345   E 006 12.345\n\n" ]
+		for point in points:
+			text.append(formatCoord("N", point.latitude) + "   " +\
+				    formatCoord("E", point.longitude))
+		self.pointList.setPlainText("\n".join(text))
+		self.layout().addWidget(self.pointList, 0, 0, 1, 2)
+
+		self.okButton = QPushButton("&Ok")
+		self.layout().addWidget(self.okButton, 1, 0)
+
+		self.cancelButton = QPushButton("&Cancel")
+		self.layout().addWidget(self.cancelButton, 1, 1)
+
+		self.connect(self.okButton, SIGNAL("released()"), self.__ok)
+		self.connect(self.cancelButton, SIGNAL("released()"), self.__cancel)
+
+	def getPoints(self):
+		return self.points
+
+	def __invalidCoord(self, message):
+		QMessageBox.critical(self, "Invalid coordinate", message)
+
+	def __ok(self):
+		text = self.pointList.toPlainText()
+		points = []
+		for line in str(text).splitlines():
+			line = line.strip()
+			if not line or line.startswith("#"):
+				continue
+			found = re.findall(gccom.coordRegex, line, re.DOTALL)
+			lat = None
+			lon = None
+			for (d, deg, minu) in found:
+				d = d.upper()
+				if d in "NS": # latitude
+					lat = parseCoord("%s %s %s" % (d, deg, minu))
+				elif d in "WEO": # longitude
+					lon = parseCoord("%s %s %s" % (d, deg, minu))
+				else:
+					self.__invalidCoord(line + ":\nInvalid coordinates")
+					return
+			if lat is None:
+				self.__invalidCoord(line + ":\nLatitude missing or invalid")
+				return
+			if lon is None:
+				self.__invalidCoord(line + ":\nLongitude missing or invalid")
+				return
+			points.append(geo.Point(lat, lon))
+		self.points = points
+		self.accept()
+
+	def __cancel(self):
+		self.reject()
+
 class CoordEntryDialog(QDialog):
 	def __init__(self, point=None, title=None, parent=None):
 		QDialog.__init__(self, parent)
@@ -399,14 +495,8 @@ class CoordEntryDialog(QDialog):
 		self.layout().addWidget(self.cancelButton, 2, 1)
 
 		if point:
-			lat = "N %d* %.3f" %\
-				(int(point.latitude),
-				 (point.latitude - int(point.latitude)) * 60)
-			lon = "E %d* %.3f" %\
-				(int(point.longitude),
-				 (point.longitude - int(point.longitude)) * 60)
-			self.latInput.setText(lat)
-			self.lonInput.setText(lon)
+			self.latInput.setText(formatCoord("N", point.latitude))
+			self.lonInput.setText(formatCoord("E", point.longitude))
 
 		self.connect(self.okButton, SIGNAL("released()"), self.__ok)
 		self.connect(self.cancelButton, SIGNAL("released()"), self.__cancel)
@@ -442,13 +532,18 @@ class ControlWidget(QWidget):
 		self.gotoButton = QPushButton("Go to...", self)
 		self.layout().addWidget(self.gotoButton, 0, 1)
 
+		self.customLocButton = QPushButton("Custom locations...", self)
+		self.layout().addWidget(self.customLocButton, 0, 2)
+
 		self.status = QLabel(self)
-		self.layout().addWidget(self.status, 1, 0)
+		self.layout().addWidget(self.status, 1, 0, 1, 3)
 
 		self.connect(self.showFound, SIGNAL("stateChanged(int)"),
 			     self.__showFoundChanged)
 		self.connect(self.gotoButton, SIGNAL("released()"),
 			     self.__gotoPressed)
+		self.connect(self.customLocButton, SIGNAL("released()"),
+			     self.__customLocPressed)
 
 	def __updateStatus(self):
 		pending = ""
@@ -479,6 +574,12 @@ class ControlWidget(QWidget):
 		if dlg.exec_() == QDialog.Accepted:
 			coord = dlg.getCoord()
 			self.mapWidget.setCenter(coord)
+
+	def __customLocPressed(self):
+		dlg = CoordListDialog(self.mapWidget.getCustomPoints(),
+				      "Custom locations", self)
+		if dlg.exec_() == QDialog.Accepted:
+			self.mapWidget.setCustomPoints(dlg.getPoints())
 
 class MainWidget(QWidget):
 	def __init__(self, gcsub, parent=None):
