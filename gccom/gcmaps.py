@@ -270,9 +270,7 @@ class GCSubprocess(QObject):
 class CacheDetails:
 	def __init__(self, guid):
 		self.guid = guid
-		self.position = None
-		self.cacheID = None
-		self.title = None
+		self.info = None
 
 	def __eq__(self, other):
 		return self.guid == other.guid
@@ -313,16 +311,14 @@ class GCMapWidget(MapWidget):
 		return self.details.get(guid, None)
 
 	def __addCache(self, details):
-		text = "%s - %s" % (details.cacheID, details.title)
-		self.addMarker(details.guid, text, CACHEICON_URL, details.position)
+		text = "%s - %s" % (details.info.gcID, details.info.title)
+		self.addMarker(details.guid, text, CACHEICON_URL, details.info.location)
 
 	def gotCacheInfo(self, guid, info):
 		details = self.__getDetails(guid)
 		if not details:
 			return
-		details.cacheID = info.gcID
-		details.title = info.title
-		details.position = info.location
+		details.info = info
 		self.__addCache(details)
 
 	def gotCachesList(self, guids):
@@ -347,11 +343,12 @@ class GCMapWidget(MapWidget):
 		# Add custom points to the details
 		for (i, point) in enumerate(self.customPoints):
 			guid = "custom-%f-%f" % (point.latitude, point.longitude)
+			title = "\n%s\n%s" % (formatCoord("N", point.latitude),
+					      formatCoord("E", point.longitude))
 			d = CacheDetails(guid)
-			d.position = point
-			d.cacheID = "Custom_%d" % i
-			d.title = "\n%s\n%s" % (formatCoord("N", point.latitude),
-					        formatCoord("E", point.longitude))
+			d.info = gccom.GCCacheInfo(gcID="Custom_%d" % i,
+						   title=title,
+						   location=point)
 			details[guid] = d
 
 		# Remove outdated markers

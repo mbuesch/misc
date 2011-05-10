@@ -195,6 +195,7 @@ class GCPageStorage:
 			raise GCException("SQL database error: " + str(e))
 
 class GCCacheInfo:
+	TYPE_UNKNOWN		= -1
 	TYPE_TRADITIONAL	= 0
 	TYPE_MULTI		= 1
 	TYPE_MYSTERY		= 2
@@ -204,6 +205,7 @@ class GCCacheInfo:
 	TYPE_LETTERBOXHYBRID	= 6
 	TYPE_WHERIGO		= 7
 
+	CONTAINER_UNKNOWN	= -1
 	CONTAINER_NOTCHOSEN	= 0
 	CONTAINER_MICRO		= 1
 	CONTAINER_SMALL		= 2
@@ -212,11 +214,11 @@ class GCCacheInfo:
 	CONTAINER_VIRTUAL	= 5
 	CONTAINER_OTHER		= 6
 
-	def __init__(self, gcID, title, cacheType,
-		     owner, ownerURL, container,
-		     difficulty, terrain,
-		     country, hiddenDate,
-		     location):
+	def __init__(self, gcID="", title="", cacheType=TYPE_UNKNOWN,
+		     owner="", ownerURL="", container=CONTAINER_UNKNOWN,
+		     difficulty=0.0, terrain=0.0,
+		     country="", hiddenDate=None,
+		     location=None):
 		self.gcID = gcID
 		self.title = title
 		self.cacheType = cacheType
@@ -256,7 +258,7 @@ class GC:
 	def __requestCookie(self):
 		self.__printDebug("Requesting fresh cookie")
 		http = self.__httpConnect(inLogin=True)
-		http.request("GET", "/")
+		http.request("GET", "/login/default.aspx")
 		resp = http.getresponse()
 		cookie = resp.getheader("set-cookie")
 		if not cookie:
