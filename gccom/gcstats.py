@@ -141,15 +141,6 @@ def gcStringToDate(string):
 	except ValueError, IndexError:
 		raise ValueError
 
-def htmlEscape(string):
-	return cgi.escape(string)
-
-def htmlUnescape(string):
-	p = htmllib.HTMLParser(None)
-	p.save_bgn()
-	p.feed(string)
-	return p.save_end()
-
 def uniquifyList(l): 
 	ret = []
 	for e in l:
@@ -378,7 +369,7 @@ def fetchGenericGeocacheInfo(gc, cache, homeCoord):
 			"other"		: Geocache.CONTAINER_OTHER,
 		}
 		cache.setGcID(m.group(1))
-		cache.setCacheOwner(htmlUnescape(m.group(2)).lower())
+		cache.setCacheOwner(gccom.htmlUnescape(m.group(2)).lower())
 		cache.setContainerType(containerMap[m.group(3).lower()])
 		difficulty = int(float(m.group(4)) * 10)
 		terrain = int(float(m.group(5)) * 10)
@@ -387,7 +378,7 @@ def fetchGenericGeocacheInfo(gc, cache, homeCoord):
 			raise ValueError
 		cache.setDifficulty(difficulty)
 		cache.setTerrain(terrain)
-		cache.setCountry(htmlUnescape(m.group(6)))
+		cache.setCountry(gccom.htmlUnescape(m.group(6)))
 	except (ValueError, KeyError):
 		raise gccom.GCException("Failed to parse detail info of " + guid)
 
@@ -537,7 +528,7 @@ class HtmlTable:
 				 'line-height: 20px; font-size: 13px; ' \
 				 'color: white; text-align: center; ">' %\
 				 (nrColumns, styleWidth, htmlTitleBgColor))
-			fd.write(htmlEscape(headline))
+			fd.write(gccom.htmlEscape(headline))
 			fd.write('</th>')
 
 	def addRow(self, *columns):
@@ -564,7 +555,7 @@ def htmlHistogramRow(tab, nrFound, count,
 		col0 += '<img src="' + entityIconUrl + '" /> '
 	if entityUrl:
 		col0 += '<a href="' + entityUrl + '" target="_blank">'
-	col0 += htmlEscape(entityText)
+	col0 += gccom.htmlEscape(entityText)
 	if entityUrl:
 		col0 += '</a>'
 	col1 = '%d' % count
@@ -594,7 +585,7 @@ def createHtmlHistogram(fd, foundCaches, attribute,
 		else:
 			byType[entityType] = [f,]
 	tab = HtmlTable(fd, nrColumns=4, headline=headline, width=htmlTableWidth)
-	tab.addRow("<b>" + htmlEscape(entityName) + "</b>",
+	tab.addRow("<b>" + gccom.htmlEscape(entityName) + "</b>",
 		   "<b>Count</b>", "<b>Percent</b>",
 		   "<b>Hist</b>")
 	types = byType.keys()

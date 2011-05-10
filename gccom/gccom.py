@@ -10,6 +10,8 @@ import sys
 import os
 import getopt
 import httplib
+import htmllib
+import cgi
 import socket
 import urllib
 #import ssl
@@ -36,6 +38,14 @@ defaultHttpHeader = {
 	"Connection" : "keep-alive",
 }
 
+def htmlEscape(string):
+	return cgi.escape(string)
+
+def htmlUnescape(string):
+	p = htmllib.HTMLParser(None)
+	p.save_bgn()
+	p.feed(string)
+	return p.save_end()
 
 class VerifiedHTTPSConnection(httplib.HTTPSConnection):
 	def connect(self):
@@ -139,6 +149,25 @@ class GCPageStorage:
 				  "strftime('%s', 'now', '" + str(ageMinutes) + " minutes');")
 		except (sql.Error), e:
 			raise GCException("SQL database error: " + str(e))
+
+class GCCacheInfo:
+	CONTAINER_NOTCHOSEN	= 0
+	CONTAINER_MICRO		= 1
+	CONTAINER_SMALL		= 2
+	CONTAINER_REGULAR	= 3
+	CONTAINER_LARGE		= 4
+	CONTAINER_VIRTUAL	= 5
+	CONTAINER_OTHER		= 6
+
+	def __init__(self, gcID, owner, container,
+		     difficulty, terrain,
+		     country):
+		self.gcID = gcID
+		self.owner = owner
+		self.container = container
+		self.difficulty = difficulty
+		self.terrain = terrain
+		self.country = country
 
 class GC:
 	HTTPS_LOGIN	= 0
@@ -314,14 +343,39 @@ class GC:
 			raise GCException("Failed to download GPX file from " + page)
 		return resp
 
-	def getCacheId(self, page):
-		"Get the GCxxxx cache ID"
+	def getCacheDetails(self, page):
+		"Get cache detail information. Returns a GCCacheInfo instance."
 		p = self.getPage(page)
-		m = re.compile(r'.*<title>\s*(GC\w+)\s+.*', re.DOTALL).match(p)
+		m = re.match(r'.*\((' + gcidRegex + r')\) was created by (.+) '
+			     r'on \d\d/\d\d/\d\d\d\d\. '
+			     r'It&#39;s a ([\w\s]+) size geocache, '
+			     r'with difficulty of ([\d\.]+), '
+			     r'terrain of ([\d\.]+)\. '
+			     r'It&#39;s located in ([\w\s\-,&#;]+)\..*',
+			     p, re.DOTALL)
 		if not m:
-			raise GCException("Failed to get cache ID from " + page)
-		id = m.group(1).strip()
-		return id
+			raise GCException("Cache detail information regex failed on " + page)
+		try:
+			containerMap = {
+				"not chosen"	: GCCacheInfo.CONTAINER_NOTCHOSEN,
+				"micro"		: GCCacheInfo.CONTAINER_MICRO,
+				"small"		: GCCacheInfo.CONTAINER_SMALL,
+				"regular"	: GCCacheInfo.CONTAINER_REGULAR,
+				"large"		: GCCacheInfo.CONTAINER_LARGE,
+				"virtual"	: GCCacheInfo.CONTAINER_VIRTUAL,
+				"other"		: GCCacheInfo.CONTAINER_OTHER,
+			}
+			gcID = m.group(1)
+			owner = htmlUnescape(m.group(2))
+			container = containerMap[m.group(3).lower()]
+			difficulty = float(m.group(4))
+			terrain = float(m.group(5))
+			country = htmlUnescape(m.group(6))
+		except (ValueError, KeyError):
+			raise GCException("Failed to parse cache detail information of " + page)
+		return GCCacheInfo(gcID=gcID, owner=owner, container=container,
+				   difficulty=difficulty, terrain=terrain,
+				   country=country)
 
 	def getGuid(self, page):
 		"Get the GUID for a page"
@@ -343,8 +397,7 @@ class GC:
 		end = p.find('"', begin)
 		if end < 0:
 			raise GCException("Failed to get cache title from " + page)
-		#TODO Fixup HTML codes
-		return p[begin:end]
+		return htmlUnescape(p[begin:end])
 
 	def getCacheLocation(self, page):
 		"Get the location of a cache. Returns a tuple of (latitude, longitude)."
@@ -602,7 +655,7 @@ def main():
 			if request == "getgpx":
 				printOutput(fileName, gc.getGPX(value))
 			if request == "getcacheid":
-				printOutput(fileName, gc.getCacheId(value))
+				printOutput(fileName, gc.getCacheDetails(value).gcID)
 			if request == "getguid":
 				printOutput(fileName, gc.getGuid(value))
 			if request == "setprofile":

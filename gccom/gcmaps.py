@@ -15,19 +15,18 @@ from geopy.distance import VincentyDistance as Distance
 
 import gccom
 
-#try:
-#	import gps
-#except (ImportError), e:
-#	print "Please install the Python GPS library module."
-#	print "On Debian Linux run: aptitude install python-gps"
-#	sys.exit(1)
+try:
+	import gps
+except (ImportError), e:
+	gps = None
 
 DEBUG			= 1
 
 EVENT_TASKFINISHED	= QEvent.User + 0
 
 CACHECOUNT_LIMIT	= 200	# 200 is gc.com max
-CACHEICON_URL		= "http://www.geocaching.com/images/wpttypes/sm/2.gif"
+BASEDIR			= os.getcwd()
+CACHEICON_URL		= "file://%s/icons/trad.png" % BASEDIR
 
 
 def printDebug(message):
@@ -68,6 +67,12 @@ def parseCoord(string):
 	except ValueError:
 		return None
 	return degree
+
+class GpsWrapper:
+	def __init__(self):
+		if gps is None:
+			return
+		pass#TODO
 
 class TaskContext:
 	def __init__(self, name, parameters=(),
@@ -270,7 +275,7 @@ class CacheDetails:
 class GCMapWidget(MapWidget):
 	TASKID_GETLIST		= 900
 	TASKID_GETLOC		= 901
-	TASKID_GETID		= 902
+	TASKID_GETINFO		= 902
 	TASKID_GETTITLE		= 903
 
 	def __init__(self, gcsub, ctlWidget, statusBar, parent=None):
@@ -318,11 +323,11 @@ class GCMapWidget(MapWidget):
 		details.title = title
 		self.__mayShowCache(guid)
 
-	def gotCacheID(self, guid, cacheID):
+	def gotCacheInfo(self, guid, info):
 		details = self.__getDetails(guid)
 		if not details:
 			return
-		details.cacheID = cacheID
+		details.cacheID = info.gcID
 		self.__mayShowCache(guid)
 
 	def gotCacheLocation(self, guid, latlng):
@@ -330,8 +335,8 @@ class GCMapWidget(MapWidget):
 		if not details:
 			return
 		details.position = geo.Point(latlng[0], latlng[1])
-		self.gcsub.execute(TaskContext("gccom.getCacheId(...)", (guid,),
-				   userid=self.TASKID_GETID, userdata=guid))
+		self.gcsub.execute(TaskContext("gccom.getCacheDetails(...)", (guid,),
+				   userid=self.TASKID_GETINFO, userdata=guid))
 		self.gcsub.execute(TaskContext("gccom.getCacheTitle(...)", (guid,),
 				   userid=self.TASKID_GETTITLE, userdata=guid))
 
@@ -536,9 +541,9 @@ class MainWidget(QWidget):
 			elif taskContext.userid == self.mapWidget.TASKID_GETLOC:
 				self.mapWidget.gotCacheLocation(guid=taskContext.userdata,
 								latlng=retval)
-			elif taskContext.userid == self.mapWidget.TASKID_GETID:
-				self.mapWidget.gotCacheID(guid=taskContext.userdata,
-							  cacheID=retval)
+			elif taskContext.userid == self.mapWidget.TASKID_GETINFO:
+				self.mapWidget.gotCacheInfo(guid=taskContext.userdata,
+							    info=retval)
 			elif taskContext.userid == self.mapWidget.TASKID_GETTITLE:
 				self.mapWidget.gotCacheTitle(guid=taskContext.userdata,
 							     title=retval)
