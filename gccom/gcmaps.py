@@ -274,9 +274,7 @@ class CacheDetails:
 
 class GCMapWidget(MapWidget):
 	TASKID_GETLIST		= 900
-	TASKID_GETLOC		= 901
-	TASKID_GETINFO		= 902
-	TASKID_GETTITLE		= 903
+	TASKID_GETINFO		= 901
 
 	def __init__(self, gcsub, ctlWidget, statusBar, parent=None):
 		MapWidget.__init__(self, parent)
@@ -316,29 +314,14 @@ class GCMapWidget(MapWidget):
 		text = "%s - %s" % (details.cacheID, details.title)
 		self.addMarker(guid, text, CACHEICON_URL, details.position)
 
-	def gotCacheTitle(self, guid, title):
-		details = self.__getDetails(guid)
-		if not details:
-			return
-		details.title = title
-		self.__mayShowCache(guid)
-
 	def gotCacheInfo(self, guid, info):
 		details = self.__getDetails(guid)
 		if not details:
 			return
 		details.cacheID = info.gcID
+		details.title = info.title
+		details.position = info.location
 		self.__mayShowCache(guid)
-
-	def gotCacheLocation(self, guid, latlng):
-		details = self.__getDetails(guid)
-		if not details:
-			return
-		details.position = geo.Point(latlng[0], latlng[1])
-		self.gcsub.execute(TaskContext("gccom.getCacheDetails(...)", (guid,),
-				   userid=self.TASKID_GETINFO, userdata=guid))
-		self.gcsub.execute(TaskContext("gccom.getCacheTitle(...)", (guid,),
-				   userid=self.TASKID_GETTITLE, userdata=guid))
 
 	def gotCachesList(self, guids):
 		self.ctlWidget.setCacheListFetching(False)
@@ -374,10 +357,8 @@ class GCMapWidget(MapWidget):
 		for d in newDetails.values():
 			self.details[d.guid] = d
 			self.gcsub.execute(
-				TaskContext("gccom.getCacheLocation(...)",
-					    (d.guid,),
-					    userid=self.TASKID_GETLOC,
-					    userdata=d.guid))
+				TaskContext("gccom.getCacheDetails(...)", (d.guid,),
+					    userid=self.TASKID_GETINFO, userdata=d.guid))
 		self.details = details
 
 	def __updateCachesList(self, center, zoom, northEast, southWest):
@@ -387,7 +368,7 @@ class GCMapWidget(MapWidget):
 		self.currentSouthWest = southWest
 
 		self.gcsub.cancelTasks( ("gccom.findCaches(...)",
-					 "gccom.getCacheLocation(...)") )
+					 "gccom.getCacheDetails(...)") )
 		self.gcsub.execute(TaskContext("gccom.findCaches(...)",
 					       (northEast, southWest, CACHECOUNT_LIMIT),
 					       userid=self.TASKID_GETLIST))
@@ -538,15 +519,9 @@ class MainWidget(QWidget):
 				continue
 			if taskContext.userid == self.mapWidget.TASKID_GETLIST:
 				self.mapWidget.gotCachesList(retval)
-			elif taskContext.userid == self.mapWidget.TASKID_GETLOC:
-				self.mapWidget.gotCacheLocation(guid=taskContext.userdata,
-								latlng=retval)
 			elif taskContext.userid == self.mapWidget.TASKID_GETINFO:
 				self.mapWidget.gotCacheInfo(guid=taskContext.userdata,
 							    info=retval)
-			elif taskContext.userid == self.mapWidget.TASKID_GETTITLE:
-				self.mapWidget.gotCacheTitle(guid=taskContext.userdata,
-							     title=retval)
 			else:
 				print taskContext.name
 				assert(0)

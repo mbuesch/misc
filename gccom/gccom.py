@@ -18,6 +18,7 @@ import urllib
 import re
 import time
 import sqlite3 as sql
+import datetime
 
 import geopy as geo
 from geopy.distance import VincentyDistance as Distance
@@ -27,6 +28,12 @@ hostname = "www.geocaching.com"
 
 guidRegex = r'\w{8,8}-\w{4,4}-\w{4,4}-\w{4,4}-\w{12,12}'
 gcidRegex = r'GC\w\w\w\w\w?'
+urlRegex = r'[\w\.\-:&%=\?/]+'
+dateRegex = r'(?:\d\d/\d\d/\d\d\d\d)|' \
+	    r'(?:\w+\s*\,\s*\w+\s*\d+\s*\,\s*\d+)'
+coordRegex = r'([NSEOW])\s+(\d+)\s*°?\s+([\d+\.]+)\s*\'?'
+coordRegexRaw = coordRegex.replace('(', '').replace(')', '')
+
 
 defaultHttpHeader = {
 	"User-Agent" : "User-Agent: Mozilla/5.0 (Windows; U; " +\
@@ -46,6 +53,43 @@ def htmlUnescape(string):
 	p.save_bgn()
 	p.feed(string)
 	return p.save_end()
+
+def gcStringToDate(string):
+	# Convert a xx/xx/xxxx date to a datetime.date object.
+	# May raise ValueError
+	try:
+		elements = string.split("/")
+		return datetime.date(year=int(elements[2]),
+				     month=int(elements[0]),
+				     day=int(elements[1]))
+	except (ValueError, IndexError):
+		pass
+	try:
+		elements = string.replace(",", " ").split()
+		weekday = elements[0].lower()
+		monthname = elements[1].lower()
+		month = {
+			"january" : 1,
+			"february" : 2,
+			"march" : 3,
+			"april" : 4,
+			"may" : 5,
+			"june" : 6,
+			"july" : 7,
+			"august" : 8,
+			"september" : 9,
+			"october" : 10,
+			"november" : 11,
+			"december" : 12,
+		}[monthname]
+		day = int(elements[2])
+		year = int(elements[3])
+		return datetime.date(year=year,
+				     month=month,
+				     day=day)
+	except (ValueError, IndexError, KeyError):
+		pass
+	raise ValueError
 
 class VerifiedHTTPSConnection(httplib.HTTPSConnection):
 	def connect(self):
@@ -151,6 +195,13 @@ class GCPageStorage:
 			raise GCException("SQL database error: " + str(e))
 
 class GCCacheInfo:
+	TYPE_TRADITIONAL	= 0
+	TYPE_MULTI		= 1
+	TYPE_MYSTERY		= 2
+	TYPE_EARTH		= 3
+	TYPE_VIRTUAL		= 4
+	TYPE_EVENT		= 5
+
 	CONTAINER_NOTCHOSEN	= 0
 	CONTAINER_MICRO		= 1
 	CONTAINER_SMALL		= 2
@@ -159,15 +210,22 @@ class GCCacheInfo:
 	CONTAINER_VIRTUAL	= 5
 	CONTAINER_OTHER		= 6
 
-	def __init__(self, gcID, owner, container,
+	def __init__(self, gcID, title, cacheType,
+		     owner, ownerURL, container,
 		     difficulty, terrain,
-		     country):
+		     country, hiddenDate,
+		     location):
 		self.gcID = gcID
+		self.title = title
+		self.cacheType = cacheType
 		self.owner = owner
+		self.ownerURL = ownerURL
 		self.container = container
 		self.difficulty = difficulty
 		self.terrain = terrain
 		self.country = country
+		self.hiddenDate = hiddenDate
+		self.location = location
 
 class GC:
 	HTTPS_LOGIN	= 0
@@ -373,9 +431,71 @@ class GC:
 			country = htmlUnescape(m.group(6))
 		except (ValueError, KeyError):
 			raise GCException("Failed to parse cache detail information of " + page)
-		return GCCacheInfo(gcID=gcID, owner=owner, container=container,
+		startstr = '<meta name="og:title" content="'
+		begin = p.find(startstr)
+		if begin < 0:
+			raise GCException("Failed to get cache title from " + page)
+		begin += len(startstr)
+		end = p.find('"', begin)
+		if end < 0:
+			raise GCException("Failed to get cache title from " + page)
+		title = htmlUnescape(p[begin:end])
+		m = re.match(r'.*<span class="minorCacheDetails">\s+'
+			     r'Hidden\s*:\s*(' + dateRegex + r')\s*</span>.*',
+			     p, re.DOTALL)
+		if m:
+			try:
+				hiddenDate = gcStringToDate(m.group(1))
+			except (ValueError):
+				raise GCException("Failed to parse Hidden date of " + page)
+		else:
+			hiddenDate = None
+		m = re.match(r'.*title="About Cache Types"><img src="' + urlRegex +\
+			     r'" alt="([\w\s\-]+)".*',
+			     p, re.DOTALL)
+		if not m:
+			raise GCException("Cachetype regex failed on " + page)
+		try:
+			typeMap = {
+				"traditional cache"	: GCCacheInfo.TYPE_TRADITIONAL,
+				"multi-cache"		: GCCacheInfo.TYPE_MULTI,
+				"unknown cache"		: GCCacheInfo.TYPE_MYSTERY,
+				"earthcache"		: GCCacheInfo.TYPE_EARTH,
+				"virtual cache"		: GCCacheInfo.TYPE_VIRTUAL,
+				"event cache"		: GCCacheInfo.TYPE_EVENT,
+			}
+			cacheType = typeMap[m.group(1).lower()]
+		except (KeyError):
+			raise GCException("Unknown cache type: " + m.group(1))
+		m = re.match(r'.*<span class="minorCacheDetails">\s+'
+			     r'[\w\s]+\s+by\s+<a href="(' +\
+			     urlRegex + r')">.*',
+			     p, re.DOTALL)
+		if not m:
+			raise GCException("Cacheowner-URL regex failed on " + page)
+		ownerURL = m.group(1)
+		m = re.match(r'.*<span id="ctl00_ContentBody_LatLon" style="font-weight:bold;">'
+			     r'\s*' + coordRegex + r'\s*'
+			     r'\s*' + coordRegex + r'\s*'
+			     r'</span>.*',
+			     p, re.DOTALL)
+		if not m:
+			raise GCException("Cache location regex failed on " + page)
+		try:
+			latDeg = float(m.group(2))
+			latMin = float(m.group(3))
+			lonDeg = float(m.group(5))
+			lonMin = float(m.group(6))
+			location = geo.Point(latDeg + latMin / 60,
+					     lonDeg + lonMin / 60)
+		except (ValueError):
+			raise GCException("Cache location information parse failure for " + page)
+
+		return GCCacheInfo(gcID=gcID, title=title, cacheType=cacheType,
+				   owner=owner, ownerURL=ownerURL, container=container,
 				   difficulty=difficulty, terrain=terrain,
-				   country=country)
+				   country=country, hiddenDate=hiddenDate,
+				   location=location)
 
 	def getGuid(self, page):
 		"Get the GUID for a page"
@@ -385,34 +505,6 @@ class GC:
 			raise GCException("Failed to get cache GUID from " + page)
 		guid = m.group(1).strip()
 		return guid
-
-	def getCacheTitle(self, page):
-		"Get the cache title"
-		p = self.getPage(page)
-		startstr = '<meta name="og:title" content="'
-		begin = p.find(startstr)
-		if begin < 0:
-			raise GCException("Failed to get cache title from " + page)
-		begin += len(startstr)
-		end = p.find('"', begin)
-		if end < 0:
-			raise GCException("Failed to get cache title from " + page)
-		return htmlUnescape(p[begin:end])
-
-	def getCacheLocation(self, page):
-		"Get the location of a cache. Returns a tuple of (latitude, longitude)."
-		p = self.getPage(page)
-		p = self.__removeChars(p, "\r\n")
-		m = re.compile(r'.*title="Other Conversions"\s+href="/wpt/\?' +
-			       r'lat=([\d\.]+)&amp;lon=([\d\.]+)&amp;detail=.*').match(p)
-		if not m:
-			raise GCException("Failed to get cache location from " + page)
-		try:
-			lat = float(m.group(1))
-			lng = float(m.group(2))
-		except ValueError:
-			raise GCException("Failed to convert cache location from " + page)
-		return (lat, lng)
 
 	def setProfile(self, profileData):
 		"Upload new public profile data to the account"

@@ -130,17 +130,6 @@ def mkdir_recursive(filename, mode=0755):
 			return
 		raise
 
-def gcStringToDate(string):
-	# Convert a xx/xx/xxxx date to a datetime.date object.
-	# May raise ValueError
-	try:
-		elements = string.split("/")
-		return datetime.date(year=int(elements[2]),
-				     month=int(elements[0]),
-				     day=int(elements[1]))
-	except ValueError, IndexError:
-		raise ValueError
-
 def uniquifyList(l): 
 	ret = []
 	for e in l:
@@ -387,7 +376,7 @@ def fetchGenericGeocacheInfo(gc, cache, homeCoord):
 	if not m:
 		raise gccom.GCException("Hidden info regex failed on " + guid)
 	try:
-		cache.setHiddenDate(gcStringToDate(m.group(1)))
+		cache.setHiddenDate(gccom.gcStringToDate(m.group(1)))
 	except (ValueError):
 		raise gccom.GCException("Failed to parse Hidden date of " + guid)
 
@@ -457,7 +446,7 @@ def getAllFound(gc, homeCoord):
 			localCacheinfoPut(foundGuid, "founddate", foundDate)
 
 		try:
-			fdate = gcStringToDate(foundDate)
+			fdate = gccom.gcStringToDate(foundDate)
 		except (ValueError):
 			raise gccom.GCException("Failed to parse date " + foundDate)
 		cache = FoundGeocache(foundGuid)
