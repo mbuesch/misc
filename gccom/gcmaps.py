@@ -659,24 +659,73 @@ class MainWindow(QMainWindow):
 							  "Geocaching.com username",
 							  mode=QLineEdit.Normal)
 			if not user or not ok:
-				return#XXX
+				self.gcsub.killThread()
+				raise gccom.GCException("No login name given")
 			(passwd, ok) = QInputDialog.getText(self, "Geocaching.com password",
 							    "Geocaching.com password for account %s" % user,
 							    mode=QLineEdit.Password)
 			if not passwd or not ok:
-				return#XXX
+				self.gcsub.killThread()
+				raise gccom.GCException("No login password given")
 		taskContext = self.gcsub.executeSync(
 				TaskContext("login(...)", (str(user), str(passwd))))
 		(retval, exception) = taskContext.retval
 		if exception:
 			QMessageBox.critical(self, "Geocaching.com login failed",
 					     "Geocaching.com login failed:\n" + str(exception))
+			self.gcsub.killThread()
 			raise exception
+
+def wmHintsWorkaround(wnd):
+	from ctypes import cast, POINTER, cdll, c_void_p, c_int, c_uint, c_long, Structure
+	import sip
+
+	class XWMHints(Structure):
+		_fields_ = [	("flags", c_long),
+				("input", c_int),
+				("a", c_int),
+				("b", c_int),
+				("c", c_int),
+				("d", c_int),
+				("e", c_int),
+				("f", c_int),
+				("g", c_int),
+		]
+
+	libX11 = cdll.LoadLibrary("libX11.so")
+
+	XGetWMHints = libX11.XGetWMHints
+	XGetWMHints.argtypes = (c_void_p, c_uint)
+	XGetWMHints.restype = POINTER(XWMHints)
+
+	XAllocWMHints = libX11.XAllocWMHints
+	XAllocWMHints.restype = POINTER(XWMHints)
+
+	XSetWMHints = libX11.XSetWMHints
+	XSetWMHints.argtypes = (c_void_p, c_uint, c_void_p)
+
+	XSetInputFocus = libX11.XSetInputFocus
+	XSetInputFocus.argtypes = (c_void_p, c_uint, c_uint, c_uint)
+
+	print QX11Info.display()
+	display = c_void_p(sip.unwrapinstance(QX11Info.display()))
+	window = wnd.winId()
+	print "WND", window
+	hints = XGetWMHints(display, window)
+	if not hints:
+		hints = XAllocWMHints()
+	hints[0].flags |= 1
+	hints[0].input = 0xFFFFFFFF
+	res = XSetWMHints(display, window, hints)
+	print res
+
+	print XSetInputFocus(display, window, 2, 0)
 
 def main():
 	app = QApplication(sys.argv)
 	mainwnd = MainWindow()
 	mainwnd.show()
+#	wmHintsWorkaround(mainwnd)
 	return app.exec_()
 
 if __name__ == "__main__":
