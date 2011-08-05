@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 # timeshift.py
-# Copyright (c) 2009-2010 Michael Buesch <mb@bu3sch.de>
+# Copyright (c) 2009-2011 Michael Buesch <m@bues.ch>
 # Licensed under the GNU/GPL version 2 or later.
 """
 
@@ -11,6 +11,8 @@ import errno
 import ConfigParser
 import base64
 import gzip
+import sqlite3 as sql
+import traceback
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 
@@ -41,7 +43,7 @@ def QDateToId(qdate):
 
 def IdToQDate(id):
 	"Convert a unique integer ID to a QDate object"
-	return QDateTime.fromTime_t(id).date()
+	return QDateTime.fromTime_t(int(id)).date()
 
 def QStringToBase64(qstring):
 	if type(qstring) != type(QString()):
@@ -59,6 +61,517 @@ def base64ToQString(b64str):
 
 class TsException(Exception): pass
 
+class ShiftConfigItem(object):
+	def __init__(self, name, shift, workTime, breakTime, attendanceTime):
+		self.name = name
+		self.shift = shift
+		self.workTime = workTime
+		self.breakTime = breakTime
+		self.attendanceTime = attendanceTime
+
+	@staticmethod
+	def toString(item):
+		return ";".join(
+			(	QStringToBase64(item.name),
+				str(item.shift),
+				str(item.workTime),
+				str(item.breakTime),
+				str(item.attendanceTime),
+			)
+		)
+
+	@staticmethod
+	def fromString(string):
+		elems = string.split(";")
+		try:
+			return ShiftConfigItem(
+				base64ToQString(elems[0]),
+				int(elems[1]),
+				float(elems[2]),
+				float(elems[3]),
+				float(elems[4])
+			)
+		except (IndexError, ValueError), e:
+			raise TsException("ShiftConfigItem.fromString() "
+					  "invalid string: " + str(string))
+
+class Preset(object):
+	def __init__(self, name, dayType, shift, workTime, breakTime, attendanceTime):
+		self.name = name
+		self.dayType = dayType
+		self.shift = shift
+		self.workTime = workTime
+		self.breakTime = breakTime
+		self.attendanceTime = attendanceTime
+
+	@staticmethod
+	def toString(preset):
+		return ";".join(
+			(	QStringToBase64(preset.name),
+				str(preset.dayType),
+				str(preset.shift),
+				str(preset.workTime),
+				str(preset.breakTime),
+				str(preset.attendanceTime),
+			)
+		)
+
+	@staticmethod
+	def fromString(string):
+		elems = string.split(";")
+		try:
+			return Preset(
+				base64ToQString(elems[0]),
+				int(elems[1]),
+				int(elems[2]),
+				float(elems[3]),
+				float(elems[4]),
+				float(elems[5])
+			)
+		except (IndexError, ValueError), e:
+			raise TsException("Preset.fromString() "
+					  "invalid string: " + str(string))
+
+class Snapshot(object):
+	def __init__(self, date, shiftConfigIndex, accountValue):
+		self.date = date
+		self.shiftConfigIndex = shiftConfigIndex
+		self.accountValue = accountValue
+
+	@staticmethod
+	def toString(snapshot):
+		return ";".join(
+			(	str(QDateToId(snapshot.date)),
+				str(snapshot.shiftConfigIndex),
+				str(snapshot.accountValue),
+			)
+		)
+
+	@staticmethod
+	def fromString(string):
+		elems = string.split(";")
+		try:
+			return Snapshot(
+				IdToQDate(int(elems[0])),
+				int(elems[1]),
+				float(elems[2])
+			)
+		except (IndexError, ValueError), e:
+			raise TsException("Snapshot.fromString() "
+					  "invalid string: " + str(string))
+
+class TsDatabase:
+	INMEM = ":memory:"
+	VERSION = 1
+
+	sql.register_adapter(QString, lambda s: str(s))
+
+	sql.register_adapter(QDate, QDateToId)
+	sql.register_converter("QDate", IdToQDate)
+
+	sql.register_adapter(ShiftConfigItem, ShiftConfigItem.toString)
+	sql.register_converter("ShiftConfigItem", ShiftConfigItem.fromString)
+
+	sql.register_adapter(Preset, Preset.toString)
+	sql.register_converter("Preset", Preset.fromString)
+
+	sql.register_adapter(Snapshot, Snapshot.toString)
+	sql.register_converter("Snapshot", Snapshot.fromString)
+
+	TAB_params	= "params(name TEXT, data TEXT)"
+	TAB_ovr_daytype	= "override_dayType(date QDate, value TEXT)"
+	TAB_ovr_shift	= "override_shift(date QDate, value TEXT)"
+	TAB_ovr_worktm	= "override_workTime(date QDate, value TEXT)"
+	TAB_ovr_brtm	= "override_breakTime(date QDate, value TEXT)"
+	TAB_ovr_atttm	= "override_attendanceTime(date QDate, value TEXT)"
+	TAB_snaps	= "snapshots(date QDate, snapshot Snapshot)"
+	TAB_comments	= "comments(date QDate, comment TEXT)"
+	TAB_shconf	= "shiftConfig(idx INTEGER, item ShiftConfigItem)"
+	TAB_presets	= "presets(idx INTEGER, preset Preset)"
+
+	def __init__(self):
+		self.conn = None
+		self.open(self.INMEM)
+
+	def __del__(self):
+		self.conn.close()
+
+	def __sqlError(self, exception):
+		msg = "SQL error: " + str(exception)
+		print msg
+		traceback.print_stack()
+		raise TsException(msg)
+
+	def __close(self):
+		if not self.conn:
+			return
+		try:
+			if not self.isInMemory():
+				c = self.conn.cursor()
+				c.execute("VACUUM;")
+				self.conn.commit()
+			self.conn.close()
+			self.conn = None
+			self.filename = None
+		except (sql.Error), e:
+			self.__sqlError(e)
+
+	def close(self):
+		self.__close()
+		self.open(self.INMEM)
+
+	def open(self, filename):
+		try:
+			self.__close()
+			self.conn = sql.connect(unicode(filename),
+				detect_types=sql.PARSE_DECLTYPES)
+			self.filename = filename
+			if not self.isInMemory():
+				self.__checkDatabaseVersion()
+			self.__initTables(self.conn)
+			if self.isInMemory():
+				self.__setDatabaseVersion()
+		except (sql.Error), e:
+			self.__sqlError(e)
+
+	def __setDatabaseVersion(self):
+		try:
+			self.__setParameter("dbVersion", self.VERSION)
+		except (sql.Error), e:
+			self.__sqlError(e)
+
+	def __checkDatabaseVersion(self):
+		try:
+			dbVer = int(self.__getParameter("dbVersion"))
+			if dbVer != self.VERSION:
+				raise TsException(
+					"Unsupported database version")
+		except (sql.Error), e:
+			self.__sqlError(e)
+		except (ValueError), e:
+			raise TsException("Invalid database version info")
+
+	def getFilename(self):
+		return self.filename
+
+	def isInMemory(self):
+		return self.filename == self.INMEM
+
+	def commit(self):
+		try:
+			self.conn.commit()
+		except (sql.Error), e:
+			self.__sqlError(e)
+
+	def __initTables(self, conn):
+		script = (
+			"CREATE TABLE IF NOT EXISTS %s;" % self.TAB_params,
+			"CREATE TABLE IF NOT EXISTS %s;" % self.TAB_ovr_daytype,
+			"CREATE TABLE IF NOT EXISTS %s;" % self.TAB_ovr_shift,
+			"CREATE TABLE IF NOT EXISTS %s;" % self.TAB_ovr_worktm,
+			"CREATE TABLE IF NOT EXISTS %s;" % self.TAB_ovr_brtm,
+			"CREATE TABLE IF NOT EXISTS %s;" % self.TAB_ovr_atttm,
+			"CREATE TABLE IF NOT EXISTS %s;" % self.TAB_snaps,
+			"CREATE TABLE IF NOT EXISTS %s;" % self.TAB_comments,
+			"CREATE TABLE IF NOT EXISTS %s;" % self.TAB_shconf,
+			"CREATE TABLE IF NOT EXISTS %s;" % self.TAB_presets,
+		)
+		conn.cursor().executescript("\n".join(script))
+		conn.commit()
+
+	def resetDatabase(self):
+		self.conn.cursor().executescript("""
+			DROP TABLE IF EXISTS params;
+			DROP TABLE IF EXISTS override_dayType;
+			DROP TABLE IF EXISTS override_shift;
+			DROP TABLE IF EXISTS override_workTime;
+			DROP TABLE IF EXISTS override_breakTime;
+			DROP TABLE IF EXISTS override_attendanceTime;
+			DROP TABLE IF EXISTS snapshots;
+			DROP TABLE IF EXISTS comments;
+			VACUUM;
+		""")
+		self.conn.commit()
+		self.__initTables(self.conn)
+
+	def __cloneTab(self, sourceCursor, targetCursor, tabSignature,
+		       table, columns):
+		targetCursor.execute("CREATE TABLE %s;" % tabSignature)
+		sourceCursor.execute("SELECT %s FROM %s;" % (columns, table))
+		for rowData in sourceCursor.fetchall():
+			valTmpl = ", ".join("?" * len(columns.split(",")))
+			targetCursor.execute("INSERT INTO %s(%s) VALUES(%s);" %\
+				(table, columns, valTmpl),
+				rowData)
+
+	def clone(self, target):
+		try:
+			cloneconn = sql.connect(unicode(target),
+				detect_types=sql.PARSE_DECLTYPES)
+			self.__cloneTab(sourceCursor=self.conn.cursor(),
+					targetCursor=cloneconn.cursor(),
+					tabSignature=self.TAB_params,
+					table="params",
+					columns="name, data")
+			self.__cloneTab(sourceCursor=self.conn.cursor(),
+					targetCursor=cloneconn.cursor(),
+					tabSignature=self.TAB_ovr_daytype,
+					table="override_dayType",
+					columns="date, value")
+			self.__cloneTab(sourceCursor=self.conn.cursor(),
+					targetCursor=cloneconn.cursor(),
+					tabSignature=self.TAB_ovr_shift,
+					table="override_shift",
+					columns="date, value")
+			self.__cloneTab(sourceCursor=self.conn.cursor(),
+					targetCursor=cloneconn.cursor(),
+					tabSignature=self.TAB_ovr_worktm,
+					table="override_workTime",
+					columns="date, value")
+			self.__cloneTab(sourceCursor=self.conn.cursor(),
+					targetCursor=cloneconn.cursor(),
+					tabSignature=self.TAB_ovr_brtm,
+					table="override_breakTime",
+					columns="date, value")
+			self.__cloneTab(sourceCursor=self.conn.cursor(),
+					targetCursor=cloneconn.cursor(),
+					tabSignature=self.TAB_ovr_atttm,
+					table="override_attendanceTime",
+					columns="date, value")
+			self.__cloneTab(sourceCursor=self.conn.cursor(),
+					targetCursor=cloneconn.cursor(),
+					tabSignature=self.TAB_snaps,
+					table="snapshots",
+					columns="date, snapshot")
+			self.__cloneTab(sourceCursor=self.conn.cursor(),
+					targetCursor=cloneconn.cursor(),
+					tabSignature=self.TAB_comments,
+					table="comments",
+					columns="date, comment")
+			self.__cloneTab(sourceCursor=self.conn.cursor(),
+					targetCursor=cloneconn.cursor(),
+					tabSignature=self.TAB_shconf,
+					table="shiftConfig",
+					columns="idx, item")
+			self.__cloneTab(sourceCursor=self.conn.cursor(),
+					targetCursor=cloneconn.cursor(),
+					tabSignature=self.TAB_presets,
+					table="presets",
+					columns="idx, preset")
+		except (sql.Error), e:
+			self.__sqlError(e)
+
+	def __setParameter(self, param, value):
+		try:
+			c = self.conn.cursor()
+			c.execute("DELETE FROM params WHERE name=?;", (str(param),))
+			if value is not None:
+				c.execute("INSERT INTO params(name, data) VALUES(?, ?);",
+					  (str(param), str(value)))
+			self.conn.commit()
+		except (sql.Error), e:
+			self.__sqlError(e)
+
+	def __getParameter(self, param):
+		try:
+			c = self.conn.cursor()
+			c.execute("SELECT data FROM params WHERE name=?;", (param,))
+			value = c.fetchone()
+			if value:
+				return value[0]
+			return None
+		except (sql.Error), e:
+			self.__sqlError(e)
+
+	def setHolidaysPerYear(self, count):
+		self.__setParameter("holidaysPerYear", count)
+
+	def getHolidaysPerYear(self):
+		try:
+			return int(self.__getParameter("HolidaysPerYear"))
+		except (ValueError, TypeError), e:
+			return 30
+
+	def __setOverride(self, table, date, value):
+		try:
+			c = self.conn.cursor()
+			c.execute("DELETE FROM %s WHERE date=?;" % table, (date,))
+			if value is not None:
+				c.execute("INSERT INTO %s(date, value) VALUES(?, ?);" % table,
+					  (date, str(value)))
+			self.conn.commit()
+		except (sql.Error), e:
+			self.__sqlError(e)
+
+	def __getOverride(self, table, date):
+		try:
+			c = self.conn.cursor()
+			c.execute("SELECT value FROM %s WHERE date=?;" % table, (date,))
+			value = c.fetchone()
+			if value:
+				return value[0]
+			return None
+		except (sql.Error), e:
+			self.__sqlError(e)
+
+	def setDayTypeOverride(self, date, daytype):
+		self.__setOverride("override_dayType", date, daytype)
+
+	def getDayTypeOverride(self, date):
+		try:
+			return int(self.__getOverride("override_dayType", date))
+		except (ValueError, TypeError), e:
+			return None
+
+	def findDayTypeDates(self, daytype, beginDate, endDate):
+		# Find all dates with the specified "daytype" between
+		# "beginDate" and "endDate".
+		try:
+			c = self.conn.cursor()
+			c.execute("""
+				SELECT date FROM override_dayType WHERE
+				(value=? AND date>=? AND date<=?);
+			""", (daytype, beginDate, endDate))
+			dates = c.fetchall()
+			return map(lambda d: d[0], dates)
+		except (ValueError, TypeError), e:
+			return None
+
+	def setShiftOverride(self, date, shift):
+		self.__setOverride("override_shift", date, shift)
+
+	def getShiftOverride(self, date):
+		try:
+			return int(self.__getOverride("override_shift", date))
+		except (ValueError, TypeError), e:
+			return None
+
+	def setWorkTimeOverride(self, date, workTime):
+		self.__setOverride("override_workTime", date, workTime)
+
+	def getWorkTimeOverride(self, date):
+		try:
+			return float(self.__getOverride("override_workTime", date))
+		except (ValueError, TypeError), e:
+			return None
+
+	def setBreakTimeOverride(self, date, breakTime):
+		self.__setOverride("override_breakTime", date, breakTime)
+
+	def getBreakTimeOverride(self, date):
+		try:
+			return float(self.__getOverride("override_breakTime", date))
+		except (ValueError, TypeError), e:
+			return None
+
+	def setAttendanceTimeOverride(self, date, attendanceTime):
+		self.__setOverride("override_attendanceTime", date, attendanceTime)
+
+	def getAttendanceTimeOverride(self, date):
+		try:
+			return float(self.__getOverride("override_attendanceTime", date))
+		except (ValueError, TypeError), e:
+			return None
+
+	def setShiftConfigItems(self, items):
+		try:
+			c = self.conn.cursor()
+			c.execute("DROP TABLE IF EXISTS shiftConfig;")
+			c.execute("CREATE TABLE %s;" % self.TAB_shconf)
+			for (index, item) in enumerate(items):
+				c.execute("INSERT INTO shiftConfig(idx, item) VALUES(?, ?);",
+					  (index, item))
+			self.conn.commit()
+		except (sql.Error), e:
+			self.__sqlError(e)
+
+	def getShiftConfigItems(self):
+		try:
+			c = self.conn.cursor()
+			c.execute("CREATE TABLE IF NOT EXISTS %s;" % self.TAB_shconf)
+			c.execute('SELECT item FROM shiftConfig ORDER BY "idx";')
+			items = c.fetchall()
+			return map(lambda i: i[0], items)
+		except (sql.Error), e:
+			self.__sqlError(e)
+
+	def setPresets(self, presets):
+		try:
+			c = self.conn.cursor()
+			c.execute("DROP TABLE IF EXISTS presets;")
+			c.execute("CREATE TABLE %s;" % self.TAB_presets)
+			for (index, preset) in enumerate(presets):
+				c.execute("INSERT INTO presets(idx, preset) VALUES(?, ?);",
+					  (index, preset))
+			self.conn.commit()
+		except (sql.Error), e:
+			self.__sqlError(e)
+
+	def getPresets(self):
+		try:
+			c = self.conn.cursor()
+			c.execute("CREATE TABLE IF NOT EXISTS %s;" % self.TAB_presets)
+			c.execute('SELECT preset FROM presets ORDER BY "idx";')
+			presets = c.fetchall()
+			return map(lambda i: i[0], presets)
+		except (sql.Error), e:
+			self.__sqlError(e)
+
+	def setSnapshot(self, date, snapshot):
+		try:
+			c = self.conn.cursor()
+			c.execute("DELETE FROM snapshots WHERE date=?;", (date,))
+			if snapshot is not None:
+				c.execute("INSERT INTO snapshots(date, snapshot) VALUES(?, ?);",
+					  (date, snapshot))
+			self.conn.commit()
+		except (sql.Error), e:
+			self.__sqlError(e)
+
+	def getSnapshot(self, date):
+		try:
+			c = self.conn.cursor()
+			c.execute("SELECT snapshot FROM snapshots WHERE date=?;", (date,))
+			snapshot = c.fetchone()
+			if snapshot:
+				snapshot = snapshot[0]
+			return snapshot
+		except (sql.Error), e:
+			self.__sqlError(e)
+
+	def getAllSnapshots(self):
+		# XXX: This is _very_ expensive.
+		#      We can probably get rid of this, if callers are fixed.
+		try:
+			c = self.conn.cursor()
+			c.execute("SELECT snapshot FROM snapshots;")
+			snapshots = c.fetchall()
+			return map(lambda s: s[0], snapshots)
+		except (sql.Error), e:
+			self.__sqlError(e)
+
+	def setComment(self, date, comment):
+		try:
+			c = self.conn.cursor()
+			c.execute("DELETE FROM comments WHERE date=?;", (date,))
+			if comment:
+				c.execute("INSERT INTO comments(date, comment) VALUES(?, ?);",
+					  (date, unicode(comment)))
+			self.conn.commit()
+		except (sql.Error), e:
+			self.__sqlError(e)
+
+	def getComment(self, date):
+		try:
+			c = self.conn.cursor()
+			c.execute("SELECT comment FROM comments WHERE date=?;", (date,))
+			comment = c.fetchone()
+			if comment:
+				comment = comment[0]
+			return comment
+		except (sql.Error), e:
+			self.__sqlError(e)
+
 class TimeSpinBox(QDoubleSpinBox):
 	def __init__(self, parent, val=0.0, minVal=0.0, maxVal=10.0,
 		     step=0.05, prefix=None, suffix="h"):
@@ -73,14 +586,6 @@ class TimeSpinBox(QDoubleSpinBox):
 			self.setSuffix(" " + suffix)
 		if prefix:
 			self.setPrefix(prefix + " ")
-
-class ShiftConfigItem:
-	def __init__(self, name, shift, workTime, breakTime, attendanceTime):
-		self.name = name
-		self.shift = shift
-		self.workTime = workTime
-		self.breakTime = breakTime
-		self.attendanceTime = attendanceTime
 
 defaultShiftConfig = [
 	ShiftConfigItem("Montag",     SHIFT_DAY, 7.0, 0.5, 8.5),
@@ -168,14 +673,15 @@ class ShiftConfigDialog(QDialog):
 
 	def loadConfig(self):
 		self.itemList.clear()
+		shiftConfig = self.mainWidget.db.getShiftConfigItems()
 		count = 1
-		for cfg in self.mainWidget.shiftConfig:
+		for cfg in shiftConfig:
 			name = "%d \"%s\"" % (count, cfg.name)
 			count += 1
 			self.itemList.addItem(name)
-		if self.mainWidget.shiftConfig:
+		if shiftConfig:
 			self.itemList.setCurrentRow(0)
-			currentItem = self.mainWidget.shiftConfig[0]
+			currentItem = shiftConfig[0]
 		else:
 			currentItem = None
 		self.loadItem(currentItem)
@@ -204,11 +710,11 @@ class ShiftConfigDialog(QDialog):
 		item.workTime = self.workTime.value()
 		item.breakTime = self.breakTime.value()
 		item.attendanceTime = self.attendanceTime.value()
-		self.mainWidget.setDirty()
 
 	def itemChanged(self, row):
 		if row >= 0:
-			self.loadItem(self.mainWidget.shiftConfig[row])
+			shiftConfig = self.mainWidget.db.getShiftConfigItems()
+			self.loadItem(shiftConfig[row])
 
 	def updateCurrentItem(self):
 		if self.updateBlocked:
@@ -216,12 +722,15 @@ class ShiftConfigDialog(QDialog):
 		index = self.itemList.currentRow()
 		if index < 0:
 			return
-		self.updateItem(self.mainWidget.shiftConfig[index])
-		name = "%d \"%s\"" % (index + 1, self.mainWidget.shiftConfig[index].name)
+		shiftConfig = self.mainWidget.db.getShiftConfigItems()
+		self.updateItem(shiftConfig[index])
+		self.mainWidget.db.setShiftConfigItems(shiftConfig)
+		name = "%d \"%s\"" % (index + 1, shiftConfig[index].name)
 		self.itemList.item(index).setText(name)
 
 	def addItem(self):
-		if len(self.mainWidget.shiftConfig) >= MAX_SHIFTCONFIG_ITEMS:
+		shiftConfig = self.mainWidget.db.getShiftConfigItems()
+		if len(shiftConfig) >= MAX_SHIFTCONFIG_ITEMS:
 			return
 		index = self.itemList.currentRow()
 		if index < 0:
@@ -230,16 +739,16 @@ class ShiftConfigDialog(QDialog):
 			index += 1
 		item = defaultShiftConfig[:][0]
 		item.name = "Unbenannt"
-		self.mainWidget.shiftConfig.insert(index, item)
+		shiftConfig.insert(index, item)
+		self.mainWidget.db.setShiftConfigItems(shiftConfig)
 		self.loadConfig()
 		self.itemList.setCurrentRow(index)
-		self.mainWidget.setDirty()
 
 	def removeItem(self):
 		index = self.itemList.currentRow()
 		if index < 0:
 			return
-		for snapshot in self.mainWidget.snapshots.values():
+		for snapshot in self.mainWidget.db.getAllSnapshots():
 			if snapshot.shiftConfigIndex >= self.itemList.count() - 1:
 				dateString = snapshot.date.toString("dd.MM.yyyy")
 				QMessageBox.critical(self, "Eintrag wird verwendet",
@@ -251,12 +760,13 @@ class ShiftConfigDialog(QDialog):
 					   QMessageBox.Yes | QMessageBox.No)
 		if res != QMessageBox.Yes:
 			return
-		self.mainWidget.shiftConfig.pop(index)
+		shiftConfig = self.mainWidget.db.getShiftConfigItems()
+		shiftConfig.pop(index)
+		self.mainWidget.db.setShiftConfigItems(shiftConfig)
 		self.loadConfig()
 		if index >= self.itemList.count() and index > 0:
 			index -= 1
 		self.itemList.setCurrentRow(index)
-		self.mainWidget.setDirty()
 
 class EnhancedDialog(QDialog):
 	def __init__(self, mainWidget):
@@ -306,30 +816,18 @@ class ManageDialog(QDialog):
 		self.fileGroup.setLayout(QGridLayout())
 		self.layout().addWidget(self.fileGroup, 0, 0)
 
-		self.loadButton = QPushButton("Laden", self)
-		self.fileGroup.layout().addWidget(self.loadButton, 0, 0)
-		self.connect(self.loadButton, SIGNAL("released()"),
-			     self.load)
-
-		self.saveAsButton = QPushButton("Speichern unter...", self)
-		self.fileGroup.layout().addWidget(self.saveAsButton, 1, 0)
-		self.connect(self.saveAsButton, SIGNAL("released()"),
-			     self.saveAs)
-
-		self.saveButton = QPushButton("Speichern", self)
-		self.fileGroup.layout().addWidget(self.saveButton, 2, 0)
-		self.connect(self.saveButton, SIGNAL("released()"),
-			     self.save)
-		if not mainWidget.getFilename():
-			self.saveButton.setEnabled(False)
+		self.setDbButton = QPushButton("Datenbank waehlen", self)
+		self.fileGroup.layout().addWidget(self.setDbButton, 0, 0)
+		self.connect(self.setDbButton, SIGNAL("released()"),
+			     self.loadDatabase)
 
 		self.resetCalButton = QPushButton("Kalender loeschen", self)
-		self.fileGroup.layout().addWidget(self.resetCalButton, 3, 0)
+		self.fileGroup.layout().addWidget(self.resetCalButton, 1, 0)
 		self.connect(self.resetCalButton, SIGNAL("released()"),
 			     self.resetCalendar)
 
 		self.schedConfButton = QPushButton("Schichtkonfig", self)
-		self.fileGroup.layout().addWidget(self.schedConfButton, 4, 0)
+		self.fileGroup.layout().addWidget(self.schedConfButton, 2, 0)
 		self.connect(self.schedConfButton, SIGNAL("released()"),
 			     self.doShiftConfig)
 
@@ -353,24 +851,15 @@ class ManageDialog(QDialog):
 
 	def loadParams(self):
 		mainWidget = self.mainWidget
-		self.holidays.setValue(mainWidget.holidays)
+		self.holidays.setValue(mainWidget.db.getHolidaysPerYear())
 
 	def updateParams(self):
 		mainWidget = self.mainWidget
-		mainWidget.setDirty()
-		mainWidget.holidays = self.holidays.value()
+		mainWidget.db.setHolidaysPerYear(self.holidays.value())
 		mainWidget.recalculate()
 
-	def load(self):
-		self.mainWidget.loadFromFile()
-		self.accept()
-
-	def saveAs(self):
-		self.mainWidget.saveToFile()
-		self.accept()
-
-	def save(self):
-		self.mainWidget.doSaveToFile(self.mainWidget.getFilename())
+	def loadDatabase(self):
+		self.mainWidget.loadDatabase()
 		self.accept()
 
 	def resetCalendar(self):
@@ -387,15 +876,6 @@ class ManageDialog(QDialog):
 		dlg.exec_()
 		self.mainWidget.recalculate()
 		self.accept()
-
-class Preset:
-	def __init__(self, name, dayType, shift, workTime, breakTime, attendanceTime):
-		self.name = name
-		self.dayType = dayType
-		self.shift = shift
-		self.workTime = workTime
-		self.breakTime = breakTime
-		self.attendanceTime = attendanceTime
 
 class PresetDialog(QDialog):
 	def __init__(self, mainWidget):
@@ -489,7 +969,7 @@ class PresetDialog(QDialog):
 				attendanceTime=shiftConfigItem.attendanceTime
 			)
 		)
-		for preset in self.mainWidget.presets:
+		for preset in self.mainWidget.db.getPresets():
 			self.__addPreset(preset)
 		self.presetList.setCurrentRow(0)
 
@@ -541,10 +1021,10 @@ class PresetDialog(QDialog):
 		preset.workTime = self.workTime.value()
 		preset.breakTime = self.breakTime.value()
 		preset.attendanceTime = self.attendanceTime.value()
-		self.mainWidget.setDirty()
 
 	def addPreset(self):
-		if len(self.mainWidget.presets) >= MAX_PRESETS:
+		presets = self.mainWidget.db.getPresets()
+		if len(presets) >= MAX_PRESETS:
 			return
 		index = self.presetList.currentRow()
 		if index <= 0:
@@ -560,10 +1040,10 @@ class PresetDialog(QDialog):
 				breakTime=shiftConfigItem.breakTime,
 				attendanceTime=shiftConfigItem.attendanceTime
 			)
-		self.mainWidget.presets.insert(index - 1, preset)
+		presets.insert(index - 1, preset)
+		self.mainWidget.db.setPresets(presets)
 		self.loadPresets()
 		self.presetList.setCurrentRow(index)
-		self.mainWidget.setDirty()
 
 	def removePreset(self):
 		index = self.presetList.currentRow()
@@ -574,12 +1054,13 @@ class PresetDialog(QDialog):
 					   QMessageBox.Yes | QMessageBox.No)
 		if res != QMessageBox.Yes:
 			return
-		self.mainWidget.presets.pop(index - 1)
+		presets = self.mainWidget.db.getPresets()
+		presets.pop(index - 1)
+		self.mainWidget.db.setPresets(presets)
 		self.loadPresets()
 		if index >= self.presetList.count() and index > 0:
 			index -= 1
 		self.presetList.setCurrentRow(index)
-		self.mainWidget.setDirty()
 
 	def commitPressed(self):
 		item = self.presetList.currentItem()
@@ -587,12 +1068,6 @@ class PresetDialog(QDialog):
 			preset = item.data(Qt.UserRole).toPyObject()
 			self.commitPreset(preset)
 			self.accept()
-
-class Snapshot:
-	def __init__(self, date, shiftConfigIndex, accountValue):
-		self.date = date
-		self.shiftConfigIndex = shiftConfigIndex
-		self.accountValue = accountValue
 
 class SnapshotDialog(QDialog):
 	def __init__(self, mainWidget, date, shiftConfigIndex=0, accountValue=0.0):
@@ -608,9 +1083,10 @@ class SnapshotDialog(QDialog):
 		l = QLabel("Startschicht:", self)
 		self.layout().addWidget(l, 1, 0)
 		self.shiftConfig = QComboBox(self)
-		assert(mainWidget.shiftConfig)
+		shiftConfig = mainWidget.db.getShiftConfigItems()
+		assert(shiftConfig)
 		index = 0
-		for cfg in mainWidget.shiftConfig:
+		for cfg in shiftConfig:
 			name = "%d \"%s\"" % (index + 1, cfg.name)
 			self.shiftConfig.addItem(name, QVariant(index))
 			index += 1
@@ -761,16 +1237,14 @@ class Calendar(QCalendarWidget):
 			painter.setPen(self.lowerLeftPen)
 			painter.drawText(rect.x() + 4, rect.y() + rect.height() - 4, text)
 
-		try:
-			shiftOverride = self.mainWidget.shiftOverrides[QDateToId(date)]
+		shiftOverride = self.mainWidget.db.getShiftOverride(date)
+		if shiftOverride is not None:
 			text = self.shiftLetter[shiftOverride]
 			painter.setPen(self.lowerRightPen)
 			metrics = QFontMetrics(painter.font())
 			painter.drawText(rect.x() + rect.width() - metrics.width(text) - 4,
 					 rect.y() + rect.height() - 4,
 					 text)
-		except (KeyError):
-			pass
 
 		painter.restore()
 
@@ -856,156 +1330,19 @@ class MainWidget(QWidget):
 		self.output.setFrameShadow(QFrame.Raised)
 		self.layout().addWidget(self.output, 8, 0, 1, 6)
 
-		self.__resetParams()
-		self.__resetCalendar()
-		self.recalculate()
-		self.setDirty(False)
+		self.db = TsDatabase()
+		self.resetState()
 
-	def __resetParams(self):
-		self.holidays = 30
-		self.shiftConfig = defaultShiftConfig[:]
-		self.presets = []
-
-	def __resetCalendar(self):
-		self.snapshots = {}
-		self.daytypeOverrides = {}
-		self.shiftOverrides = {}
-		self.workTimeOverrides = {}
-		self.breakTimeOverrides = {}
-		self.attendanceTimeOverrides = {}
-		self.comments = {}
-		self.setFilename(None)
+	def shutdown(self):
+		self.db.close()
 
 	def resetState(self):
-		self.__resetCalendar()
-		self.__resetParams()
-		self.setDirty()
+		self.db.resetDatabase()
+		self.updateTitle()
 		self.recalculate()
 		self.calendar.redraw()
 
-	def setDirty(self, dirty=True):
-		self.dirty = dirty
-		self.parent().setTitleDirty(dirty)
-
-	def __genShiftCfgWeek(self, shift, workTime, workGain, breakTime):
-		attendanceTime = workTime + breakTime + workGain
-		shiftstr = {
-			SHIFT_EARLY	: "Frueh",
-			SHIFT_LATE	: "Spaet",
-			SHIFT_NIGHT	: "Nacht",
-			SHIFT_DAY	: "Normal",
-		}[shift]
-		shiftcfg = [
-			ShiftConfigItem("Mo (%s)" % shiftstr, shift, workTime, breakTime, attendanceTime),
-			ShiftConfigItem("Di (%s)" % shiftstr, shift, workTime, breakTime, attendanceTime),
-			ShiftConfigItem("Mi (%s)" % shiftstr, shift, workTime, breakTime, attendanceTime),
-			ShiftConfigItem("Do (%s)" % shiftstr, shift, workTime, breakTime, attendanceTime),
-			ShiftConfigItem("Fr (%s)" % shiftstr, shift, workTime, breakTime, attendanceTime),
-			ShiftConfigItem("Sa (%s)" % shiftstr, shift, 0.0, breakTime, 0.0),
-			ShiftConfigItem("So (%s)" % shiftstr, shift, 0.0, 0.0, 0.0),
-		]
-		return shiftcfg
-
-	def __parseFile_ver1(self, p):
-		# ver1 compat import layer
-		defaultBreakTime = 0.5
-		workTime = p.getfloat("PARAMETERS", "workTime")
-		shiftcfgEarly = self.__genShiftCfgWeek(SHIFT_EARLY, workTime,
-					p.getfloat("PARAMETERS", "earlyGain"),
-					defaultBreakTime)
-		shiftcfgLate = self.__genShiftCfgWeek(SHIFT_LATE, workTime,
-					p.getfloat("PARAMETERS", "lateGain"),
-					defaultBreakTime)
-		shiftcfgNight = self.__genShiftCfgWeek(SHIFT_NIGHT, workTime,
-					p.getfloat("PARAMETERS", "nightGain"),
-					defaultBreakTime)
-		shiftcfgDay = self.__genShiftCfgWeek(SHIFT_DAY, workTime,
-					p.getfloat("PARAMETERS", "dayGain"),
-					defaultBreakTime)
-		earlyIndex = None
-		lateIndex = None
-		nightIndex = None
-		dayIndex = None
-		shiftSched = p.getint("PARAMETERS", "shiftSchedule")
-		if shiftSched == 0: # early only
-			self.shiftConfig = shiftcfgEarly[:]
-			earlyIndex = 0
-		elif shiftSched == 1: # late only
-			self.shiftConfig = shiftcfgLate[:]
-			lateIndex = 0
-		elif shiftSched == 2: # night only
-			self.shiftConfig = shiftcfgNight[:]
-			nightIndex = 0
-		elif shiftSched == 3: # day only
-			self.shiftConfig = shiftcfgDay[:]
-			dayIndex = 0
-		elif shiftSched == 4: # early->late
-			self.shiftConfig = shiftcfgEarly[:]
-			self.shiftConfig.extend(shiftcfgLate[:])
-			earlyIndex = 0
-			lateIndex = 7
-		elif shiftSched == 5: # early->night->late
-			self.shiftConfig = shiftcfgEarly[:]
-			self.shiftConfig.extend(shiftcfgNight[:])
-			self.shiftConfig.extend(shiftcfgLate[:])
-			earlyIndex = 0
-			nightIndex = 7
-			lateIndex = 14
-		else:
-			raise TsException("Unknown shift schedule")
-
-		for dateString in p.options("SNAPSHOTS"):
-			date = QDate.fromString(dateString, Qt.ISODate)
-			payload = p.get("SNAPSHOTS", dateString)
-			try:
-				elems = payload.split(",")
-				shift = int(elems[0])
-				accountValue = float(elems[1])
-			except (IndexError, ValueError):
-				raise TsException("Datei defekt (snapshot)")
-			dayOfWeek = date.dayOfWeek() - 1
-			shiftConfigIndexMap = {
-				SHIFT_EARLY	: earlyIndex,
-				SHIFT_LATE	: lateIndex,
-				SHIFT_NIGHT	: nightIndex,
-				SHIFT_DAY	: dayIndex,
-			}
-			try:
-				shiftConfigIndex = shiftConfigIndexMap[shift]
-				if shiftConfigIndex is None:
-					raise ValueError
-			except (IndexError, ValueError):
-				raise TsException("Datei defekt (snapshot shift)")
-			shiftConfigIndex += dayOfWeek
-			snapshot = Snapshot(date, shiftConfigIndex, accountValue)
-			self.__setSnapshot(snapshot)
-
-		for dateString in p.options("ATTRIBUTES"):
-			date = QDate.fromString(dateString, Qt.ISODate)
-			attrs = p.getint("ATTRIBUTES", dateString)
-			if attrs & (1 << 2):
-				self.setDayType(date, DTYPE_COMPTIME)
-			if attrs & (1 << 3):
-				self.setDayType(date, DTYPE_HOLIDAY)
-			if attrs & (1 << 4):
-				self.setDayType(date, DTYPE_SHORTTIME)
-			if attrs & (1 << 9):
-				self.setDayType(date, DTYPE_FEASTDAY)
-			if attrs & (1 << 5):
-				self.setShiftOverride(date, SHIFT_EARLY)
-			if attrs & (1 << 6):
-				self.setShiftOverride(date, SHIFT_LATE)
-			if attrs & (1 << 7):
-				self.setShiftOverride(date, SHIFT_NIGHT)
-			if attrs & (1 << 8):
-				self.setShiftOverride(date, SHIFT_DAY)
-
-		for comm in p.options("COMMENTS"):
-			date = QDate.fromString(comm, Qt.ISODate)
-			comment = base64ToQString(p.get("COMMENTS", comm))
-			self.setCommentFor(date, comment)
-
-	def __readOverrides(self, p, dateDict, section, floatFormat):
+	def __readOverrides(self, p, setCallback, section, floatFormat):
 		for date in p.options(section):
 			payload = p.get(section, date)
 			try:
@@ -1015,12 +1352,12 @@ class MainWidget(QWidget):
 					payload = int(payload)
 			except (ValueError):
 				raise TsException("Datei defekt")
-			dateDict[QDateToId(QDate.fromString(date, Qt.ISODate))] = payload
+			setCallback(QDate.fromString(date, Qt.ISODate), payload)
 
 	def __parseFile_ver2(self, p):
-		self.holidays = p.getint("PARAMETERS", "holidaysPerYear")
+		self.db.setHolidaysPerYear(p.getint("PARAMETERS", "holidaysPerYear"))
 
-		self.shiftConfig = []
+		shiftConfig = []
 		for count in range(0, MAX_SHIFTCONFIG_ITEMS):
 			try:
 				name = p.get("SHIFTCONFIG", "name%d" % count)
@@ -1030,13 +1367,15 @@ class MainWidget(QWidget):
 			workTime = p.getfloat("SHIFTCONFIG", "workTime%d" % count)
 			breakTime = p.getfloat("SHIFTCONFIG", "breakTime%d" % count)
 			attendanceTime = p.getfloat("SHIFTCONFIG", "attendanceTime%d" % count)
-			self.shiftConfig.append(
+			shiftConfig.append(
 				ShiftConfigItem(name=base64ToQString(name),
 						shift=shift,
 						workTime=workTime, breakTime=breakTime,
 						attendanceTime=attendanceTime)
 			)
+		self.db.setShiftConfigItems(shiftConfig)
 
+		presets = []
 		for count in range(0, MAX_PRESETS):
 			try:
 				name = p.get("PRESETS", "name%d" % count)
@@ -1047,11 +1386,12 @@ class MainWidget(QWidget):
 			workTime = p.getfloat("PRESETS", "workTime%d" % count)
 			breakTime = p.getfloat("PRESETS", "breakTime%d" % count)
 			attendanceTime = p.getfloat("PRESETS", "attendanceTime%d" % count)
-			self.presets.append(
+			presets.append(
 				Preset(name=base64ToQString(name),
 					dayType=dayType, shift=shift, workTime=workTime,
 					breakTime=breakTime, attendanceTime=attendanceTime)
 			)
+		self.db.setPresets(presets)
 
 		for snap in p.options("SNAPSHOTS"):
 			date = QDate.fromString(snap, Qt.ISODate)
@@ -1063,53 +1403,55 @@ class MainWidget(QWidget):
 			except (IndexError, ValueError):
 				raise TsException("Datei defekt")
 			snapshot = Snapshot(date, shiftConfigIndex, accountValue)
-			self.__setSnapshot(snapshot)
+			self.db.setSnapshot(date, snapshot)
 
-		self.__readOverrides(p, self.daytypeOverrides, "DAYTYPE_OVERRIDES", False)
-		self.__readOverrides(p, self.shiftOverrides, "SHIFT_OVERRIDES", False)
-		self.__readOverrides(p, self.workTimeOverrides, "WORKTIME_OVERRIDES", True)
-		self.__readOverrides(p, self.breakTimeOverrides, "BREAKTIME_OVERRIDES", True)
-		self.__readOverrides(p, self.attendanceTimeOverrides, "ATTENDANCETIME_OVERRIDES", True)
+		self.__readOverrides(p, self.db.setDayTypeOverride, "DAYTYPE_OVERRIDES", False)
+		self.__readOverrides(p, self.db.setShiftOverride, "SHIFT_OVERRIDES", False)
+		self.__readOverrides(p, self.db.setWorkTimeOverride, "WORKTIME_OVERRIDES", True)
+		self.__readOverrides(p, self.db.setBreakTimeOverride, "BREAKTIME_OVERRIDES", True)
+		self.__readOverrides(p, self.db.setAttendanceTimeOverride, "ATTENDANCETIME_OVERRIDES", True)
 
 		for comm in p.options("COMMENTS"):
 			date = QDate.fromString(comm, Qt.ISODate)
 			comment = base64ToQString(p.get("COMMENTS", comm))
-			self.setCommentFor(date, comment)
+			self.db.setComment(date, comment)
 
-	def doLoadFromFile(self, filename):
+	def doLoadDatabase(self, filename):
 		try:
-			fd = gzip.GzipFile(filename, "rb")
-			try:
-				fd.read(1)
-				fd.rewind()
-			except (IOError):
-				fd = file(filename, "rb")
-
-			p = ConfigParser.SafeConfigParser()
-			p.readfp(fd, filename)
-
-			ver = None
-			try:
-				ver = p.getint("TIMESHIFT_FILE", "version")
-			except (ConfigParser.Error):
+			exists = QFileInfo(filename).exists()
+			parser = None
+			if exists:
+				fd = gzip.GzipFile(filename, "rb")
 				try:
-					ver = p.getint("PARAMETERS", "fileversion")
+					fd.read(1)
+					fd.rewind()
+				except (IOError):
+					fd = file(filename, "rb")
+				try:
+					p = ConfigParser.SafeConfigParser()
+					p.readfp(fd, filename)
+
+					ver = None
+					try:
+						ver = p.getint("TIMESHIFT_FILE", "version")
+					except (ConfigParser.Error):
+						pass
+					if ver == 2:
+						parser = self.__parseFile_ver2
+					else:
+						raise TsException("Dateiversion nicht unterstuetzt")
 				except (ConfigParser.Error):
 					pass
-			if ver == 1:
-				parser = self.__parseFile_ver1
-			elif ver == 2:
-				parser = self.__parseFile_ver2
+			if parser:
+				self.db.close()
+				parser(p)
 			else:
-				raise TsException("Dateiversion nicht unterstuetzt")
+				if not exists and self.db.isInMemory():
+					# Clone the in-memory DB to the new file
+					self.db.clone(filename)
+				self.db.open(filename)
 
-			self.__resetParams()
-			self.__resetCalendar()
-
-			parser(p)
-
-			self.setDirty(False)
-			self.setFilename(filename)
+			self.updateTitle()
 			self.recalculate()
 			self.calendar.redraw()
 
@@ -1119,149 +1461,31 @@ class MainWidget(QWidget):
 			return False
 		return True
 
-	def loadFromFile(self):
-		if self.dirty:
-			if not self.askSaveToFile():
-				return
-		fn = QFileDialog.getOpenFileName(self, "Laden", "",
-						 "Timeshift Dateien (*.tms *.tmz);;"
-						 "Alle Dateien (*)")
+	def loadDatabase(self):
+		fn = QFileDialog.getSaveFileName(self, "Datenbank laden", "",
+						 "Timeshift Dateien (*.tmd *.tms *.tmz);;"
+						 "Alle Dateien (*)",
+						 "", QFileDialog.DontConfirmOverwrite)
 		if fn:
-			self.doLoadFromFile(fn)
+			self.doLoadDatabase(fn)
 
-	def __writeOverrides(self, fd, dateDict, section, floatFormat):
-		fd.write("\r\n[%s]\r\n" % section)
-		for date in dateDict:
-			payload = dateDict[date]
-			if floatFormat:
-				fmt = "%s=%f\r\n"
-			else:
-				fmt = "%s=%d\r\n"
-			fd.write(fmt % (IdToQDate(date).toString(Qt.ISODate),
-					payload))
-
-	def doSaveToFile(self, filename):
-		compressed = str(filename).endswith(".tmz")
-		for i in range(0, 128):
-			tmpFilename = "%s.tmp%d" % (filename, i)
-			try:
-				os.stat(tmpFilename)
-			except (OSError), e:
-				if e.errno == errno.ENOENT:
-					break
+	def updateTitle(self):
+		if self.db.isInMemory():
+			suffix = "<in memory>"
 		else:
-			QMessageBox.critical(self, "Speichern fehlgeschlagen",
-					     "Speichern fehlgeschlagen:\n" +\
-					     "Tmp file error")
-			return False
-		try:
-			fd = file(tmpFilename, "w+b")
-			if compressed:
-				fd = gzip.GzipFile(filename="", compresslevel=9, fileobj=fd)
-
-			fd.write("[TIMESHIFT_FILE]\r\n")
-			fd.write("version=2\r\n")
-
-			fd.write("\r\n[PARAMETERS]\r\n")
-			fd.write("holidaysPerYear=%d\r\n" % self.holidays)
-
-			fd.write("\r\n[SHIFTCONFIG]\r\n")
-			count = 0
-			for cfg in self.shiftConfig:
-				fd.write("name%d=%s\r\n" % (count, QStringToBase64(cfg.name)))
-				fd.write("shift%d=%d\r\n" % (count, cfg.shift))
-				fd.write("workTime%d=%f\r\n" % (count, cfg.workTime))
-				fd.write("breakTime%d=%f\r\n" % (count, cfg.breakTime))
-				fd.write("attendanceTime%d=%f\r\n" % (count, cfg.attendanceTime))
-				count += 1
-
-			fd.write("\r\n[PRESETS]\r\n")
-			count = 0
-			for preset in self.presets:
-				fd.write("name%d=%s\r\n" % (count, QStringToBase64(preset.name)))
-				fd.write("dayType%d=%d\r\n" % (count, preset.dayType))
-				fd.write("shift%d=%d\r\n" % (count, preset.shift))
-				fd.write("workTime%d=%f\r\n" % (count, preset.workTime))
-				fd.write("breakTime%d=%f\r\n" % (count, preset.breakTime))
-				fd.write("attendanceTime%d=%f\r\n" % (count, preset.attendanceTime))
-				count += 1
-
-			fd.write("\r\n[SNAPSHOTS]\r\n")
-			for snapKey in self.snapshots:
-				snapshot = self.snapshots[snapKey]
-				date = IdToQDate(snapKey)
-				shift = snapshot.shiftConfigIndex
-				value = snapshot.accountValue
-				fd.write("%s=%d,%f\r\n" % (date.toString(Qt.ISODate), shift, value))
-
-			self.__writeOverrides(fd, self.daytypeOverrides, "DAYTYPE_OVERRIDES", False)
-			self.__writeOverrides(fd, self.shiftOverrides, "SHIFT_OVERRIDES", False)
-			self.__writeOverrides(fd, self.workTimeOverrides, "WORKTIME_OVERRIDES", True)
-			self.__writeOverrides(fd, self.breakTimeOverrides, "BREAKTIME_OVERRIDES", True)
-			self.__writeOverrides(fd, self.attendanceTimeOverrides, "ATTENDANCETIME_OVERRIDES", True)
-
-			fd.write("\r\n[COMMENTS]\r\n")
-			for commentKey in self.comments:
-				comment = QStringToBase64(self.comments[commentKey])
-				date = IdToQDate(commentKey)
-				fd.write("%s=%s\r\n" % (date.toString(Qt.ISODate), comment))
-
-			fd.flush()
-			fd.close()
-			os.rename(tmpFilename, filename)
-
-			self.setDirty(False)
-			self.setFilename(filename)
-		except (IOError), e:
-			QMessageBox.critical(self, "Speichern fehlgeschlagen",
-					     "Speichern fehlgeschlagen:\n" +\
-					     e.strerror)
-			try:
-				os.unlink(tmpFilename)
-			except (IOError):
-				pass
-			return False
-		return True
-
-	def saveToFile(self):
-		selectedFilter = QString()
-		fn = QFileDialog.getSaveFileName(self, "Speichern", "",
-						 "Komprimierte timeshift Dateien (*.tmz);;"
-						 "Timeshift Dateien (*.tms)",
-						 selectedFilter=selectedFilter)
-		if not fn:
-			return True
-		extension = str(selectedFilter).split("(")[1].strip()[1:-1]
-		if not fn.endsWith(extension):
-			fn += extension
-		return self.doSaveToFile(fn)
-
-	def setFilename(self, filename):
-		suffix = None
-		if filename:
-			fi = QFileInfo(filename)
+			fi = QFileInfo(self.db.getFilename())
 			suffix = fi.fileName()
 		self.parent().setTitleSuffix(suffix)
-		self.filename = filename
-
-	def getFilename(self):
-		return self.filename
 
 	def dateHasComment(self, date):
-		return QDateToId(date) in self.comments
+		return bool(self.db.getComment(date))
 
 	def getCommentFor(self, date):
-		try:
-			return self.comments[QDateToId(date)]
-		except KeyError:
-			return ""
+		comment = self.db.getComment(date)
+		return comment if comment else ""
 
 	def setCommentFor(self, date, text):
-		if text:
-			self.comments[QDateToId(date)] = text
-		else:
-			self.comments.pop(QDateToId(date), None)
-		self.setDirty()
+		self.db.setComment(date, text)
 
 	def doEnhanced(self):
 		dlg = EnhancedDialog(self)
@@ -1276,8 +1500,7 @@ class MainWidget(QWidget):
 		dlg.exec_()
 
 	def __removeSnapshot(self, date):
-		self.snapshots.pop(QDateToId(date), None)
-		self.setDirty()
+		self.db.setSnapshot(date, None)
 
 	def removeSnapshot(self, date):
 		self.__removeSnapshot(date)
@@ -1285,11 +1508,10 @@ class MainWidget(QWidget):
 		self.calendar.redraw()
 
 	def __setSnapshot(self, snapshot):
-		self.snapshots[QDateToId(snapshot.date)] = snapshot
-		self.setDirty()
+		self.db.setSnapshot(snapshot.date, snapshot)
 
 	def doSnapshot(self):
-		if not self.shiftConfig:
+		if not self.db.getShiftConfigItems():
 			QMessageBox.critical(self, "Kein Schichtsystem",
 					     "Kein Schichtsystem konfiguriert")
 			return
@@ -1315,16 +1537,13 @@ class MainWidget(QWidget):
 			self.recalculate()
 
 	def dateHasSnapshot(self, date):
-		return QDateToId(date) in self.snapshots
+		return bool(self.db.getSnapshot(date))
 
 	def getSnapshotFor(self, date):
-		try:
-			return self.snapshots[QDateToId(date)]
-		except (KeyError):
-			return None
+		return self.db.getSnapshot(date)
 
 	def overrideChanged(self):
-		if self.overrideChangeBlocked or not self.shiftConfig:
+		if self.overrideChangeBlocked or not self.db.getShiftConfigItems():
 			return
 		date = self.calendar.selectedDate()
 		shiftConfigItem = self.getShiftConfigItemForDate(date)
@@ -1366,8 +1585,7 @@ class MainWidget(QWidget):
 		# Find a snapshot relative to "date".
 		# Searches backwards in time
 		snapshot = None
-		for key in self.snapshots:
-			s = self.snapshots[key]
+		for s in self.db.getAllSnapshots():
 			if s.date <= date:
 				if snapshot is None or s.date >= snapshot.date:
 					snapshot = s
@@ -1383,13 +1601,13 @@ class MainWidget(QWidget):
 		assert(daysBetween >= 0)
 		index = snapshot.shiftConfigIndex
 		index += daysBetween
-		index %= len(self.shiftConfig)
+		index %= len(self.db.getShiftConfigItems())
 		return index
 
 	def getShiftConfigItemForDate(self, date):
 		index = self.getShiftConfigIndexForDate(date)
 		if index >= 0:
-			return self.shiftConfig[index]
+			return self.db.getShiftConfigItems()[index]
 		return None
 
 	def enableOverrideControls(self, enable):
@@ -1401,77 +1619,60 @@ class MainWidget(QWidget):
 		self.presetButton.setEnabled(enable)
 
 	def getDayType(self, date):
-		try:
-			return self.daytypeOverrides[QDateToId(date)]
-		except (KeyError):
-			return DTYPE_DEFAULT
+		dtype = self.db.getDayTypeOverride(date)
+		return dtype if dtype is not None else DTYPE_DEFAULT
 
 	def setDayType(self, date, dtype):
-		if dtype == DTYPE_DEFAULT:
-			self.daytypeOverrides.pop(QDateToId(date), None)
-		else:
-			self.daytypeOverrides[QDateToId(date)] = dtype
-		self.setDirty()
+		dtype = dtype if dtype != DTYPE_DEFAULT else None
+		self.db.setDayTypeOverride(date, dtype)
 
 	def setShiftOverride(self, date, shift):
-		if shift is None:
-			self.shiftOverrides.pop(QDateToId(date), None)
-		else:
-			self.shiftOverrides[QDateToId(date)] = shift
-		self.setDirty()
+		self.db.setShiftOverride(date, shift)
 
 	def __getRealShift(self, date, shiftConfigItem):
-		try: # Check for override
-			return self.shiftOverrides[QDateToId(date)]
-		except (KeyError): # Use standard schedule
-			return shiftConfigItem.shift
+		shift = self.db.getShiftOverride(date)
+		if shift is not None:
+			return shift
+		# Use standard schedule
+		return shiftConfigItem.shift
 
 	def setWorkTimeOverride(self, date, workTime):
-		if workTime is None:
-			self.workTimeOverrides.pop(QDateToId(date), None)
-		else:
-			self.workTimeOverrides[QDateToId(date)] = workTime
-		self.setDirty()
+		self.db.setWorkTimeOverride(date, workTime)
 
 	def __getRealWorkTime(self, date, shiftConfigItem):
-		try: # Check for override
-			return self.workTimeOverrides[QDateToId(date)]
-		except (KeyError): # Use standard schedule
-			return shiftConfigItem.workTime
+		workTime = self.db.getWorkTimeOverride(date)
+		if workTime is not None:
+			return workTime
+		# Use standard schedule
+		return shiftConfigItem.workTime
 
 	def setBreakTimeOverride(self, date, breakTime):
-		if breakTime is None:
-			self.breakTimeOverrides.pop(QDateToId(date), None)
-		else:
-			self.breakTimeOverrides[QDateToId(date)] = breakTime
-		self.setDirty()
+		self.db.setBreakTimeOverride(date, breakTime)
 
 	def __getRealBreakTime(self, date, shiftConfigItem):
-		try: # Check for override
-			return self.breakTimeOverrides[QDateToId(date)]
-		except (KeyError): # Use standard schedule
-			return shiftConfigItem.breakTime
+		breakTime = self.db.getBreakTimeOverride(date)
+		if breakTime is not None:
+			return breakTime
+		# Use standard schedule
+		return shiftConfigItem.breakTime
 
 	def setAttendanceTimeOverride(self, date, attendanceTime):
-		if attendanceTime is None:
-			self.attendanceTimeOverrides.pop(QDateToId(date), None)
-		else:
-			self.attendanceTimeOverrides[QDateToId(date)] = attendanceTime
-		self.setDirty()
+		self.db.setAttendanceTimeOverride(date, attendanceTime)
 
 	def __getRealAttendanceTime(self, date, shiftConfigItem):
-		try: # Check for override
-			return self.attendanceTimeOverrides[QDateToId(date)]
-		except (KeyError): # Use standard schedule
-			return shiftConfigItem.attendanceTime
+		attendanceTime = self.db.getAttendanceTimeOverride(date)
+		if attendanceTime is not None:
+			return attendanceTime
+		# Use standard schedule
+		return shiftConfigItem.attendanceTime
 
 	def dateHasTimeOverrides(self, date):
-		dateId = QDateToId(date)
-		return dateId in self.workTimeOverrides or \
-			dateId in self.breakTimeOverrides or \
-			dateId in self.attendanceTimeOverrides
+		return self.db.getWorkTimeOverride(date) is not None or\
+		       self.db.getBreakTimeOverride(date) is not None or\
+		       self.db.getAttendanceTimeOverride(date) is not None
 
 	def __calcAccountState(self, snapshot, endDate):
+		shiftConfig = self.db.getShiftConfigItems()
 		date = snapshot.date
 		shiftConfigIndex = snapshot.shiftConfigIndex
 		startOfTheDay = snapshot.accountValue
@@ -1479,7 +1680,7 @@ class MainWidget(QWidget):
 		while True:
 			assert(date <= endDate)
 
-			shiftConfigItem = self.shiftConfig[shiftConfigIndex]
+			shiftConfigItem = shiftConfig[shiftConfigIndex]
 			currentShift = self.__getRealShift(date, shiftConfigItem)
 			workTime = self.__getRealWorkTime(date, shiftConfigItem)
 			breakTime = self.__getRealBreakTime(date, shiftConfigItem)
@@ -1506,28 +1707,22 @@ class MainWidget(QWidget):
 				break
 			date = date.addDays(1)
 			shiftConfigIndex += 1
-			if shiftConfigIndex >= len(self.shiftConfig):
+			if shiftConfigIndex >= len(shiftConfig):
 				shiftConfigIndex = 0
 			startOfTheDay = endOfTheDay
 
 		return (shiftConfigIndex, startOfTheDay, endOfTheDay)
 
 	def __holidaysLeft(self, date):
-
-		def daytypeOverridesFilterFunc(key):
-			itemDate = IdToQDate(key)
-			return itemDate.year() == date.year() and \
-			       itemDate <= date and \
-			       self.daytypeOverrides[key] == DTYPE_HOLIDAY
-
-		keys = filter(daytypeOverridesFilterFunc,
-			      self.daytypeOverrides.keys())
-		return self.holidays - len(keys)
+		beginDate = QDate(date.year(), 1, 1)
+		dates = self.db.findDayTypeDates(DTYPE_HOLIDAY, beginDate, date)
+		return self.db.getHolidaysPerYear() - len(dates)
 
 	def recalculate(self):
 		selDate = self.calendar.selectedDate()
+		shiftConfig = self.db.getShiftConfigItems()
 
-		if not self.shiftConfig:
+		if not shiftConfig:
 			self.output.setText("Kein Schichtsystem konfiguriert")
 			self.enableOverrideControls(False)
 			return
@@ -1547,7 +1742,7 @@ class MainWidget(QWidget):
 		(shiftConfigIndex, startOfTheDay, endOfTheDay) = self.__calcAccountState(snapshot, selDate)
 		holidaysLeft = self.__holidaysLeft(selDate)
 
-		shiftConfigItem = self.shiftConfig[shiftConfigIndex]
+		shiftConfigItem = shiftConfig[shiftConfigIndex]
 		dtype = self.getDayType(selDate)
 		shift = self.__getRealShift(selDate, shiftConfigItem)
 		workTime = self.__getRealWorkTime(selDate, shiftConfigItem)
@@ -1566,61 +1761,35 @@ class MainWidget(QWidget):
 		self.output.setText("Konto am %s:  Beginn: %.2f  Ende: %.2f  Urlaub: %d" %\
 			(dateString, startOfTheDay, endOfTheDay, holidaysLeft))
 
-	def askSaveToFile(self):
-		res = QMessageBox.question(self, "Ungespeicherte Daten",
-					   "Es existieren ungespeicherte Daten.\n" +\
-					   "Jetzt speichern?",
-					   QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
-		if res == QMessageBox.Cancel:
-			return False
-		if res == QMessageBox.Yes:
-			if self.getFilename():
-				return self.doSaveToFile(self.getFilename())
-			return self.saveToFile()
-		return True
-
-	def shutdown(self):
-		if not self.dirty:
-			return True
-		return self.askSaveToFile()
-
 class MainWindow(QMainWindow):
 	def __init__(self, parent=None):
 		QMainWindow.__init__(self, parent)
 		self.titleSuffix = None
-		self.titleDirty = False
 		self.__updateTitle()
 
 		self.setCentralWidget(MainWidget(self))
 
-	def loadFile(self, filename):
-		return self.centralWidget().doLoadFromFile(filename)
+	def loadDatabase(self, filename):
+		return self.centralWidget().doLoadDatabase(filename)
 
 	def __updateTitle(self):
 		title = "Zeitkonto"
 		if self.titleSuffix:
 			title += " - " + self.titleSuffix
-		if self.titleDirty:
-			title += " *"
 		self.setWindowTitle(title)
 
 	def setTitleSuffix(self, suffix):
 		self.titleSuffix = suffix
 		self.__updateTitle()
 
-	def setTitleDirty(self, dirty):
-		self.titleDirty = dirty
-		self.__updateTitle()
-
 	def closeEvent(self, e):
-		if not self.centralWidget().shutdown():
-			e.ignore()
+		self.centralWidget().shutdown()
 
 def main(argv):
 	app = QApplication(argv)
 	mainwnd = MainWindow()
 	if len(argv) == 2:
-		if not mainwnd.loadFile(argv[1]):
+		if not mainwnd.loadDatabase(argv[1]):
 			return 1
 	mainwnd.show()
 	return app.exec_()
