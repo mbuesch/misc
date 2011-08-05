@@ -296,6 +296,7 @@ class TsDatabase:
 
 	def __cloneTab(self, sourceCursor, targetCursor, tabSignature,
 		       table, columns):
+		targetCursor.execute("DROP TABLE IF EXISTS %s;" % table)
 		targetCursor.execute("CREATE TABLE %s;" % tabSignature)
 		sourceCursor.execute("SELECT %s FROM %s;" % (columns, table))
 		for rowData in sourceCursor.fetchall():
