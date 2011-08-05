@@ -358,6 +358,9 @@ class TsDatabase:
 					tabSignature=self.TAB_presets,
 					table="presets",
 					columns="idx, preset")
+			cloneconn.cursor().execute("VACUUM;")
+			cloneconn.commit()
+			cloneconn.close()
 		except (sql.Error), e:
 			self.__sqlError(e)
 
