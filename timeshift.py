@@ -304,71 +304,33 @@ class TsDatabase:
 		self.__setDatabaseVersion()
 		self.conn.commit()
 
-	def __cloneTab(self, sourceCursor, targetCursor, tabSignature,
-		       table, columns):
-		targetCursor.execute("DROP TABLE IF EXISTS %s;" % table)
+	def __cloneTab(self, sourceCursor, targetCursor, tabSignature):
+		tabName = tabSignature.split("(")[0].strip()
+		columns = tabSignature.split("(")[1].split(")")[0]
+		columns = map(lambda c: c.split()[0], columns.split(","))
+		columns = ", ".join(columns)
+		targetCursor.execute("DROP TABLE IF EXISTS %s;" % tabName)
 		targetCursor.execute("CREATE TABLE %s;" % tabSignature)
-		sourceCursor.execute("SELECT %s FROM %s;" % (columns, table))
+		sourceCursor.execute("SELECT %s FROM %s;" % (columns, tabName))
 		for rowData in sourceCursor.fetchall():
 			valTmpl = ", ".join("?" * len(columns.split(",")))
 			targetCursor.execute("INSERT INTO %s(%s) VALUES(%s);" %\
-				(table, columns, valTmpl),
+				(tabName, columns, valTmpl),
 				rowData)
 
 	def clone(self, target):
 		try:
 			cloneconn = sql.connect(unicode(target),
 				detect_types=sql.PARSE_DECLTYPES)
-			self.__cloneTab(sourceCursor=self.conn.cursor(),
-					targetCursor=cloneconn.cursor(),
-					tabSignature=self.TAB_params,
-					table="params",
-					columns="name, data")
-			self.__cloneTab(sourceCursor=self.conn.cursor(),
-					targetCursor=cloneconn.cursor(),
-					tabSignature=self.TAB_ovr_daytype,
-					table="override_dayType",
-					columns="date, value")
-			self.__cloneTab(sourceCursor=self.conn.cursor(),
-					targetCursor=cloneconn.cursor(),
-					tabSignature=self.TAB_ovr_shift,
-					table="override_shift",
-					columns="date, value")
-			self.__cloneTab(sourceCursor=self.conn.cursor(),
-					targetCursor=cloneconn.cursor(),
-					tabSignature=self.TAB_ovr_worktm,
-					table="override_workTime",
-					columns="date, value")
-			self.__cloneTab(sourceCursor=self.conn.cursor(),
-					targetCursor=cloneconn.cursor(),
-					tabSignature=self.TAB_ovr_brtm,
-					table="override_breakTime",
-					columns="date, value")
-			self.__cloneTab(sourceCursor=self.conn.cursor(),
-					targetCursor=cloneconn.cursor(),
-					tabSignature=self.TAB_ovr_atttm,
-					table="override_attendanceTime",
-					columns="date, value")
-			self.__cloneTab(sourceCursor=self.conn.cursor(),
-					targetCursor=cloneconn.cursor(),
-					tabSignature=self.TAB_snaps,
-					table="snapshots",
-					columns="date, snapshot")
-			self.__cloneTab(sourceCursor=self.conn.cursor(),
-					targetCursor=cloneconn.cursor(),
-					tabSignature=self.TAB_comments,
-					table="comments",
-					columns="date, comment")
-			self.__cloneTab(sourceCursor=self.conn.cursor(),
-					targetCursor=cloneconn.cursor(),
-					tabSignature=self.TAB_shconf,
-					table="shiftConfig",
-					columns="idx, item")
-			self.__cloneTab(sourceCursor=self.conn.cursor(),
-					targetCursor=cloneconn.cursor(),
-					tabSignature=self.TAB_presets,
-					table="presets",
-					columns="idx, preset")
+			for tabSignature in (self.TAB_params, self.TAB_dayflags,
+					     self.TAB_ovr_daytype, self.TAB_ovr_shift,
+					     self.TAB_ovr_worktm, self.TAB_ovr_brtm,
+					     self.TAB_ovr_atttm, self.TAB_snaps,
+					     self.TAB_comments, self.TAB_shconf,
+					     self.TAB_presets):
+				self.__cloneTab(sourceCursor=self.conn.cursor(),
+						targetCursor=cloneconn.cursor(),
+						tabSignature=tabSignature)
 			cloneconn.cursor().execute("VACUUM;")
 			cloneconn.commit()
 			cloneconn.close()
