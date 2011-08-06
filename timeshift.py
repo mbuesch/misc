@@ -1253,57 +1253,57 @@ class Calendar(QCalendarWidget):
 	def paintCell(self, painter, rect, date):
 		QCalendarWidget.paintCell(self, painter, rect, date)
 		painter.save()
+
 		mainWidget = self.mainWidget
+		db = mainWidget.db
+		rx, ry, rw, rh = rect.x(), rect.y(), rect.width(), rect.height()
 
 		if mainWidget.dateHasSnapshot(date):
 			painter.setPen(self.snapshotPen)
 		else:
 			painter.setPen(self.framePen)
-		painter.drawRect(rect.x(), rect.y(),
-				 rect.width() - 1, rect.height() - 1)
+		painter.drawRect(rx, ry, rw - 1, rh - 1)
 
 		if date == self.today:
 			painter.setPen(self.todayPen)
-			for (x, y) in ((3, 3), (rect.width() - 3, 3),
-				       (3, rect.height() - 3),
-				       (rect.width() - 3, rect.height() - 3)):
-				painter.drawPoint(rect.x() + x, rect.y() + y)
+			for (x, y) in ((3, 3), (rw - 3, 3),
+				       (3, rh - 3),
+				       (rw - 3, rh - 3)):
+				painter.drawPoint(rx + x, ry + y)
 
 		if mainWidget.dateHasComment(date):
 			painter.setPen(self.commentPen)
-			painter.drawRect(rect.x() + 3, rect.y() + 3,
-					 rect.width() - 3 - 3, rect.height() - 3 - 3)
+			painter.drawRect(rx + 3, ry + 3, rw - 3 - 3, rh - 3 - 3)
 
 		if mainWidget.dateHasTimeOverrides(date):
 			painter.setPen(self.overridesPen)
-			painter.drawPoint(rect.x() + rect.width() - 8,
-					  rect.y() + 8)
+			painter.drawPoint(rx + rw - 8, ry + 8)
 
 		font = painter.font()
 		font.setBold(True)
 		painter.setFont(font)
 
-		text = self.typeLetter[self.mainWidget.getDayType(date)]
+		text = self.typeLetter[mainWidget.getDayType(date)]
 		if text:
 			painter.setPen(self.lowerLeftPen)
-			painter.drawText(rect.x() + 4, rect.y() + rect.height() - 4, text)
+			painter.drawText(rx + 4, ry + rh - 4, text)
 
-		shiftOverride = self.mainWidget.db.getShiftOverride(date)
+		shiftOverride = db.getShiftOverride(date)
 		if shiftOverride is not None:
 			text = self.shiftLetter[shiftOverride]
 			painter.setPen(self.lowerRightPen)
 			metrics = QFontMetrics(painter.font())
-			painter.drawText(rect.x() + rect.width() - metrics.width(text) - 4,
-					 rect.y() + rect.height() - 4,
+			painter.drawText(rx + rw - metrics.width(text) - 4,
+					 ry + rh - 4,
 					 text)
 
-		dayFlags = self.mainWidget.db.getDayFlags(date)
+		dayFlags = db.getDayFlags(date)
 		if dayFlags & DFLAG_UNCERTAIN:
 			text = "???"
 			painter.setPen(self.centerPen)
 			metrics = QFontMetrics(painter.font())
-			painter.drawText(rect.x() + rect.width() / 2 - metrics.width(text) / 2,
-					 rect.y() + rect.height() / 2 + metrics.height() / 2,
+			painter.drawText(rx + rw / 2 - metrics.width(text) / 2,
+					 ry + rh / 2 + metrics.height() / 2,
 					 text)
 
 		painter.restore()
