@@ -33,6 +33,9 @@ DTYPE_HOLIDAY		= 2
 DTYPE_FEASTDAY		= 3
 DTYPE_SHORTTIME		= 4
 
+# Day flags
+DFLAG_UNCERTAIN		= (1 << 0)
+
 
 def floatEqual(f0, f1):
 	return abs(f0 - f1) < 0.001
@@ -179,6 +182,7 @@ class TsDatabase:
 	sql.register_converter("Snapshot", Snapshot.fromString)
 
 	TAB_params	= "params(name TEXT, data TEXT)"
+	TAB_dayflags	= "dayFlags(date QDate, value INTEGER)"
 	TAB_ovr_daytype	= "override_dayType(date QDate, value TEXT)"
 	TAB_ovr_shift	= "override_shift(date QDate, value TEXT)"
 	TAB_ovr_worktm	= "override_workTime(date QDate, value TEXT)"
@@ -266,6 +270,7 @@ class TsDatabase:
 	def __initTables(self, conn):
 		script = (
 			"CREATE TABLE IF NOT EXISTS %s;" % self.TAB_params,
+			"CREATE TABLE IF NOT EXISTS %s;" % self.TAB_dayflags,
 			"CREATE TABLE IF NOT EXISTS %s;" % self.TAB_ovr_daytype,
 			"CREATE TABLE IF NOT EXISTS %s;" % self.TAB_ovr_shift,
 			"CREATE TABLE IF NOT EXISTS %s;" % self.TAB_ovr_worktm,
@@ -282,6 +287,7 @@ class TsDatabase:
 	def resetDatabase(self):
 		self.conn.cursor().executescript("""
 			DROP TABLE IF EXISTS params;
+			DROP TABLE IF EXISTS dayFlags;
 			DROP TABLE IF EXISTS override_dayType;
 			DROP TABLE IF EXISTS override_shift;
 			DROP TABLE IF EXISTS override_workTime;
@@ -289,10 +295,14 @@ class TsDatabase:
 			DROP TABLE IF EXISTS override_attendanceTime;
 			DROP TABLE IF EXISTS snapshots;
 			DROP TABLE IF EXISTS comments;
+			DROP TABLE IF EXISTS shiftConfig;
+			DROP TABLE IF EXISTS presets;
 			VACUUM;
 		""")
 		self.conn.commit()
 		self.__initTables(self.conn)
+		self.__setDatabaseVersion()
+		self.conn.commit()
 
 	def __cloneTab(self, sourceCursor, targetCursor, tabSignature,
 		       table, columns):
@@ -384,6 +394,27 @@ class TsDatabase:
 			if value:
 				return value[0]
 			return None
+		except (sql.Error), e:
+			self.__sqlError(e)
+
+	def setDayFlags(self, date, value):
+		try:
+			c = self.conn.cursor()
+			c.execute("DELETE FROM dayFlags WHERE date=?;", (date,))
+			c.execute("INSERT INTO dayFlags(date, value) VALUES(?, ?);",
+				  (date, int(value) & 0xFFFFFFFF))
+			self.conn.commit()
+		except (sql.Error), e:
+			self.__sqlError(e)
+
+	def getDayFlags(self, date):
+		try:
+			c = self.conn.cursor()
+			c.execute("SELECT value FROM dayFlags WHERE date=?;", (date,))
+			value = c.fetchone()
+			if not value:
+				return 0
+			return int(value[0]) & 0xFFFFFFFF
 		except (sql.Error), e:
 			self.__sqlError(e)
 
@@ -776,38 +807,51 @@ class EnhancedDialog(QDialog):
 	def __init__(self, mainWidget):
 		QDialog.__init__(self, mainWidget)
 		self.mainWidget = mainWidget
+
+		date = mainWidget.calendar.selectedDate()
+		dayFlags = mainWidget.db.getDayFlags(date)
+
 		self.setWindowTitle("Erweitert")
 		self.setLayout(QGridLayout())
 
 		self.commentGroup = QGroupBox("Kommentar", self)
 		self.commentGroup.setLayout(QGridLayout())
-		self.layout().addWidget(self.commentGroup, 0, 0, 1, 2)
+		self.layout().addWidget(self.commentGroup, 0, 0)
 
 		self.comment = QTextEdit(self)
 		self.commentGroup.layout().addWidget(self.comment, 0, 0)
-		date = mainWidget.calendar.selectedDate()
 		self.comment.document().setPlainText(mainWidget.getCommentFor(date))
 
-		self.okButton = QPushButton("OK", self)
-		self.layout().addWidget(self.okButton, 1, 0)
-		self.connect(self.okButton, SIGNAL("released()"),
-			     self.ok)
+		self.flagsGroup = QGroupBox("Tagesoptionen", self)
+		self.flagsGroup.setLayout(QGridLayout())
+		self.layout().addWidget(self.flagsGroup, 1, 0)
 
-		self.cancelButton = QPushButton("Abbrechen", self)
-		self.layout().addWidget(self.cancelButton, 1, 1)
-		self.connect(self.cancelButton, SIGNAL("released()"),
-			     self.cancel)
+		self.uncertainCheckBox = QCheckBox("Unbestaetigt", self)
+		self.flagsGroup.layout().addWidget(self.uncertainCheckBox, 0, 0)
+		cs = Qt.Checked if dayFlags & DFLAG_UNCERTAIN else Qt.Unchecked
+		self.uncertainCheckBox.setCheckState(cs)
 
-	def ok(self):
+	def closeEvent(self, e):
+		self.commit()
+
+	def commit(self):
 		date = self.mainWidget.calendar.selectedDate()
+		dayFlags = oldDayFlags = self.mainWidget.db.getDayFlags(date)
+
+		if self.uncertainCheckBox.checkState() == Qt.Checked:
+			dayFlags |= DFLAG_UNCERTAIN
+		else:
+			dayFlags &= ~DFLAG_UNCERTAIN
+
+		if dayFlags != oldDayFlags:
+			self.mainWidget.db.setDayFlags(date, dayFlags)
+
 		old = self.mainWidget.getCommentFor(date)
 		new = self.comment.document().toPlainText()
 		if old != new:
 			self.mainWidget.setCommentFor(date, new)
-		self.accept()
 
-	def cancel(self):
-		self.reject()
+		self.accept()
 
 class ManageDialog(QDialog):
 	def __init__(self, mainWidget):
@@ -1182,6 +1226,9 @@ class Calendar(QCalendarWidget):
 		self.overridesPen = QPen(QColor("#9F9F9F"))
 		self.overridesPen.setWidth(5)
 
+		self.centerPen = QPen(QColor("#007FFF"))
+		self.centerPen.setWidth(1)
+
 		self.lowerLeftPen = QPen(QColor("#FF0000"))
 		self.lowerLeftPen.setWidth(1)
 
@@ -1248,6 +1295,15 @@ class Calendar(QCalendarWidget):
 			metrics = QFontMetrics(painter.font())
 			painter.drawText(rect.x() + rect.width() - metrics.width(text) - 4,
 					 rect.y() + rect.height() - 4,
+					 text)
+
+		dayFlags = self.mainWidget.db.getDayFlags(date)
+		if dayFlags & DFLAG_UNCERTAIN:
+			text = "???"
+			painter.setPen(self.centerPen)
+			metrics = QFontMetrics(painter.font())
+			painter.drawText(rect.x() + rect.width() / 2 - metrics.width(text) / 2,
+					 rect.y() + rect.height() / 2 + metrics.height() / 2,
 					 text)
 
 		painter.restore()
