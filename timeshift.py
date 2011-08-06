@@ -537,13 +537,24 @@ class TsDatabase:
 			self.__sqlError(e)
 
 	def getAllSnapshots(self):
-		# XXX: This is _very_ expensive.
-		#      We can probably get rid of this, if callers are fixed.
 		try:
 			c = self.conn.cursor()
 			c.execute("SELECT snapshot FROM snapshots;")
 			snapshots = c.fetchall()
 			return map(lambda s: s[0], snapshots)
+		except (sql.Error), e:
+			self.__sqlError(e)
+
+	def findSnapshotForDate(self, date):
+		# Get the snapshot that is active for a certain date.
+		try:
+			c = self.conn.cursor()
+			c.execute("SELECT snapshot FROM snapshots WHERE date<=? "
+				  "ORDER BY date DESC", (date,))
+			snapshot = c.fetchone()
+			if snapshot:
+				return snapshot[0]
+			return None
 		except (sql.Error), e:
 			self.__sqlError(e)
 
@@ -1544,7 +1555,7 @@ class MainWidget(QWidget):
 		if snapshot is None:
 			# Calculate the account state w.r.t. the
 			# last shapshot.
-			snapshot = self.__findSnapshot(date)
+			snapshot = self.db.findSnapshotForDate(date)
 			if snapshot:
 				(shiftConfigIndex, startOfTheDay, endOfTheDay) = self.__calcAccountState(snapshot, date)
 				accountValue = startOfTheDay
@@ -1603,20 +1614,10 @@ class MainWidget(QWidget):
 		self.recalculate()
 		self.calendar.redraw()
 
-	def __findSnapshot(self, date):
-		# Find a snapshot relative to "date".
-		# Searches backwards in time
-		snapshot = None
-		for s in self.db.getAllSnapshots():
-			if s.date <= date:
-				if snapshot is None or s.date >= snapshot.date:
-					snapshot = s
-		return snapshot
-
 	def getShiftConfigIndexForDate(self, date):
 		# Find the shift config index that's valid for the date.
 		# May return -1 on error.
-		snapshot = self.__findSnapshot(date)
+		snapshot = self.db.findSnapshotForDate(date)
 		if not snapshot:
 			return -1
 		daysBetween = snapshot.date.daysTo(date)
@@ -1750,7 +1751,7 @@ class MainWidget(QWidget):
 			return
 
 		# First find the next snapshot.
-		snapshot = self.__findSnapshot(selDate)
+		snapshot = self.db.findSnapshotForDate(selDate)
 		if not snapshot:
 			dateString = selDate.toString("dd.MM.yyyy")
 			self.output.setText("Kein Schnappschuss vor dem %s gesetzt" %\
