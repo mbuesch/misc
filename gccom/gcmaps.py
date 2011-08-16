@@ -29,6 +29,7 @@ EVENT_TASKFINISHED	= QEvent.User + 0
 CACHECOUNT_LIMIT	= 200	# 200 is gc.com max
 BASEDIR			= os.getcwd()
 CACHEICON_URL		= "file://%s/icons/trad.png" % BASEDIR
+GPSICON_URL		= "file://%s/icons/gps.png" % BASEDIR
 
 
 def printDebug(message):
@@ -80,7 +81,21 @@ class GpsWrapper:
 	def __init__(self):
 		if gps is None:
 			return
-		pass#TODO
+		self.g = gps.gps()
+		self.g.poll()
+		self.g.stream()
+
+	def present(self):
+		return gps is not None
+
+	def getPos(self):
+		if gps is None:
+			return
+		self.g.poll()
+		fix = self.g.fix
+		if abs(fix.latitude) < 0.0001 and abs(fix.longitude) < 0.0001:
+			return None
+		return geo.Point(fix.latitude, fix.longitude)
 
 class TaskContext:
 	def __init__(self, name, parameters=(),
@@ -302,6 +317,39 @@ class GCMapWidget(MapWidget):
 		self.connect(self, SIGNAL("mapChanged"), self.__updateCachesList)
 
 		self.load()
+
+		self.gps = GpsWrapper()
+		self.myGpsPos = None
+		if self.gps.present():
+			self.gpstimer = QTimer(self)
+			self.connect(self.gpstimer, SIGNAL("timeout()"), self.__gpsTimer)
+			self.gpstimer.start(3000)
+
+	def __gpsTimer(self):
+		if not self.gps.present():
+			return
+		posMarkerID = "__MYPOS__"
+		pos = self.gps.getPos()
+		prevPos = self.myGpsPos
+		self.myGpsPos = pos
+		if pos is not None:
+			if prevPos is None:
+				self.statusBar.message("Acquired GPS fix", 3000)
+			else:
+				if pos == prevPos:
+					return
+		else:
+			if prevPos is not None:
+				self.statusBar.message("Lost GPS fix!", 10000)
+		self.removeMarker(posMarkerID)
+		if pos is not None:
+			self.addMarker(posMarkerID, "GPS position", GPSICON_URL, pos)
+
+	def gotoGpsFix(self):
+		if self.myGpsPos is None:
+			return False
+		self.setCenter(self.myGpsPos)
+		return True
 
 	def __basicInitFinished(self):
 		self.setCenter(geo.Point(50, 6.5))#FIXME
@@ -531,8 +579,11 @@ class ControlWidget(QWidget):
 		self.gotoButton = QPushButton("Go to...", self)
 		self.layout().addWidget(self.gotoButton, 0, 1)
 
+		self.gotoGpsButton = QPushButton("Go to GPS", self)
+		self.layout().addWidget(self.gotoGpsButton, 0, 2)
+
 		self.customLocButton = QPushButton("Custom locations...", self)
-		self.layout().addWidget(self.customLocButton, 0, 2)
+		self.layout().addWidget(self.customLocButton, 0, 3)
 
 		self.status = QLabel(self)
 		self.layout().addWidget(self.status, 1, 0, 1, 3)
@@ -541,6 +592,8 @@ class ControlWidget(QWidget):
 			     self.__showFoundChanged)
 		self.connect(self.gotoButton, SIGNAL("released()"),
 			     self.__gotoPressed)
+		self.connect(self.gotoGpsButton, SIGNAL("released()"),
+			     self.__gotoGpsPressed)
 		self.connect(self.customLocButton, SIGNAL("released()"),
 			     self.__customLocPressed)
 
@@ -573,6 +626,11 @@ class ControlWidget(QWidget):
 		if dlg.exec_() == QDialog.Accepted:
 			coord = dlg.getCoord()
 			self.mapWidget.setCenter(coord)
+
+	def __gotoGpsPressed(self):
+		if not self.mapWidget.gotoGpsFix():
+			QMessageBox.critical(self, "No GPS fix",
+				"Failed to go to GPS fix")
 
 	def __customLocPressed(self):
 		dlg = CoordListDialog(self.mapWidget.getCustomPoints(),
