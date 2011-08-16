@@ -11,6 +11,7 @@ import os
 import time
 import multiprocessing
 import re
+import getopt
 
 from mapwidget import *
 from geopy.distance import VincentyDistance as Distance
@@ -30,6 +31,8 @@ CACHECOUNT_LIMIT	= 200	# 200 is gc.com max
 BASEDIR			= os.getcwd()
 CACHEICON_URL		= "file://%s/icons/trad.png" % BASEDIR
 GPSICON_URL		= "file://%s/icons/gps.png" % BASEDIR
+
+useWebProxy		= True
 
 
 def printDebug(message):
@@ -337,7 +340,7 @@ class GCMapWidget(MapWidget):
 	TASKID_GETINFO		= 901
 
 	def __init__(self, gcsub, ctlWidget, statusBar, parent=None):
-		MapWidget.__init__(self, parent)
+		MapWidget.__init__(self, parent, useLocalSquid=useWebProxy)
 		self.gcsub = gcsub
 		self.ctlWidget = ctlWidget
 		self.statusBar = statusBar
@@ -824,7 +827,29 @@ def wmHintsWorkaround(wnd):
 
 	print XSetInputFocus(display, window, 2, 0)
 
+def usage():
+	print "%s [OPTIONS]" % sys.argv[0]
+	print ""
+	print " -h|--help           Print this help text"
+	print " -n|--noproxy        Do not use proxy server"
+
 def main():
+	global useWebProxy
+
+	try:
+		(opts, args) = getopt.getopt(sys.argv[1:],
+			"hn",
+			[ "help", "noproxy", ])
+	except getopt.GetoptError:
+		usage()
+		return 1
+	for (o, v) in opts:
+		if o in ("-h", "--help"):
+			usage()
+			return 0
+		if o in ("-n", "--noproxy"):
+			useWebProxy = False
+
 	app = QApplication(sys.argv)
 	mainwnd = MainWindow()
 	mainwnd.show()

@@ -9,6 +9,7 @@ import geopy as geo
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 from PyQt4.QtWebKit import *
+from PyQt4.QtNetwork import *
 
 
 googleMapsHtmlCode = """
@@ -137,8 +138,14 @@ class MapWidget(QWebView):
 		"mapChanged",
 	)
 
-	def __init__(self, parent=None):
+	def __init__(self, parent=None, useLocalSquid=False):
 		QWebView.__init__(self, parent)
+
+		if useLocalSquid:
+			port = 3128
+			print "MapWidget: Using localhost proxy server on port %d" % port
+			proxy = QNetworkProxy(QNetworkProxy.HttpProxy, "localhost", port)
+			self.page().networkAccessManager().setProxy(proxy)
 
 		self.callbackObj = MapWidgetCallback(self)
 		self.connect(self, SIGNAL("javaScriptWindowObjectCleared()"),
