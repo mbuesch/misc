@@ -352,7 +352,7 @@ class GCMapWidget(MapWidget):
 		return True
 
 	def __basicInitFinished(self):
-		self.setCenter(geo.Point(50, 6.5))#FIXME
+		self.setCenter(geo.Point(50, 6.5))
 		self.setZoom(13)
 
 	def __getDetails(self, guid):
