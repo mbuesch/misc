@@ -141,6 +141,9 @@ class GCSubprocessWorker:
 				self.gccom = gccom.GC(user=user, password=passwd,
 						      debug=DEBUG, storage=True)
 				retval = True
+			elif task == "logout":
+				self.gccom.logout()
+				self.gccom = None
 			else:
 				assert(0)
 		except (gccom.GCException), exception:
@@ -168,7 +171,43 @@ class GCSubprocess(QObject):
 							     childAsyncConn,
 							     childRevokeConn))
 		self.process.start()
+		self.isOnline = False
 		self.isRunning = True
+
+	def login(self, parentWidget):
+		if self.isOnline:
+			return
+		try:
+			acc = file("account", "rb").read().split()
+			user = acc[0]
+			passwd = acc[1]
+		except (IOError, IndexError), e:
+			(user, ok) = QInputDialog.getText(parentWidget, "Geocaching.com username",
+							  "Geocaching.com username",
+							  mode=QLineEdit.Normal)
+			if not user or not ok:
+				raise gccom.GCException("No login name given")
+			(passwd, ok) = QInputDialog.getText(parentWidget, "Geocaching.com password",
+							    "Geocaching.com password for account %s" % user,
+							    mode=QLineEdit.Password)
+			if not passwd or not ok:
+				raise gccom.GCException("No login password given")
+		taskContext = self.executeSync(
+				TaskContext("login(...)", (str(user), str(passwd))))
+		(retval, exception) = taskContext.retval
+		if exception:
+			QMessageBox.critical(parentWidget, "Geocaching.com login failed",
+					     "Geocaching.com login failed:\n" + str(exception))
+			raise exception
+		self.isOnline = True
+
+	def logout(self):
+		if self.isOnline:
+			self.executeSync(TaskContext("logout"))
+			self.isOnline = False
+
+	def online(self):
+		return self.isOnline
 
 	def nrTasksPending(self):
 		return len(self.queuedTasks)
@@ -305,13 +344,8 @@ class GCMapWidget(MapWidget):
 
 		self.details = {}
 		self.currentCenter = None
+		self.foundGuids = []
 		self.customPoints = []
-
-		print "Fetching found caches..."
-		taskContext = gcsub.executeSync(TaskContext("gccom.getMyFoundCaches()"))
-		(found, exception) = taskContext.retval
-		self.foundGuids = map(lambda (foundDate, foundGuid): foundGuid, found)
-		print "done."
 
 		self.connect(self, SIGNAL("initialized"), self.__basicInitFinished)
 		self.connect(self, SIGNAL("mapChanged"), self.__updateCachesList)
@@ -324,6 +358,15 @@ class GCMapWidget(MapWidget):
 			self.gpstimer = QTimer(self)
 			self.connect(self.gpstimer, SIGNAL("timeout()"), self.__gpsTimer)
 			self.gpstimer.start(3000)
+
+	def fetchFoundCachesSync(self):
+		self.statusBar.message("Fetching found caches...")
+		QApplication.processEvents()
+		taskContext = self.gcsub.executeSync(TaskContext("gccom.getMyFoundCaches()"))
+		QApplication.processEvents()
+		(found, exception) = taskContext.retval
+		self.foundGuids = map(lambda (foundDate, foundGuid): foundGuid, found)
+		self.statusBar.message("done.", 3000)
 
 	def __gpsTimer(self):
 		if not self.gps.present():
@@ -429,14 +472,17 @@ class GCMapWidget(MapWidget):
 		self.currentNorthEast = northEast
 		self.currentSouthWest = southWest
 
-		self.gcsub.cancelTasks( ("gccom.findCaches(...)",
-					 "gccom.getCacheDetails(...)") )
-		self.gcsub.execute(TaskContext("gccom.findCaches(...)",
-					       (northEast, southWest, CACHECOUNT_LIMIT),
-					       userid=self.TASKID_GETLIST))
+		if self.gcsub.online():
+			self.gcsub.cancelTasks( ("gccom.findCaches(...)",
+						 "gccom.getCacheDetails(...)") )
+			self.gcsub.execute(TaskContext("gccom.findCaches(...)",
+						       (northEast, southWest, CACHECOUNT_LIMIT),
+						       userid=self.TASKID_GETLIST))
 
-		self.ctlWidget.setNrTasksPending(self.gcsub.nrTasksPending())
-		self.ctlWidget.setCacheListFetching(True)
+			self.ctlWidget.setNrTasksPending(self.gcsub.nrTasksPending())
+			self.ctlWidget.setCacheListFetching(True)
+		else:
+			self.gotCachesList([])
 
 	def triggerMapUpdate(self):
 		if not self.currentCenter:
@@ -565,16 +611,20 @@ class CoordEntryDialog(QDialog):
 		return self.point
 
 class ControlWidget(QWidget):
-	def __init__(self, parent=None):
+	def __init__(self, parent, gcsub):
 		QWidget.__init__(self, parent)
 		self.setLayout(QGridLayout(self))
+		self.gcsub = gcsub
 		self.mapWidget = None
 
 		self.nrTasksPending = 0
 		self.fetchingList = False
 
+		self.enableGccom = QCheckBox("Enable geocaching.com", self)
+		self.layout().addWidget(self.enableGccom, 0, 0)
+
 		self.showFound = QCheckBox("Show found geocaches", self)
-		self.layout().addWidget(self.showFound, 0, 0)
+		self.layout().addWidget(self.showFound, 1, 0)
 
 		self.gotoButton = QPushButton("Go to...", self)
 		self.layout().addWidget(self.gotoButton, 0, 1)
@@ -586,8 +636,12 @@ class ControlWidget(QWidget):
 		self.layout().addWidget(self.customLocButton, 0, 3)
 
 		self.status = QLabel(self)
-		self.layout().addWidget(self.status, 1, 0, 1, 3)
+		self.layout().addWidget(self.status, 2, 0, 1, 3)
 
+		self.__enableGccomChanged()
+
+		self.connect(self.enableGccom, SIGNAL("stateChanged(int)"),
+			     self.__enableGccomChanged)
 		self.connect(self.showFound, SIGNAL("stateChanged(int)"),
 			     self.__showFoundChanged)
 		self.connect(self.gotoButton, SIGNAL("released()"),
@@ -617,6 +671,23 @@ class ControlWidget(QWidget):
 	def mustShowFound(self):
 		return self.showFound.checkState() == Qt.Checked
 
+	def __enableGccomChanged(self):
+		on = (self.enableGccom.checkState() == Qt.Checked)
+		self.showFound.setEnabled(on)
+		try:
+			if on:
+				self.gcsub.login(self)
+				if self.mapWidget:
+					self.mapWidget.fetchFoundCachesSync()
+			else:
+				self.gcsub.logout()
+			if self.mapWidget:
+				self.mapWidget.triggerMapUpdate()
+		except (gccom.GCException), e:
+			QMessageBox.critical(self, "GC.COM failed",
+				str(e))
+			self.enableGccom.setCheckState(Qt.Unchecked)
+
 	def __showFoundChanged(self):
 		self.mapWidget.triggerMapUpdate()
 
@@ -645,7 +716,7 @@ class MainWidget(QWidget):
 		self.gcsub = gcsub
 		self.statusBar = parent.statusBar()
 
-		self.ctlWidget = ControlWidget(self)
+		self.ctlWidget = ControlWidget(self, gcsub)
 		self.mapWidget = GCMapWidget(gcsub, self.ctlWidget,
 					     self.statusBar, self)
 		self.ctlWidget.mapWidget = self.mapWidget
@@ -654,6 +725,8 @@ class MainWidget(QWidget):
 		self.layout().addWidget(self.ctlWidget, 1, 0)
 
 	def gcsubEvent(self):
+		if not self.gcsub.online():
+			return
 		while True:
 			self.ctlWidget.setNrTasksPending(self.gcsub.nrTasksPending())
 
@@ -689,7 +762,6 @@ class MainWindow(QMainWindow):
 		QMainWindow.__init__(self, parent)
 		self.setWindowTitle("Geocaching mapper")
 		self.gcsub = GCSubprocess(self)
-		self.__login()
 
 		self.setStatusBar(StatusBar(self))
 		self.setCentralWidget(MainWidget(self.gcsub, self))
@@ -704,35 +776,8 @@ class MainWindow(QMainWindow):
 		return QMainWindow.event(self, e)
 
 	def closeEvent(self, e):
-		self.gcsub.executeSync(TaskContext("gccom.logout()"))
+		self.gcsub.logout()
 		self.gcsub.killThread()
-
-	def __login(self):
-		try:
-			acc = file("account", "rb").read().split()
-			user = acc[0]
-			passwd = acc[1]
-		except (IOError, IndexError), e:
-			(user, ok) = QInputDialog.getText(self, "Geocaching.com username",
-							  "Geocaching.com username",
-							  mode=QLineEdit.Normal)
-			if not user or not ok:
-				self.gcsub.killThread()
-				raise gccom.GCException("No login name given")
-			(passwd, ok) = QInputDialog.getText(self, "Geocaching.com password",
-							    "Geocaching.com password for account %s" % user,
-							    mode=QLineEdit.Password)
-			if not passwd or not ok:
-				self.gcsub.killThread()
-				raise gccom.GCException("No login password given")
-		taskContext = self.gcsub.executeSync(
-				TaskContext("login(...)", (str(user), str(passwd))))
-		(retval, exception) = taskContext.retval
-		if exception:
-			QMessageBox.critical(self, "Geocaching.com login failed",
-					     "Geocaching.com login failed:\n" + str(exception))
-			self.gcsub.killThread()
-			raise exception
 
 def wmHintsWorkaround(wnd):
 	from ctypes import cast, POINTER, cdll, c_void_p, c_int, c_uint, c_long, Structure
