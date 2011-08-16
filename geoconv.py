@@ -53,7 +53,7 @@ def main(argv):
 		# Print the result in various formats
 		minutes = (degree - int(degree)) * 60
 		seconds = (minutes - int(minutes)) * 60
-		print "%08.4f*    %03.0f* %06.3f\'    %03.0f* %02.0f\' %02.0f\"" %\
+		print "%08.4f*   |   %03.0f* %06.3f\'   |   %03.0f* %02.0f\' %02.0f\"" %\
 			(degree,
 			 float(int(degree)), minutes,
 			 float(int(degree)), float(int(minutes)), seconds)
