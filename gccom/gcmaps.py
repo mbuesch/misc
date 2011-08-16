@@ -389,7 +389,8 @@ class GCMapWidget(MapWidget):
 				self.statusBar.message("Lost GPS fix!", 10000)
 		self.removeMarker(posMarkerID)
 		if pos is not None:
-			self.addMarker(posMarkerID, "GPS position", GPSICON_URL, pos)
+			self.addMarker(posMarkerID, "GPS position -- %s" % str(pos),
+				       GPSICON_URL, pos)
 
 	def gotoGpsFix(self):
 		if self.myGpsPos is None:
