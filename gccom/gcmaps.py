@@ -33,6 +33,7 @@ CACHEICON_URL		= "file://%s/icons/trad.png" % BASEDIR
 GPSICON_URL		= "file://%s/icons/gps.png" % BASEDIR
 
 useWebProxy		= True
+useGPS			= True
 
 
 def printDebug(message):
@@ -82,18 +83,17 @@ def formatCoord(prefix, degree):
 
 class GpsWrapper:
 	def __init__(self):
-		if gps is None:
-			return
-		self.g = gps.gps()
-		self.g.poll()
-		self.g.stream()
+		if gps is None or not useGPS:
+			self.g = None
+		else:
+			self.g = gps.gps()
+			self.g.poll()
+			self.g.stream()
 
 	def present(self):
-		return gps is not None
+		return self.g is not None
 
 	def getPos(self):
-		if gps is None:
-			return
 		self.g.poll()
 		fix = self.g.fix
 		if abs(fix.latitude) < 0.0001 and abs(fix.longitude) < 0.0001:
@@ -833,14 +833,16 @@ def usage():
 	print ""
 	print " -h|--help           Print this help text"
 	print " -n|--noproxy        Do not use proxy server"
+	print " -g|--nogps          Do not use GPSd"
 
 def main():
 	global useWebProxy
+	global useGPS
 
 	try:
 		(opts, args) = getopt.getopt(sys.argv[1:],
-			"hn",
-			[ "help", "noproxy", ])
+			"hng",
+			[ "help", "noproxy", "nogps", ])
 	except getopt.GetoptError:
 		usage()
 		return 1
@@ -850,6 +852,8 @@ def main():
 			return 0
 		if o in ("-n", "--noproxy"):
 			useWebProxy = False
+		if o in ("-g", "--nogps"):
+			useGPS = False
 
 	app = QApplication(sys.argv)
 	mainwnd = MainWindow()
