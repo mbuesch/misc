@@ -1,0 +1,32 @@
+#!/bin/sh
+set -e
+
+dev=wlan0
+[ $# -ge 1 ] && dev="$1"
+
+msg()
+{
+	local text="$*"
+	echo "$text"
+	zenity --info --timeout=1 --title="WLAN power saving" \
+		--text="$text" || true
+}
+
+ps_is_on()
+{
+	[ "$(iw dev "$dev" get power_save | cut -d':' -f2 | tr -d ' ')" = on ]
+}
+
+ps_enable()
+{
+	iw dev "$dev" set power_save on
+	msg "Turned $dev power saving ON"
+}
+
+ps_disable()
+{
+	iw dev "$dev" set power_save off
+	msg "Turned $dev power saving OFF"
+}
+
+ps_is_on && ps_disable || ps_enable

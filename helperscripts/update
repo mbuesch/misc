@@ -1,0 +1,2 @@
+#!/bin/sh
+aptitude update && aptitude safe-upgrade && aptitude clean
