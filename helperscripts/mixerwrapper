@@ -1,0 +1,45 @@
+#!/bin/sh
+
+command="$1"
+
+
+main_ctl_name()
+{
+	echo -n PCM
+}
+
+do_mute_toggle()
+{
+	ctl="$(main_ctl_name)"
+	amixer set "$ctl" toggle
+}
+
+do_volume_step_down()
+{
+	ctl="$(main_ctl_name)"
+	amixer set "$ctl" 3dB-
+}
+
+do_volume_step_up()
+{
+	ctl="$(main_ctl_name)"
+	amixer set "$ctl" unmute
+	amixer set "$ctl" 3dB+
+}
+
+case "$command" in
+	mute-toggle)
+		do_mute_toggle
+		;;
+	volume-step-down)
+		do_volume_step_down
+		;;
+	volume-step-up)
+		do_volume_step_up
+		;;
+	*)
+		echo "Invalid command"
+		;;
+esac
+
+exit 0
