@@ -273,10 +273,10 @@ class GC:
 		self.__printDebug("Logging into geocaching.com...")
 		http = self.__httpConnect(inLogin=True)
 		body = self.__getHiddenFormsUrlencoded("/login/default.aspx", inLogin=True) + "&" +\
-			"ctl00%24SiteContent%24tbUsername=" + urllib.quote_plus(user) + "&" +\
-			"ctl00%24SiteContent%24tbPassword=" + urllib.quote_plus(password) + "&" +\
-			"ctl00%24SiteContent%24cbRememberMe=Checked&" +\
-			"ctl00%24SiteContent%24btnSignIn=Login"
+			"ctl00%24ContentBody%24tbUsername=" + urllib.quote_plus(user) + "&" +\
+			"ctl00%24ContentBody%24tbPassword=" + urllib.quote_plus(password) + "&" +\
+			"ctl00%24ContentBody%24cbRememberMe=Checked&" +\
+			"ctl00%24ContentBody%24btnSignIn=Login"
 		header = defaultHttpHeader.copy()
 		header["Host"] = hostname
 		header["Cookie"] = self.cookie
