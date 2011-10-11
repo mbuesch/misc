@@ -688,7 +688,7 @@ class FragGraph(object):
 				   label=self.game.getSaneName("  -  "),
 				   labelfontsize=22,
 				   labelloc="t",
-				   dpi=75)
+				   dpi=70)
 		# Calculate maximum per-target frag count
 		maxPerTargetFragCnt = 0
 		for player in self.game.getPlayers():
