@@ -1,0 +1,12 @@
+Index: sauerbraten/src/engine/console.cpp
+===================================================================
+--- sauerbraten.orig/src/engine/console.cpp	2010-06-29 00:07:18.000000000 +0200
++++ sauerbraten/src/engine/console.cpp	2011-10-09 19:23:48.281415882 +0200
+@@ -31,6 +31,7 @@ void conoutfv(int type, const char *fmt,
+     conline(type, buf);
+     filtertext(buf, buf);
+     puts(buf);
++    fflush(stdout);
+ }
+ 
+ void conoutf(const char *fmt, ...)

@@ -1,0 +1,23 @@
+Index: sauerbraten/src/engine/console.cpp
+===================================================================
+--- sauerbraten.orig/src/engine/console.cpp	2011-10-09 19:23:48.281415882 +0200
++++ sauerbraten/src/engine/console.cpp	2011-10-10 12:24:37.639390148 +0200
+@@ -1,6 +1,7 @@
+ // console.cpp: the console buffer, its display, and command line control
+ 
+ #include "engine.h"
++#include "../fpsgame/game.h"
+ 
+ struct cline { char *line; int type, outtime; };
+ vector<cline> conlines;
+@@ -30,6 +31,10 @@ void conoutfv(int type, const char *fmt,
+     vformatstring(buf, fmt, args, sizeof(buf));
+     conline(type, buf);
+     filtertext(buf, buf);
++    if (type & CON_TEAMCHAT)
++        fputs("teamchat-message: ", stdout);
++    else if (type & CON_CHAT)
++        fputs("chat-message: ", stdout);
+     puts(buf);
+     fflush(stdout);
+ }
