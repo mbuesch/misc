@@ -280,12 +280,12 @@ class Game(object):
 	def __saneName(self, name):
 		return re.sub(r'\s+', '-', name)
 
-	def getSaneMapName(self):
+	def getSaneName(self, sep="-"):
 		items = []
 		items.append(self.__saneName(self.started.strftime("%Y%m%d-%H%M%S")))
 		items.append(self.__saneName(self.mode))
 		items.append(self.__saneName(self.mapname))
-		return "-".join(items)
+		return sep.join(items)
 
 	def __mkPlayerKey(self, name):
 		return "player_" + name
@@ -650,49 +650,77 @@ class Parser(object):
 		if self.fragGraphDir:
 			fg = FragGraph(self.currentGame)
 			filename = "%s/frags-%s.svg" %\
-				(self.fragGraphDir, self.currentGame.getSaneMapName())
+				(self.fragGraphDir, self.currentGame.getSaneName())
 			fg.generateSVG(filename)
 
 class FragGraph(object):
 	# Graph tuning parameters
 	ALGORITHM	= "circo"
-	ARROW_SCALE	= 3.0
+	ARROW_SCALE	= 2.0
 	ARROW_BIAS	= 0.5
 	WEIGHT_SCALE	= 0.5
+	PEN_SCALE	= 8.0
 
 	def __init__(self, game):
 		self.game = game
 
-	def __genEdge(self, player, fraggedPlayer, maxPerTargetFragCnt):
-		nrFrags = player.getKills().countFor(fraggedPlayer)
+	def __genEdge(self, player, fraggedPlayer, nrFrags, maxPerTargetFragCnt,
+		      color="#000000"):
 		assert(nrFrags <= maxPerTargetFragCnt)
 		arrowSize = ((float(nrFrags) / maxPerTargetFragCnt) * self.ARROW_SCALE) +\
 			self.ARROW_BIAS
+		penWidth = max(1, ((float(nrFrags) / maxPerTargetFragCnt) * self.PEN_SCALE))
 		edgeWeight = float(nrFrags) * self.WEIGHT_SCALE
 		self.g.add_edge(player.realName,
 				fraggedPlayer.realName,
-				key=player.realName,
+				key="%s->%s" % (player.realName, fraggedPlayer.realName),
 				dir="forward",
 				arrowhead="normal",
 				weight=edgeWeight,
-				arrowsize=arrowSize)
+				arrowsize=arrowSize,
+				penwidth=penWidth,
+				color=color)
 
 	def __generate(self):
-		self.g = g = gv.AGraph(strict=False, directed=False,
-				       landscape=False)
+		self.g = gv.AGraph(strict=False, directed=False,
+				   landscape=False,
+				   name=self.game.getSaneName(),
+				   label=self.game.getSaneName("  -  "),
+				   labelfontsize=22,
+				   labelloc="t",
+				   dpi=75)
+		# Calculate maximum per-target frag count
 		maxPerTargetFragCnt = 0
 		for player in self.game.getPlayers():
-			for fraggedPlayer in player.getKills().getPlayers():
-				cnt = player.getKills().countFor(fraggedPlayer)
-				maxPerTargetFragCnt = max(maxPerTargetFragCnt, cnt)
+			for fraggedPlayer in player.getFrags().getPlayers():
+				maxPerTargetFragCnt = max(maxPerTargetFragCnt,
+					player.getFrags().countFor(fraggedPlayer))
+			for fraggedPlayer in player.getTeamkills().getPlayers():
+				maxPerTargetFragCnt = max(maxPerTargetFragCnt,
+					player.getTeamkills().countFor(fraggedPlayer))
+			maxPerTargetFragCnt = max(maxPerTargetFragCnt,
+				player.getNrSuicides())
+		# Create all nodes
 		for player in self.game.getPlayers():
-			for fraggedPlayer in player.getKills().getPlayers():
+			self.g.add_node(player.realName,
+					margin="0.2, 0.1",
+					fontsize=22)
+		# Create all edges
+		for player in self.game.getPlayers():
+			for fraggedPlayer in player.getFrags().getPlayers():
 				self.__genEdge(player, fraggedPlayer,
+					       player.getFrags().countFor(fraggedPlayer),
 					       maxPerTargetFragCnt)
-				if player in fraggedPlayer.getKills().getPlayers():
-					self.__genEdge(fraggedPlayer, player,
-						       maxPerTargetFragCnt)
-		g.layout(prog=self.ALGORITHM)
+			for fraggedPlayer in player.getTeamkills().getPlayers():
+				self.__genEdge(player, fraggedPlayer,
+					       player.getTeamkills().countFor(fraggedPlayer),
+					       maxPerTargetFragCnt,
+					       color="#FF0000")
+			if player.getNrSuicides():
+				self.__genEdge(player, player, player.getNrSuicides(),
+					       maxPerTargetFragCnt,
+					       color="#0000FF")
+		self.g.layout(prog=self.ALGORITHM)
 
 	def generateSVG(self, filename):
 		self.__generate()
