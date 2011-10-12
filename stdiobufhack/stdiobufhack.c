@@ -11,9 +11,14 @@
 
 
 static int (*libc_setvbuf)(FILE *stream, char *buf, int mode, size_t size);
+static int in_stdiobufhack;
 
 int setvbuf(FILE *stream, char *buf, int mode, size_t size)
 {
+	if (in_stdiobufhack)
+		return 0;
+	in_stdiobufhack = 1;
+
 	if (!libc_setvbuf)
 		libc_setvbuf = dlsym(RTLD_NEXT, "setvbuf");
 	if (!libc_setvbuf) {
@@ -23,6 +28,8 @@ int setvbuf(FILE *stream, char *buf, int mode, size_t size)
 
 	if (stream == stdout || stream == stderr)
 		mode = TARGET_MODE;
+
+	in_stdiobufhack = 0;
 
 	return libc_setvbuf(stream, buf, mode, size);
 }
