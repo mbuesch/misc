@@ -665,14 +665,14 @@ class Parser(object):
 			return
 		if self.options.fragGraphDir:
 			fg = FragGraph(self.currentGame)
-			filename = "%s/frags-%s.svg" %\
-				(self.options.fragGraphDir, self.currentGame.getSaneName())
-			fg.generateSVG(filename)
+			for algo in ("dot", "circo"):
+				filename = "%s/frags-%s-%s.svg" %\
+					(self.options.fragGraphDir, algo,
+					 self.currentGame.getSaneName())
+				fg.generateSVG(filename, algo)
 
 class FragGraph(object):
 	# Graph tuning parameters
-	ALGORITHM	= "circo"
-#	ALGORITHM	= "dot"
 	ARROW_SCALE	= 2.0
 	ARROW_BASE	= 0.5
 	WEIGHT_SCALE	= 0.5
@@ -703,7 +703,7 @@ class FragGraph(object):
 				penwidth=penWidth,
 				color=color)
 
-	def __generate(self):
+	def __generate(self, layoutAlgorithm):
 		self.g = gv.AGraph(strict=False, directed=False,
 				   landscape=False,
 				   name=self.game.getSaneName(),
@@ -747,10 +747,10 @@ class FragGraph(object):
 				self.__genEdge(player, player, player.getNrSuicides(),
 					       maxPerTargetKillCnt,
 					       color="#0000FF")
-		self.g.layout(prog=self.ALGORITHM)
+		self.g.layout(prog=layoutAlgorithm)
 
-	def generateSVG(self, filename):
-		self.__generate()
+	def generateSVG(self, filename, layoutAlgorithm):
+		self.__generate(layoutAlgorithm)
 		self.g.draw(filename, format="svg")
 
 rawlogfile = None
