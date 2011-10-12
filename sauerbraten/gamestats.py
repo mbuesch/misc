@@ -283,12 +283,12 @@ class Game(object):
 
 	def generateStats(self):
 		ret = []
-		prefix = ""
-		if self.options.liveUpdate:
-			if self.ended:
-				prefix = "<GAME ENDED %s> " % self.ended.ctime()
+		if self.ended:
+			prefix = "<GAME ENDED %s> " % self.ended.ctime()
 		else:
-			if not self.ended:
+			if self.options.liveUpdate:
+				prefix = "<game running> "
+			else:
 				prefix = "<GAME INTERRUPTED> "
 		ret.append("%s'%s' on map '%s' started %s:" %\
 			   (prefix, self.mode, self.mapname, self.started.ctime()))
@@ -300,8 +300,6 @@ class Game(object):
 		players.sort(key=key, reverse=True)
 		for player in players:
 			ret.append(player.generateStats())
-		if not self.options.liveUpdate:
-			ret.append("")
 		return "\n".join(ret)
 
 class Parser(object):
@@ -333,10 +331,14 @@ class Parser(object):
 					break
 				self.parseLine(line)
 				if self.options.liveUpdate:
-					self.generateStats()
+					sys.stdout.write(self.generateStats())
+					sys.stdout.flush()
 			except (Warn), e:
 				print("Warning: " + str(e))
-		self.generateStats()
+		stats = self.generateStats()
+		if stats:
+			sys.stdout.write(stats + "\n\n\n")
+			sys.stdout.flush()
 
 	def assertCurrentGame(self, msg):
 		if not self.currentGame:
@@ -346,13 +348,15 @@ class Parser(object):
 
 	def generateStats(self):
 		if not self.games:
-			return
+			return ""
 		if self.options.liveUpdate:
 			clearscreen()
-			print(self.games[-1].generateStats())
+			return self.games[-1].generateStats()
 		else:
+			ret = []
 			for game in self.games:
-				print(game.generateStats())
+				ret.append(game.generateStats())
+			return "\n\n\n".join(ret)
 
 	def gameEnded(self):
 		if not self.currentGame or\
