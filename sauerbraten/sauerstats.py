@@ -17,8 +17,13 @@ debug = False
 liveUpdate = False
 myname = "self"
 alwaysSortByFrags = False
+filterLeft = False
+filterJoinIG = False
+splitLogs = False
 
 
+re_iso_timestamp = re.compile(r'(\d\d\d\d)-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)\.(\d\d\d\d\d\d)')
+ISO_TIMESTAMP_LEN = 26
 _re_name = r'(.*)'
 
 re_init = re.compile(r'^init: .*$')
@@ -384,14 +389,15 @@ class Parser(object):
 			stamp = line[0:idx]
 			line = line[idx+1:]
 
-			stamp = stamp.split("T")
-			date, time = stamp[0], stamp[1]
-			date = date.split("-")
-			time = time.replace(".", ":").split(":")
+			if len(stamp) != ISO_TIMESTAMP_LEN:
+				raise ValueError
+			m = re_iso_timestamp.match(stamp)
+			if not m:
+				raise ValueError
 			stamp = datetime.datetime(
-				year=int(date[0]), month=int(date[1]), day=int(date[2]),
-				hour=int(time[0]), minute=int(time[1]), second=int(date[2]),
-				microsecond=int(time[3]))
+				year=int(m.group(1)), month=int(m.group(2)), day=int(m.group(3)),
+				hour=int(m.group(4)), minute=int(m.group(5)), second=int(m.group(6)),
+				microsecond=int(m.group(7)))
 		except (IndexError, ValueError), e:
 			print("Parser: Invalid timestamp")
 			sys.exit(1)
@@ -424,7 +430,6 @@ class Parser(object):
 			return
 		m = re_game_mode.match(line)
 		if m:
-			closeRawLog()
 			self.currentGame = None
 			debugMsg("Game mode (%s)" % line)
 			newGame = Game(timestamp=stamp, mode=m.group(1),
@@ -611,6 +616,8 @@ class Parser(object):
 			return
 		m = re_read_map.match(line)
 		if m:
+			if splitLogs:
+				closeRawLog()
 			debugMsg("Map (%s)" % line)
 			mapname = m.group(1)
 			mapname = mapname.split('/')[-1]
@@ -761,13 +768,22 @@ def closeRawLog():
 		rawlogfile.close()
 		rawlogfile = None
 
-def readInput(fd, rawlogdir, fragGraphDir, addStamp):
+def lineHasTimestamp(line):
+	try:
+		m = re_iso_timestamp.match(line[0:ISO_TIMESTAMP_LEN])
+		if m:
+			return True
+	except (IndexError), e:
+		pass
+	return False
+
+def readInput(fd, rawlogdir, fragGraphDir):
 	p = Parser(fragGraphDir)
 	while True:
 		line = fd.readline()
 		if not line:
 			break
-		if addStamp:
+		if not lineHasTimestamp(line):
 			now = datetime.datetime.now().isoformat()
 			line = "%s/%s" % (now, line)
 		line = line.strip()
@@ -792,6 +808,7 @@ def usage():
 	print("")
 	print(" -n|--myname NAME       my nickname ('self', if not given)")
 	print(" -l|--logdir DIR        Write the raw logs to DIRectory")
+	print(" -s|--splitlogs         Split logs by map")
 	print(" -F|--fraggraphdir DIR  Write frag-graph SVGs to DIRectory")
 	print(" -L|--filterleft        Filter all players who left the game early")
 	print(" -J|--filterjoinig      Filter all players who joined the game late")
@@ -805,16 +822,16 @@ def main():
 	global alwaysSortByFrags
 	global filterLeft
 	global filterJoinIG
+	global splitLogs
 
-	filterLeft = False
-	filterJoinIG = False
 	rawlogdir = None
 	fragGraphDir = None
 	try:
 		(opts, args) = getopt.getopt(sys.argv[1:],
-			"hdn:l:fF:LJ",
+			"hdn:l:fF:LJs",
 			[ "help", "debug", "myname=", "logdir=", "sortbyfrags",
-			  "fraggraphdir=", "filterleft", "filterjoinig", ])
+			  "fraggraphdir=", "filterleft", "filterjoinig",
+			  "splitlogs", ])
 		for (o, v) in opts:
 			if o in ("-h", "--help"):
 				usage()
@@ -833,16 +850,18 @@ def main():
 				filterLeft = True
 			if o in ("-J", "--filterjoinig"):
 				filterJoinIG = True
+			if o in ("-s", "--splitlogs"):
+				splitLogs = True
 	except (getopt.GetoptError):
 		usage()
 		return 1
 	if args:
 		for arg in args:
 			fd = open(arg, "r")
-			readInput(fd, rawlogdir, fragGraphDir, False)
+			readInput(fd, rawlogdir, fragGraphDir)
 	else:
 		liveUpdate = True
-		readInput(sys.stdin, rawlogdir, fragGraphDir, True)
+		readInput(sys.stdin, rawlogdir, fragGraphDir)
 	return 0
 
 if __name__ == "__main__":
