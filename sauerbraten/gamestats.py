@@ -8,6 +8,7 @@ import sys
 import re
 import datetime
 import errno
+import getopt
 import pygraphviz as gv
 
 
@@ -510,3 +511,67 @@ def closeRawLog():
 		rawlogfile.flush()
 		rawlogfile.close()
 		rawlogfile = None
+
+def genericUsage(scriptname, additionalInfo):
+	print("Usage: %s [OPTIONS] [LOGFILES]" % scriptname)
+	print("")
+	print("The optional LOGFILES are files logged with the -l|--logdir option")
+	print("If no logfiles are given, %s will listen to raw logdata" % scriptname)
+	print("input on stdin.")
+	if additionalInfo:
+		print("\n" + additionalInfo)
+	print("")
+	print(" -n|--myname NAME       my nickname ('self', if not given)")
+	print(" -l|--logdir DIR        Write the raw logs to DIRectory")
+	print(" -s|--splitlogs         Split logs by map")
+	print(" -F|--fraggraphdir DIR  Write frag-graph SVGs to DIRectory")
+	print(" -L|--filterleft        Filter all players who left the game early")
+	print(" -J|--filterjoinig      Filter all players who joined the game late")
+	print(" -f|--sortbyfrags       Always sort by # of frags")
+	print(" -d|--debug             Enable debugging")
+
+def genericMain(scriptname, usageinfo, parserClass):
+	global debug
+
+	options = Options()
+	try:
+		(opts, args) = getopt.getopt(sys.argv[1:],
+			"hdn:l:fF:LJs",
+			[ "help", "debug", "myname=", "logdir=", "sortbyfrags",
+			  "fraggraphdir=", "filterleft", "filterjoinig",
+			  "splitlogs", ])
+		for (o, v) in opts:
+			if o in ("-h", "--help"):
+				genericUsage(scriptname, usageinfo)
+				return 0
+			if o in ("-d", "--debug"):
+				debug = True
+			if o in ("-n", "--myname"):
+				options.myname = v
+			if o in ("-l", "--logdir"):
+				options.rawlogdir = v
+			if o in ("-f", "--sortbyfrags"):
+				options.alwaysSortByFrags = True
+			if o in ("-F", "--fraggraphdir"):
+				options.fragGraphDir = v
+			if o in ("-L", "--filterleft"):
+				options.filterLeft = True
+			if o in ("-J", "--filterjoinig"):
+				options.filterJoinIG = True
+			if o in ("-s", "--splitlogs"):
+				options.splitLogs = True
+	except (getopt.GetoptError):
+		genericUsage(scriptname, usageinfo)
+		return 1
+	try:
+		if args:
+			for arg in args:
+				fd = open(arg, "r")
+				parserClass(options).parseFile(fd)
+		else:
+			options.liveUpdate = True
+			parserClass(options).parseFile(sys.stdin)
+	except (Warn, Error), e:
+		print("Exception: " + str(e))
+		return 1
+	return 0

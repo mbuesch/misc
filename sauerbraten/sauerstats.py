@@ -6,7 +6,6 @@
 """
 
 import sys
-import getopt
 from gamestats import *
 
 
@@ -334,73 +333,14 @@ class SauerbratenParser(Parser):
 			return
 		debugMsg("UNKNOWN console message: '%s'" % line)
 
-def usage():
-	print("Usage: sauerstats.py [OPTIONS] [LOGFILES]")
-	print("")
-	print("The optional LOGFILES are files logged with the -l|--logdir option")
-	print("If no logfiles are given, sauerstats will listen to raw sauerbraten")
-	print("input on stdin.")
-	print("")
-	print(" Example: Convert and log stats into directory:")
-	print("  sauerbraten_unix | sauerstats.py -n mynick -l ./logs")
-	print("")
-	print(" Example: Create stats from logfile:")
-	print("  sauerstats.py -n mynick ./logs/2011....log")
-	print("")
-	print(" -n|--myname NAME       my nickname ('self', if not given)")
-	print(" -l|--logdir DIR        Write the raw logs to DIRectory")
-	print(" -s|--splitlogs         Split logs by map")
-	print(" -F|--fraggraphdir DIR  Write frag-graph SVGs to DIRectory")
-	print(" -L|--filterleft        Filter all players who left the game early")
-	print(" -J|--filterjoinig      Filter all players who joined the game late")
-	print(" -f|--sortbyfrags       Always sort by # of frags")
-	print(" -d|--debug             Enable debugging")
-
 def main():
-	global debug
-
-	options = Options()
-	try:
-		(opts, args) = getopt.getopt(sys.argv[1:],
-			"hdn:l:fF:LJs",
-			[ "help", "debug", "myname=", "logdir=", "sortbyfrags",
-			  "fraggraphdir=", "filterleft", "filterjoinig",
-			  "splitlogs", ])
-		for (o, v) in opts:
-			if o in ("-h", "--help"):
-				usage()
-				return 0
-			if o in ("-d", "--debug"):
-				debug = True
-			if o in ("-n", "--myname"):
-				options.myname = v
-			if o in ("-l", "--logdir"):
-				options.rawlogdir = v
-			if o in ("-f", "--sortbyfrags"):
-				options.alwaysSortByFrags = True
-			if o in ("-F", "--fraggraphdir"):
-				options.fragGraphDir = v
-			if o in ("-L", "--filterleft"):
-				options.filterLeft = True
-			if o in ("-J", "--filterjoinig"):
-				options.filterJoinIG = True
-			if o in ("-s", "--splitlogs"):
-				options.splitLogs = True
-	except (getopt.GetoptError):
-		usage()
-		return 1
-	try:
-		if args:
-			for arg in args:
-				fd = open(arg, "r")
-				SauerbratenParser(options).parseFile(fd)
-		else:
-			options.liveUpdate = True
-			SauerbratenParser(options).parseFile(sys.stdin)
-	except (Warn, Error), e:
-		print("Exception: " + str(e))
-		return 1
-	return 0
+	return genericMain(scriptname="sauerstats.py",
+			   usageinfo=" Example: Convert and log stats into directory:\n"
+				     "  sauerbraten_unix | sauerstats.py -n mynick -l ./logs\n"
+				     "\n"
+				     " Example: Create stats from logfile:\n"
+				     "  sauerstats.py -n mynick ./logs/2011....log",
+			   parserClass=SauerbratenParser)
 
 if __name__ == "__main__":
 	sys.exit(main())
