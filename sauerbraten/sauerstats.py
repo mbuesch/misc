@@ -19,6 +19,9 @@ re_iso_timestamp = re.compile(r'(\d\d\d\d)-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)\.(
 ISO_TIMESTAMP_LEN = 26
 
 
+class Warn(Exception): pass
+class Error(Exception): pass
+
 def debugMsg(msg):
 	if debug:
 		print(msg)
@@ -338,8 +341,7 @@ class Parser(object):
 		# Returns a tuple (rest-of-line, datetime-instance)
 		idx = line.find("/")
 		if idx < 0:
-			print("Parser: Did not find timestamp on line: " + line)
-			sys.exit(1)
+			raise Error("Parser: Did not find timestamp on line: " + line)
 		try:
 			stamp = line[0:idx]
 			line = line[idx+1:]
@@ -354,8 +356,7 @@ class Parser(object):
 				hour=int(m.group(4)), minute=int(m.group(5)), second=int(m.group(6)),
 				microsecond=int(m.group(7)))
 		except (IndexError, ValueError), e:
-			print("Parser: Invalid timestamp")
-			sys.exit(1)
+			raise Error("Parser: Invalid timestamp")
 		return line, stamp
 
 class SauerbratenParser(Parser):
@@ -781,15 +782,13 @@ def writeRawLog(directory, line):
 					if e.errno == errno.ENOENT:
 						break
 				if count >= 999:
-					print("Could not find possible filename")
-					sys.exit(1)
+					raise Warn("Could not find possible filename")
 				count += 1
 			rawlogfile = open(name, "w")
 		rawlogfile.write(line)
 		rawlogfile.flush()
 	except IOError, e:
-		print("Failed to write logfile: %s" % str(e))
-		sys.exit(1)
+		raise Warn("Failed to write logfile: %s" % str(e))
 
 def closeRawLog():
 	global rawlogfile
@@ -810,17 +809,20 @@ def lineHasTimestamp(line):
 def readInput(fd, options):
 	p = SauerbratenParser(options)
 	while True:
-		line = fd.readline()
-		if not line:
-			break
-		if not lineHasTimestamp(line):
-			now = datetime.datetime.now().isoformat()
-			line = "%s/%s" % (now, line)
-		line = line.strip()
-		p.parseLine(line)
-		writeRawLog(options.rawlogdir, line + "\n")
-		if options.liveUpdate:
-			p.generateStats()
+		try:
+			line = fd.readline()
+			if not line:
+				break
+			if not lineHasTimestamp(line):
+				now = datetime.datetime.now().isoformat()
+				line = "%s/%s" % (now, line)
+			line = line.strip()
+			p.parseLine(line)
+			writeRawLog(options.rawlogdir, line + "\n")
+			if options.liveUpdate:
+				p.generateStats()
+		except (Warn), e:
+			print("Warning: " + str(e))
 	p.generateStats()
 
 def usage():
@@ -878,13 +880,17 @@ def main():
 	except (getopt.GetoptError):
 		usage()
 		return 1
-	if args:
-		for arg in args:
-			fd = open(arg, "r")
-			readInput(fd, options)
-	else:
-		options.liveUpdate = True
-		readInput(sys.stdin, options)
+	try:
+		if args:
+			for arg in args:
+				fd = open(arg, "r")
+				readInput(fd, options)
+		else:
+			options.liveUpdate = True
+			readInput(sys.stdin, options)
+	except (Warn, Error), e:
+		print("Exception: " + str(e))
+		return 1
 	return 0
 
 if __name__ == "__main__":
