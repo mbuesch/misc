@@ -14,12 +14,6 @@ import pygraphviz as gv
 
 
 debug = False
-liveUpdate = False
-myname = "self"
-alwaysSortByFrags = False
-filterLeft = False
-filterJoinIG = False
-splitLogs = False
 
 
 re_iso_timestamp = re.compile(r'(\d\d\d\d)-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)\.(\d\d\d\d\d\d)')
@@ -85,19 +79,31 @@ def clearscreen():
 	sys.stdout.write("\33[2J\33[0;0H")
 	sys.stdout.flush()
 
-def filterPlayers(players):
-	if filterLeft:
+def filterPlayers(options, players):
+	if options.filterLeft:
 		players = filter(lambda p: not p.disconnectedInGame, players)
-	if filterJoinIG:
+	if options.filterJoinIG:
 		players = filter(lambda p: not p.connectedInGame, players)
 	return players
+
+class Options(object):
+	def __init__(self):
+		self.myname = "self"
+		self.liveUpdate = False
+		self.alwaysSortByFrags = False
+		self.filterLeft = False
+		self.filterJoinIG = False
+		self.splitLogs = False
+		self.rawlogdir = None
+		self.fragGraphDir = None
 
 class Event(object):
 	def __init__(self, timestamp):
 		self.timestamp = timestamp
 
 class Events(object):
-	def __init__(self):
+	def __init__(self, options):
+		self.options = options
 		self.events = []
 
 	def addEvent(self, event):
@@ -107,11 +113,12 @@ class Events(object):
 		return len(self.events)
 
 class PlayerEvents(object):
-	def __init__(self, players={}):
+	def __init__(self, options, players={}):
+		self.options = options
 		self.players = players.copy()
 
 	def copy(self):
-		return PlayerEvents(self.players.copy())
+		return PlayerEvents(self.options, self.players)
 
 	def extend(self, other):
 		self.players.update(other.players)
@@ -129,22 +136,22 @@ class PlayerEvents(object):
 		return self.players.keys()
 
 	def getPlayers(self):
-		return filterPlayers(self.getPlayersUnfiltered())
+		return filterPlayers(self.options, self.getPlayersUnfiltered())
 
 class Player(object):
 	def __init__(self, name, realName, game):
 		self.name = name
 		self.realName = realName
 		self.game = game
-		self.frags = PlayerEvents()
-		self.teamkills = PlayerEvents()
-		self.deaths = PlayerEvents()
-		self.ctfScores = Events()
-		self.ctfDrops = Events()
-		self.ctfPicks = Events()
-		self.ctfStolen = Events()
-		self.ctfReturns = Events()
-		self.suicides = Events()
+		self.frags = PlayerEvents(game.options)
+		self.teamkills = PlayerEvents(game.options)
+		self.deaths = PlayerEvents(game.options)
+		self.ctfScores = Events(game.options)
+		self.ctfDrops = Events(game.options)
+		self.ctfPicks = Events(game.options)
+		self.ctfStolen = Events(game.options)
+		self.ctfReturns = Events(game.options)
+		self.suicides = Events(game.options)
 		self.connectedInGame = False
 		self.disconnectedInGame = False
 		#FIXME Is there a way to detect connectedInGame for self?
@@ -271,14 +278,15 @@ class Player(object):
 			(name, frags, tks, deaths, suicides, ctf, extra)
 
 class Game(object):
-	def __init__(self, timestamp, mode, mapname):
+	def __init__(self, options, timestamp, mode, mapname):
+		self.options = options
 		self.mode = mode.lower()
 		self.mapname = mapname
 		self.hadFirstBlood = False
 		self.started = timestamp
 		self.ended = False
 		self.players = {
-			"self"	: Player("self", myname, self)
+			"self"	: Player("self", self.options.myname, self)
 		}
 		debugMsg("New game: mode=%s" % mode)
 
@@ -311,7 +319,7 @@ class Game(object):
 		return self.players.values()
 
 	def getPlayers(self):
-		return filterPlayers(self.getPlayersUnfiltered())
+		return filterPlayers(self.options, self.getPlayersUnfiltered())
 
 	def renamePlayer(self, oldName, newName):
 		player = self.players.pop(self.__mkPlayerKey(oldName))
@@ -325,7 +333,7 @@ class Game(object):
 	def generateStats(self):
 		ret = []
 		prefix = ""
-		if liveUpdate:
+		if self.options.liveUpdate:
 			if self.ended:
 				prefix = "<GAME ENDED %s> " % self.ended.ctime()
 		else:
@@ -334,20 +342,20 @@ class Game(object):
 		ret.append("%s'%s' on map '%s' started %s:" %\
 			   (prefix, self.mode, self.mapname, self.started.ctime()))
 		players = list(self.getPlayers())[:]
-		if self.isCtf() and not alwaysSortByFrags:
+		if self.isCtf() and not self.options.alwaysSortByFrags:
 			key = lambda p: p.getNrCtfScores()
 		else:
 			key = lambda p: p.getNrFrags()
 		players.sort(key=key, reverse=True)
 		for player in players:
 			ret.append(player.generateStats())
-		if not liveUpdate:
+		if not self.options.liveUpdate:
 			ret.append("")
 		return "\n".join(ret)
 
 class Parser(object):
-	def __init__(self, fragGraphDir=None):
-		self.fragGraphDir = fragGraphDir
+	def __init__(self, options):
+		self.options = options
 		self.currentGame = None
 		self.games = []
 		self.lastReadMap = "unknown"
@@ -361,7 +369,7 @@ class Parser(object):
 	def generateStats(self):
 		if not self.games:
 			return
-		if liveUpdate:
+		if self.options.liveUpdate:
 			clearscreen()
 			print(self.games[-1].generateStats())
 		else:
@@ -432,7 +440,8 @@ class Parser(object):
 		if m:
 			self.currentGame = None
 			debugMsg("Game mode (%s)" % line)
-			newGame = Game(timestamp=stamp, mode=m.group(1),
+			newGame = Game(options=self.options,
+				       timestamp=stamp, mode=m.group(1),
 				       mapname=self.lastReadMap)
 			self.currentGame = newGame
 			self.games.append(newGame)
@@ -616,7 +625,7 @@ class Parser(object):
 			return
 		m = re_read_map.match(line)
 		if m:
-			if splitLogs:
+			if self.options.splitLogs:
 				closeRawLog()
 			debugMsg("Map (%s)" % line)
 			mapname = m.group(1)
@@ -654,10 +663,10 @@ class Parser(object):
 	def __gameEnded(self):
 		if not self.currentGame:
 			return
-		if self.fragGraphDir:
+		if self.options.fragGraphDir:
 			fg = FragGraph(self.currentGame)
 			filename = "%s/frags-%s.svg" %\
-				(self.fragGraphDir, self.currentGame.getSaneName())
+				(self.options.fragGraphDir, self.currentGame.getSaneName())
 			fg.generateSVG(filename)
 
 class FragGraph(object):
@@ -777,8 +786,8 @@ def lineHasTimestamp(line):
 		pass
 	return False
 
-def readInput(fd, rawlogdir, fragGraphDir):
-	p = Parser(fragGraphDir)
+def readInput(fd, options):
+	p = Parser(options)
 	while True:
 		line = fd.readline()
 		if not line:
@@ -788,8 +797,8 @@ def readInput(fd, rawlogdir, fragGraphDir):
 			line = "%s/%s" % (now, line)
 		line = line.strip()
 		p.parseLine(line)
-		writeRawLog(rawlogdir, line + "\n")
-		if liveUpdate:
+		writeRawLog(options.rawlogdir, line + "\n")
+		if options.liveUpdate:
 			p.generateStats()
 	p.generateStats()
 
@@ -816,16 +825,9 @@ def usage():
 	print(" -d|--debug             Enable debugging")
 
 def main():
-	global myname
 	global debug
-	global liveUpdate
-	global alwaysSortByFrags
-	global filterLeft
-	global filterJoinIG
-	global splitLogs
 
-	rawlogdir = None
-	fragGraphDir = None
+	options = Options()
 	try:
 		(opts, args) = getopt.getopt(sys.argv[1:],
 			"hdn:l:fF:LJs",
@@ -839,29 +841,29 @@ def main():
 			if o in ("-d", "--debug"):
 				debug = True
 			if o in ("-n", "--myname"):
-				myname = v
+				options.myname = v
 			if o in ("-l", "--logdir"):
-				rawlogdir = v
+				options.rawlogdir = v
 			if o in ("-f", "--sortbyfrags"):
-				alwaysSortByFrags = True
+				options.alwaysSortByFrags = True
 			if o in ("-F", "--fraggraphdir"):
-				fragGraphDir = v
+				options.fragGraphDir = v
 			if o in ("-L", "--filterleft"):
-				filterLeft = True
+				options.filterLeft = True
 			if o in ("-J", "--filterjoinig"):
-				filterJoinIG = True
+				options.filterJoinIG = True
 			if o in ("-s", "--splitlogs"):
-				splitLogs = True
+				options.splitLogs = True
 	except (getopt.GetoptError):
 		usage()
 		return 1
 	if args:
 		for arg in args:
 			fd = open(arg, "r")
-			readInput(fd, rawlogdir, fragGraphDir)
+			readInput(fd, options)
 	else:
-		liveUpdate = True
-		readInput(sys.stdin, rawlogdir, fragGraphDir)
+		options.liveUpdate = True
+		readInput(sys.stdin, options)
 	return 0
 
 if __name__ == "__main__":
