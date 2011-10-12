@@ -672,23 +672,29 @@ class Parser(object):
 class FragGraph(object):
 	# Graph tuning parameters
 	ALGORITHM	= "circo"
+#	ALGORITHM	= "dot"
 	ARROW_SCALE	= 2.0
-	ARROW_BIAS	= 0.5
+	ARROW_BASE	= 0.5
 	WEIGHT_SCALE	= 0.5
 	PEN_SCALE	= 8.0
+	NAME_BASE	= 12
+	NAME_SCALE	= 14.0
 
 	def __init__(self, game):
 		self.game = game
 
-	def __genEdge(self, player, fraggedPlayer, nrFrags, maxPerTargetFragCnt,
+	def __p2n(self, player):
+		return "%s (%d)" % (player.realName, player.getNrFrags())
+
+	def __genEdge(self, player, fraggedPlayer, nrFrags, maxPerTargetKillCnt,
 		      color="#000000"):
-		assert(nrFrags <= maxPerTargetFragCnt)
-		arrowSize = ((float(nrFrags) / maxPerTargetFragCnt) * self.ARROW_SCALE) +\
-			self.ARROW_BIAS
-		penWidth = max(1, ((float(nrFrags) / maxPerTargetFragCnt) * self.PEN_SCALE))
+		assert(nrFrags <= maxPerTargetKillCnt)
+		arrowSize = ((float(nrFrags) / maxPerTargetKillCnt) * self.ARROW_SCALE) +\
+			self.ARROW_BASE
+		penWidth = max(1, ((float(nrFrags) / maxPerTargetKillCnt) * self.PEN_SCALE))
 		edgeWeight = float(nrFrags) * self.WEIGHT_SCALE
-		self.g.add_edge(player.realName,
-				fraggedPlayer.realName,
+		self.g.add_edge(self.__p2n(player),
+				self.__p2n(fraggedPlayer),
 				key="%s->%s" % (player.realName, fraggedPlayer.realName),
 				dir="forward",
 				arrowhead="normal",
@@ -705,36 +711,41 @@ class FragGraph(object):
 				   labelfontsize=22,
 				   labelloc="t",
 				   dpi=70)
-		# Calculate maximum per-target frag count
-		maxPerTargetFragCnt = 0
+		# Find extrema
+		maxPerTargetKillCnt = 0 # Max per-target kill count
+		maxNrFrags = 0 # Max frags (no SKs, no TKs, any target)
 		for player in self.game.getPlayers():
 			for fraggedPlayer in player.getFrags().getPlayers():
-				maxPerTargetFragCnt = max(maxPerTargetFragCnt,
+				maxPerTargetKillCnt = max(maxPerTargetKillCnt,
 					player.getFrags().countFor(fraggedPlayer))
 			for fraggedPlayer in player.getTeamkills().getPlayers():
-				maxPerTargetFragCnt = max(maxPerTargetFragCnt,
+				maxPerTargetKillCnt = max(maxPerTargetKillCnt,
 					player.getTeamkills().countFor(fraggedPlayer))
-			maxPerTargetFragCnt = max(maxPerTargetFragCnt,
+			maxPerTargetKillCnt = max(maxPerTargetKillCnt,
 				player.getNrSuicides())
+			maxNrFrags = max(maxNrFrags, player.getNrFrags())
 		# Create all nodes
 		for player in self.game.getPlayers():
-			self.g.add_node(player.realName,
+			nrFrags = player.getNrFrags()
+			fontsize = ((float(nrFrags) / maxNrFrags) * self.NAME_SCALE) +\
+				self.NAME_BASE
+			self.g.add_node(self.__p2n(player),
 					margin="0.2, 0.1",
-					fontsize=22)
+					fontsize=int(round(fontsize)))
 		# Create all edges
 		for player in self.game.getPlayers():
 			for fraggedPlayer in player.getFrags().getPlayers():
 				self.__genEdge(player, fraggedPlayer,
 					       player.getFrags().countFor(fraggedPlayer),
-					       maxPerTargetFragCnt)
+					       maxPerTargetKillCnt)
 			for fraggedPlayer in player.getTeamkills().getPlayers():
 				self.__genEdge(player, fraggedPlayer,
 					       player.getTeamkills().countFor(fraggedPlayer),
-					       maxPerTargetFragCnt,
+					       maxPerTargetKillCnt,
 					       color="#FF0000")
 			if player.getNrSuicides():
 				self.__genEdge(player, player, player.getNrSuicides(),
-					       maxPerTargetFragCnt,
+					       maxPerTargetKillCnt,
 					       color="#0000FF")
 		self.g.layout(prog=self.ALGORITHM)
 
