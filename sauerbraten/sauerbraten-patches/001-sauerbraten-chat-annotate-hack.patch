@@ -1,7 +1,7 @@
 Index: sauerbraten/src/engine/console.cpp
 ===================================================================
---- sauerbraten.orig/src/engine/console.cpp	2011-10-09 19:23:48.281415882 +0200
-+++ sauerbraten/src/engine/console.cpp	2011-10-10 12:24:37.639390148 +0200
+--- sauerbraten.orig/src/engine/console.cpp	2011-10-12 23:16:22.521014549 +0200
++++ sauerbraten/src/engine/console.cpp	2011-10-12 23:16:34.968958595 +0200
 @@ -1,6 +1,7 @@
  // console.cpp: the console buffer, its display, and command line control
  
@@ -19,5 +19,5 @@ Index: sauerbraten/src/engine/console.cpp
 +    else if (type & CON_CHAT)
 +        fputs("chat-message: ", stdout);
      puts(buf);
-     fflush(stdout);
  }
+ 
