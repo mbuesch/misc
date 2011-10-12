@@ -301,7 +301,64 @@ class Game(object):
 			ret.append("")
 		return "\n".join(ret)
 
-class SauerbratenParser(object):
+class Parser(object):
+	def __init__(self, options):
+		self.options = options
+		self.currentGame = None
+		self.games = []
+
+	def assertCurrentGame(self, msg):
+		if not self.currentGame:
+			print(str(msg) + ", but there's no game")
+			return False
+		return True
+
+	def generateStats(self):
+		if not self.games:
+			return
+		if self.options.liveUpdate:
+			clearscreen()
+			print(self.games[-1].generateStats())
+		else:
+			for game in self.games:
+				print(game.generateStats())
+
+	def gameEnded(self):
+		if not self.currentGame or\
+		   not self.options.fragGraphDir:
+			return
+		fg = FragGraph(self.currentGame)
+		for algo in ("dot", "circo"):
+			filename = "%s/frags-%s-%s.svg" %\
+				(self.options.fragGraphDir, algo,
+				 self.currentGame.getSaneName())
+			fg.generateSVG(filename, algo)
+
+	def parseIsoTimestamp(self, line):
+		# Returns a tuple (rest-of-line, datetime-instance)
+		idx = line.find("/")
+		if idx < 0:
+			print("Parser: Did not find timestamp on line: " + line)
+			sys.exit(1)
+		try:
+			stamp = line[0:idx]
+			line = line[idx+1:]
+
+			if len(stamp) != ISO_TIMESTAMP_LEN:
+				raise ValueError
+			m = re_iso_timestamp.match(stamp)
+			if not m:
+				raise ValueError
+			stamp = datetime.datetime(
+				year=int(m.group(1)), month=int(m.group(2)), day=int(m.group(3)),
+				hour=int(m.group(4)), minute=int(m.group(5)), second=int(m.group(6)),
+				microsecond=int(m.group(7)))
+		except (IndexError, ValueError), e:
+			print("Parser: Invalid timestamp")
+			sys.exit(1)
+		return line, stamp
+
+class SauerbratenParser(Parser):
 	_re_name = r'(.*)' # Player/item name
 
 	re_init = re.compile(r'^init: .*$')
@@ -359,30 +416,13 @@ class SauerbratenParser(object):
 	re_teamchat = re.compile(r'^teamchat-message: ' + _re_name + r':\s*(.*)$')
 
 	def __init__(self, options):
-		self.options = options
-		self.currentGame = None
-		self.games = []
+		Parser.__init__(self, options)
+
 		self.lastReadMap = "unknown"
-
-	def __assertCurrentGame(self, msg):
-		if not self.currentGame:
-			print(msg + ", but there's no game")
-			return False
-		return True
-
-	def generateStats(self):
-		if not self.games:
-			return
-		if self.options.liveUpdate:
-			clearscreen()
-			print(self.games[-1].generateStats())
-		else:
-			for game in self.games:
-				print(game.generateStats())
 
 	def __parseKill(self, timestamp, name0, name1, tk=False):
 		# name0 fragged name1
-		if not self.__assertCurrentGame("kill"):
+		if not self.assertCurrentGame("kill"):
 			return
 		player0 = self.currentGame.playerOrMe(name0)
 		player1 = self.currentGame.playerOrMe(name1)
@@ -392,31 +432,8 @@ class SauerbratenParser(object):
 			player0.addFrag(timestamp, player1)
 		self.currentGame.hadFirstBlood = True
 
-	def __parseStamp(self, line):
-		idx = line.find("/")
-		if idx < 0:
-			print("Parser: Did not find timestamp on line: " + line)
-			sys.exit(1)
-		try:
-			stamp = line[0:idx]
-			line = line[idx+1:]
-
-			if len(stamp) != ISO_TIMESTAMP_LEN:
-				raise ValueError
-			m = re_iso_timestamp.match(stamp)
-			if not m:
-				raise ValueError
-			stamp = datetime.datetime(
-				year=int(m.group(1)), month=int(m.group(2)), day=int(m.group(3)),
-				hour=int(m.group(4)), minute=int(m.group(5)), second=int(m.group(6)),
-				microsecond=int(m.group(7)))
-		except (IndexError, ValueError), e:
-			print("Parser: Invalid timestamp")
-			sys.exit(1)
-		return line, stamp
-
 	def parseLine(self, line):
-		line, stamp = self.__parseStamp(line)
+		line, stamp = self.parseIsoTimestamp(line)
 		m = self.re_chat.match(line)
 		if m:
 			debugMsg("Chat (%s: %s)" % (m.group(1), m.group(2)))
@@ -431,14 +448,14 @@ class SauerbratenParser(object):
 			return
 		m = self.re_game_ended.match(line)
 		if m:
-			if not self.__assertCurrentGame("game ended"):
+			if not self.assertCurrentGame("game ended"):
 				return
 			debugMsg("Game ended (%s)" % line)
 			if self.currentGame.ended:
 				print("Current game ended twice?!")
 				return
 			self.currentGame.ended = stamp
-			self.__gameEnded()
+			self.gameEnded()
 			return
 		m = self.re_game_mode.match(line)
 		if m:
@@ -473,7 +490,7 @@ class SauerbratenParser(object):
 		m = self.re_suicide.match(line)
 		if m:
 			debugMsg("Suicide (%s)" % line)
-			if not self.__assertCurrentGame("suicide"):
+			if not self.assertCurrentGame("suicide"):
 				return
 			player = self.currentGame.playerOrMe(m.group(1))
 			player.addSuicide(stamp)
@@ -481,7 +498,7 @@ class SauerbratenParser(object):
 		m = self.re_dropped_your.match(line)
 		if m:
 			debugMsg("Dropped your flag (%s)" % line)
-			if not self.__assertCurrentGame("dropped-your"):
+			if not self.assertCurrentGame("dropped-your"):
 				return
 			player = self.currentGame.player(m.group(1))
 			player.addCtfDrop(stamp)
@@ -489,7 +506,7 @@ class SauerbratenParser(object):
 		m = self.re_dropped_enemy.match(line)
 		if m:
 			debugMsg("Dropped enemy flag (%s)" % line)
-			if not self.__assertCurrentGame("dropped-enemy"):
+			if not self.assertCurrentGame("dropped-enemy"):
 				return
 			player = self.currentGame.playerOrMe(m.group(1))
 			player.addCtfDrop(stamp)
@@ -497,7 +514,7 @@ class SauerbratenParser(object):
 		m = self.re_stole_your.match(line)
 		if m:
 			debugMsg("Stole your flag (%s)" % line)
-			if not self.__assertCurrentGame("stole-your"):
+			if not self.assertCurrentGame("stole-your"):
 				return
 			player = self.currentGame.player(m.group(1))
 			player.addCtfSteal(stamp)
@@ -505,7 +522,7 @@ class SauerbratenParser(object):
 		m = self.re_stole_enemy.match(line)
 		if m:
 			debugMsg("Stole enemy flag (%s)" % line)
-			if not self.__assertCurrentGame("stole-enemy"):
+			if not self.assertCurrentGame("stole-enemy"):
 				return
 			player = self.currentGame.playerOrMe(m.group(1))
 			player.addCtfSteal(stamp)
@@ -513,7 +530,7 @@ class SauerbratenParser(object):
 		m = self.re_picked_your.match(line)
 		if m:
 			debugMsg("Picked your flag (%s)" % line)
-			if not self.__assertCurrentGame("picked-your"):
+			if not self.assertCurrentGame("picked-your"):
 				return
 			player = self.currentGame.player(m.group(1))
 			player.addCtfPick(stamp)
@@ -521,7 +538,7 @@ class SauerbratenParser(object):
 		m = self.re_picked_enemy.match(line)
 		if m:
 			debugMsg("Picked enemy flag (%s)" % line)
-			if not self.__assertCurrentGame("picked-enemy"):
+			if not self.assertCurrentGame("picked-enemy"):
 				return
 			player = self.currentGame.playerOrMe(m.group(1))
 			player.addCtfPick(stamp)
@@ -529,7 +546,7 @@ class SauerbratenParser(object):
 		m = self.re_score_your.match(line)
 		if m:
 			debugMsg("Scored for your team (%s)" % line)
-			if not self.__assertCurrentGame("scored-your"):
+			if not self.assertCurrentGame("scored-your"):
 				return
 			player = self.currentGame.playerOrMe(m.group(1))
 			player.addCtfScore(stamp)
@@ -537,7 +554,7 @@ class SauerbratenParser(object):
 		m = self.re_score_enemy.match(line)
 		if m:
 			debugMsg("Scored for enemy team (%s)" % line)
-			if not self.__assertCurrentGame("scored-enemy"):
+			if not self.assertCurrentGame("scored-enemy"):
 				return
 			player = self.currentGame.player(m.group(1))
 			player.addCtfScore(stamp)
@@ -545,7 +562,7 @@ class SauerbratenParser(object):
 		m = self.re_returned_your.match(line)
 		if m:
 			debugMsg("Returned your flag (%s)" % line)
-			if not self.__assertCurrentGame("returned-your"):
+			if not self.assertCurrentGame("returned-your"):
 				return
 			player = self.currentGame.playerOrMe(m.group(1))
 			player.addCtfReturn(stamp)
@@ -553,7 +570,7 @@ class SauerbratenParser(object):
 		m = self.re_returned_enemy.match(line)
 		if m:
 			debugMsg("Returned enemy flag (%s)" % line)
-			if not self.__assertCurrentGame("returned-enemy"):
+			if not self.assertCurrentGame("returned-enemy"):
 				return
 			player = self.currentGame.player(m.group(1))
 			player.addCtfReturn(stamp)
@@ -581,7 +598,7 @@ class SauerbratenParser(object):
 		m = self.re_player_connected.match(line)
 		if m:
 			debugMsg("Player connected (%s)" % line)
-			if not self.__assertCurrentGame("player connected"):
+			if not self.assertCurrentGame("player connected"):
 				return
 			name = m.group(1)
 			self.currentGame.player(name).connected()
@@ -589,7 +606,7 @@ class SauerbratenParser(object):
 		m = self.re_player_disconn.match(line)
 		if m:
 			debugMsg("Player disconnected (%s)" % line)
-			if not self.__assertCurrentGame("player connected"):
+			if not self.assertCurrentGame("player connected"):
 				return
 			name = m.group(1)
 			self.currentGame.player(name).disconnected()
@@ -621,7 +638,7 @@ class SauerbratenParser(object):
 		m = self.re_rename.match(line)
 		if m:
 			debugMsg("Player rename (%s)" % line)
-			if not self.__assertCurrentGame("player rename"):
+			if not self.assertCurrentGame("player rename"):
 				return
 			oldName = m.group(1)
 			newName = m.group(2)
@@ -663,17 +680,6 @@ class SauerbratenParser(object):
 			debugMsg("Spacer (%s)" % line)
 			return
 		debugMsg("UNKNOWN console message: '%s'" % line)
-
-	def __gameEnded(self):
-		if not self.currentGame:
-			return
-		if self.options.fragGraphDir:
-			fg = FragGraph(self.currentGame)
-			for algo in ("dot", "circo"):
-				filename = "%s/frags-%s-%s.svg" %\
-					(self.options.fragGraphDir, algo,
-					 self.currentGame.getSaneName())
-				fg.generateSVG(filename, algo)
 
 class FragGraph(object):
 	# Graph tuning parameters
