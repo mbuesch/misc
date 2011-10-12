@@ -227,13 +227,14 @@ class Player(object):
 			(name, frags, tks, deaths, suicides, ctf, extra)
 
 class Game(object):
-	def __init__(self, options, timestamp, mode, mapname):
+	def __init__(self, options, timestamp, mode, mapname, selfIDs=[]):
 		self.options = options
 		self.mode = mode.lower()
 		self.mapname = mapname
 		self.hadFirstBlood = False
 		self.started = timestamp
 		self.ended = False
+		self.selfIDs = selfIDs
 		self.players = {
 			"self"	: Player("self", self.options.myname, self)
 		}
@@ -260,7 +261,7 @@ class Game(object):
 		return self.players["self"]
 
 	def playerOrMe(self, name):
-		if not name or name == "you":
+		if not name or name in self.selfIDs:
 			return self.me()
 		return self.player(name)
 

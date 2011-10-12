@@ -115,7 +115,8 @@ class SauerbratenParser(Parser):
 			debugMsg("Game mode (%s)" % line)
 			newGame = Game(options=self.options,
 				       timestamp=stamp, mode=m.group(1),
-				       mapname=self.lastReadMap)
+				       mapname=self.lastReadMap,
+				       selfIDs=("you",))
 			self.currentGame = newGame
 			self.games.append(newGame)
 			return
