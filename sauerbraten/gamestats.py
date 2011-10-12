@@ -314,8 +314,8 @@ class Parser(object):
 		if not self.lineHasTimestamp(line):
 			now = datetime.datetime.now().isoformat()
 			line = "%s/%s" % (now, line)
-		line, stamp = self.parseIsoTimestamp(line)
-		self.doParseLine(stamp, line)
+		lineNoStamp, stamp = self.parseIsoTimestamp(line)
+		self.doParseLine(stamp, lineNoStamp)
 		if not line.endswith("\n"):
 			line += "\n"
 		writeRawLog(self.options.rawlogdir, line)
