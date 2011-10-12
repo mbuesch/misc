@@ -334,12 +334,12 @@ class SauerbratenParser(Parser):
 		debugMsg("UNKNOWN console message: '%s'" % line)
 
 def main():
-	return genericMain(scriptname="sauerstats.py",
+	return genericMain(scriptname="sauerstats",
 			   usageinfo=" Example: Convert and log stats into directory:\n"
-				     "  sauerbraten_unix | sauerstats.py -n mynick -l ./logs\n"
+				     "  sauerbraten_unix | sauerstats -n mynick -l ./logs\n"
 				     "\n"
 				     " Example: Create stats from logfile:\n"
-				     "  sauerstats.py -n mynick ./logs/2011....log",
+				     "  sauerstats -n mynick ./logs/2011....log",
 			   parserClass=SauerbratenParser)
 
 if __name__ == "__main__":
