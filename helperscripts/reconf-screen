@@ -1,0 +1,86 @@
+#!/bin/sh
+
+usage()
+{
+	echo "reconf-screen [OPTIONS]"
+	echo
+	echo "Options:"
+	echo " --unified          Show one desktop on all screens"
+	echo " --nodvi            Disable DVI"
+	echo " --nohdmi           Disable HDMI"
+	echo " --novga            Disable VGA"
+	echo " --nolvds           Disable LVDS"
+	echo " -h|--help          Show this help text"
+}
+
+unified=0
+nodvi=0
+nohdmi=0
+novga=0
+nolvds=0
+
+while [ $# -ne 0 ]; do
+	case "$1" in
+		--help|-h)
+			usage
+			exit 0
+			;;
+		--unified)
+			unified=1
+			;;
+		--nodvi)
+			nodvi=1
+			;;
+		--nohdmi)
+			nohdmi=1
+			;;
+		--novga)
+			novga=1
+			;;
+		--nolvds)
+			nolvds=1
+			;;
+		*)
+			echo "Unknown option: $1"
+			exit 1
+			;;
+	esac
+	shift
+done
+
+getconn()
+{
+	# Assumes there is only one of each connection type
+	xrandr | grep -Exe '^'$1'[0-9\-]* connected.*$' | head -n1 | cut -d' ' -f1
+}
+
+DVI="$(getconn DVI)"
+HDMI="$(getconn HDMI)"
+VGA="$(getconn VGA)"
+LVDS="$(getconn LVDS)"
+
+[ $nodvi -ne 0 ] && { OFF_DVI="$DVI"; ON_DVI=; } || { OFF_DVI=; ON_DVI="$DVI"; }
+[ $nohdmi -ne 0 ] && { OFF_HDMI="$HDMI"; ON_HDMI=; } || { OFF_HDMI=; ON_HDMI="$HDMI"; }
+[ $novga -ne 0 ] && { OFF_VGA="$VGA"; ON_VGA=; } || { OFF_VGA=; ON_VGA="$VGA"; }
+[ $nolvds -ne 0 ] && { OFF_LVDS="$LVDS"; ON_LVDS=; } || { OFF_LVDS=; ON_LVDS="$LVDS"; }
+
+ALL="$LVDS $DVI $HDMI $VGA"
+ON_ALL="$ON_LVDS $ON_DVI $ON_HDMI $ON_VGA"
+OFF_ALL="$OFF_LVDS $OFF_DVI $OFF_HDMI $OFF_VGA"
+
+
+for out in $ALL; do
+	xrandr --output $out --auto
+done
+for out in $OFF_ALL; do
+	xrandr --output $out --off
+done
+last_out=
+for out in $ON_ALL; do
+	[ -z "$last_out" -o $unified -ne 0 ] && {
+		xrandr --output $out --pos 0x0
+	} || {
+		xrandr --output $out --right-of $last_out
+	}
+	last_out=$out
+done
