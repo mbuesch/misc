@@ -1,0 +1,326 @@
+#!/usr/bin/env python2.7
+"""
+# urbanterrorstats
+# Copyright (c) 2011 Michael Buesch <m@bues.ch>
+# Licensed under the GNU/GPL version 2 or later.
+"""
+
+import sys
+from gamestats import *
+
+
+class UTParser(Parser):
+	_re_name = r'(.*)' # Player/item name
+	_re_team = r'(.*)'
+	_re_weapon = r'(.*)' # Weapon name #FIXME
+	_re_esc = r'(?:\^\d)?'
+
+	re_files_pk3 = re.compile(r'^(\d+) files in pk3 files$')
+	re_gameinit = re.compile(r'^CL_InitCGame:\s+([\d\.]+)\s+seconds$')
+	re_imgdraw = re.compile(r'^(\d+) msec to draw all images$')
+
+	re_connected = re.compile(r'^' + _re_name + r' connected$')
+	re_disconnected = re.compile(r'^' + _re_name + r' disconnected$')
+	re_enter_game = re.compile(r'^' + _re_name + r' entered the game$')
+	re_join_team = re.compile(r'^' + _re_name + r' joined the ' +\
+				  _re_team + r' team.$')
+	re_join_spec = re.compile(r'^' + _re_name + r' joined the spectators\.$')
+
+	re_bled_death = re.compile(r'^' + _re_name + r'bled to death from ' +\
+				   _re_name + r"'s attacks\.$")
+	re_you_hit = re.compile(r'^You were hit in the (\w+) by ' + _re_name +\
+				r' for (\d+)% damage\.$')
+	re_other_hit = re.compile(r'^You hit ' + _re_name +\
+				  r' in the (\w+) for (\d+)% damage\.$')
+	re_fragged0 = re.compile(r'^' + _re_name + r' was on the wrong end of ' +\
+				 _re_name + r"'s " + _re_weapon + r'\.$')
+	re_fragged1 = re.compile(r'^' + _re_name + r' got shredded to pieces by ' +\
+				 _re_name + r"'s " + _re_weapon + r'$')
+	re_fragged2 = re.compile(r'^' + _re_name + r" played 'catch the shiny bullet' with " +\
+				 _re_name + r"'s" + _re_weapon + r' rounds\.$')
+	re_fragged3 = re.compile(r'^' + _re_name + r' has become a nasty stain thanks to ' +\
+				 _re_name + r"'s " + _re_weapon + r'\.$')
+	re_fragged4 = re.compile(r'^' + _re_name + r' danced the ' + _re_weapon +\
+				 r' tango to ' + _re_name + r"'s sweet sweet music\.$")
+	re_fragged5 = re.compile(r'^' + _re_name + r' was torn asunder by ' + _re_name +\
+				 r"'s crass " + _re_weapon + r'\.$')
+	re_fragged6 = re.compile(r'^' + _re_name + r' was ' + _re_weapon + r' spammed without mercy by ' +\
+				 _re_name + r'\.$')
+	re_fragged7 = re.compile(r'^' + _re_name + r' HEARD ' + _re_name + r"'s " +\
+				 _re_weapon + r"\.\.\. didn't AVOID it\. Sucka\.$")
+	re_fragged8 = re.compile(r'^' + _re_name + r' got a whole lot of hole from ' +\
+				 _re_name + r"'s " + _re_weapon + r' round\.$')
+	re_fragged9 = re.compile(r'^' + _re_name + r" was BBQ'ed by " + _re_name +\
+				 r"'s " + _re_weapon + r'\.$')
+	re_fragged10 = re.compile(r'^' + _re_name + r' got nailed to the wall by ' +\
+				  _re_name + r"'s " + _re_weapon + r'$')
+	re_fragged11 = re.compile(r'^' + _re_name + r' was taken out by ' + _re_name +\
+				  r"'s " + _re_weapon + r'\. Plink!$')
+	re_selfkill0 = re.compile(r'^' + _re_name + r' did the lemming thing\.$')
+	re_selfkill1 = re.compile(r'^' + _re_name + r' stepped on his own grenade\.$')
+	re_slowdown = re.compile(r'^' + _re_name + r' managed to slow down ' +\
+				 _re_name + r"'s " + _re_weapon + r' round just a little\.(?:  NEEP NEEP!)?$')
+	re_had_health = re.compile(r'^' + _re_name + r' had (\d+)% Health\.$')
+
+	re_flag_prot = re.compile(r'^' + _re_name + r' protected the ' + _re_name + r' flag\.$')
+	re_flag_ret = re.compile(r'^' + _re_name + r' returned the ' + _re_name + r' flag!$')
+	re_flag_taken = re.compile(r'^' + _re_esc + _re_name + _re_esc + r' has taken the ' +\
+				   _re_esc + _re_name + _re_esc + r' flag!$')
+	re_flag_captured = re.compile(r'^' + _re_esc + _re_name + _re_esc + r' captured the ' +\
+				      _re_esc + _re_name + _re_esc + r' flag!$')
+	re_flag_dropped = re.compile(r'^' + _re_esc + _re_name + _re_esc + r' dropped the ' +\
+				     _re_esc + _re_name + _re_esc + r' flag!$')
+
+	def __init__(self, options):
+		Parser.__init__(self, options)
+		self.inClientStartup = False
+
+	def __parseSystemMessages(self, stamp, line):
+		if self.inClientStartup:
+			if line.startswith("Loading vm file"):
+				debugMsg("<<< Game init finished >>>")
+				self.inClientStartup = False
+			return True
+		if line == "----- Client Initialization -----":
+			debugMsg("<<< Initializing game >>>")
+			self.inClientStartup = True
+			return True
+		if line.startswith("---") and line.endswith("---"):
+			debugMsg("Separator (%s)" % line)
+			return True
+		if line.startswith("ioQ3 ") or\
+		   line.startswith("Going through search path") or\
+		   line.startswith("execing ") or\
+		   line.startswith("Hunk_Clear: reset the hunk ok") or\
+		   line.startswith("...loading ") or\
+		   line.startswith("...setting ") or\
+		   line.startswith("...using ") or\
+		   line.startswith("...ignoring ") or\
+		   line.startswith("Initializing OpenGL") or\
+		   line.startswith("GL_RENDERER: ") or\
+		   line.startswith("GL_VENDOR: ") or\
+		   line.startswith("GL_VERSION: ") or\
+		   line.startswith("GL_MAX_TEXTURE_SIZE: ") or\
+		   line.startswith("GL_MAX_ACTIVE_TEXTURES_ARB: ") or\
+		   line.startswith("PIXELFORMAT: ") or\
+		   line.startswith("MODE: ") or\
+		   line.startswith("GAMMA: ") or\
+		   line.startswith("CPU:") or\
+		   line.startswith("Hostname:") or\
+		   line.startswith("IP:") or\
+		   line.startswith("QKEY found.") or\
+		   line.startswith("Initializing Shaders") or\
+		   line.startswith("Initializing SDL") or\
+		   line.startswith("SDL audio driver is") or\
+		   line.startswith("Starting SDL audio") or\
+		   line.startswith("SDL audio initialized") or\
+		   line.startswith("Sound initialization") or\
+		   line.startswith("Sound memory manager") or\
+		   line.startswith("Loading vm file") or\
+		   line.startswith("Opening IP socket: ") or\
+		   line.startswith("Started tty console") or\
+		   line.startswith("RE_Shutdown(") or\
+		   line.startswith("compressed textures: ") or\
+		   line.startswith("Com_TouchMemory: ") or\
+		   line.startswith("Closing SDL audio device") or\
+		   line.startswith("SDL audio device shut down") or\
+		   line.startswith("Shutdown tty console") or\
+		   line.startswith("compilation took ") or\
+		   line.startswith("CL_InitCGame: ") or\
+		   line.find("SDL_Init") >= 0:
+			debugMsg("Misc system message (%s)" % line)
+			return True
+		if line.startswith("console: "):
+			debugMsg("Console (%s)" % line)
+			return True
+		if line == "Don't download your skill. Hackers get Banned!" or\
+		   line == "Welcome until you are banned!":
+			debugMsg("No faggots (%s)" % line)
+			return True
+		m = self.re_files_pk3.match(line)
+		if m:
+			debugMsg("PK3 files (%s)" % line)
+			return True
+		m = self.re_imgdraw.match(line)
+		if m:
+			debugMsg("Image draw (%s)" % line)
+			return True
+		return False
+
+	def __parseKill(self, timestamp, name0, name1=None, tk=False, sk=False):
+		# name0 fragged name1
+		if not self.assertCurrentGame("kill"):
+			return
+		player0 = self.currentGame.player(name0)
+		if not sk:
+			player1 = self.currentGame.player(name1)
+		if tk:
+			player0.addTeamkill(timestamp, player1)
+		elif sk:
+			player0.addSuicide(timestamp)
+		else:
+			player0.addFrag(timestamp, player1)
+		if not sk:
+			self.currentGame.hadFirstBlood = True
+
+	def doParseLine(self, stamp, line):
+		line = line.strip()
+		if not line:
+			return
+		if self.__parseSystemMessages(stamp, line):
+			return
+		m = self.re_connected.match(line)
+		if m:
+			debugMsg("Connected (%s)" % line)
+			return
+		m = self.re_disconnected.match(line)
+		if m:
+			debugMsg("Disconnected (%s)" % line)
+			if not self.assertCurrentGame("player disconnect"):
+				return
+			self.currentGame.player(m.group(1)).disconnected()
+			return
+		m = self.re_enter_game.match(line)
+		if m:
+			debugMsg("Enter game (%s)" % line)
+			if not self.currentGame:
+				self.currentGame = Game(options=self.options,
+							timestamp=stamp,
+							mode="Unknown mode",
+							mapname="Unknown map",
+							selfIDs=("You",))
+				self.games.append(self.currentGame)
+			self.currentGame.player(m.group(1)).connected()
+			return
+		m = self.re_join_team.match(line)
+		if m:
+			debugMsg("Join team (%s)" % line)
+			return
+		m = self.re_join_spec.match(line)
+		if m:
+			debugMsg("Join spectators (%s)" % line)
+			return
+		m = self.re_bled_death.match(line)
+		if m:
+			debugMsg("Bled to death (%s)" % line)
+			self.__parseKill(stamp, m.group(2), m.group(1))
+			return
+		m = self.re_you_hit.match(line)
+		if m:
+			debugMsg("You were hit (%s)" % line)
+			return
+		m = self.re_other_hit.match(line)
+		if m:
+			debugMsg("The enemy was hit (%s)" % line)
+			return
+		m = self.re_fragged0.match(line)
+		if m:
+			debugMsg("Fragged 0 (%s)" % line)
+			self.__parseKill(stamp, m.group(2), m.group(1))
+			return
+		m = self.re_fragged1.match(line)
+		if m:
+			debugMsg("Fragged 1 (%s)" % line)
+			self.__parseKill(stamp, m.group(2), m.group(1))
+			return
+		m = self.re_fragged2.match(line)
+		if m:
+			debugMsg("Fragged 2 (%s)" % line)
+			self.__parseKill(stamp, m.group(2), m.group(1))
+			return
+		m = self.re_fragged3.match(line)
+		if m:
+			debugMsg("Fragged 3 (%s)" % line)
+			self.__parseKill(stamp, m.group(2), m.group(1))
+			return
+		m = self.re_fragged4.match(line)
+		if m:
+			debugMsg("Fragged 4 (%s)" % line)
+			self.__parseKill(stamp, m.group(3), m.group(1))
+			return
+		m = self.re_fragged5.match(line)
+		if m:
+			debugMsg("Fragged 5 (%s)" % line)
+			self.__parseKill(stamp, m.group(2), m.group(1))
+			return
+		m = self.re_fragged6.match(line)
+		if m:
+			debugMsg("Fragged 6(%s)" % line)
+			self.__parseKill(stamp, m.group(3), m.group(1))
+			return
+		m = self.re_fragged7.match(line)
+		if m:
+			debugMsg("Fragged 7(%s)" % line)
+			self.__parseKill(stamp, m.group(2), m.group(1))
+			return
+		m = self.re_fragged8.match(line)
+		if m:
+			debugMsg("Fragged 8(%s)" % line)
+			self.__parseKill(stamp, m.group(2), m.group(1))
+			return
+		m = self.re_fragged9.match(line)
+		if m:
+			debugMsg("Fragged 9(%s)" % line)
+			self.__parseKill(stamp, m.group(2), m.group(1))
+			return
+		m = self.re_fragged10.match(line)
+		if m:
+			debugMsg("Fragged 10(%s)" % line)
+			self.__parseKill(stamp, m.group(2), m.group(1))
+			return
+		m = self.re_fragged11.match(line)
+		if m:
+			debugMsg("Fragged 11(%s)" % line)
+			self.__parseKill(stamp, m.group(2), m.group(1))
+			return
+		m = self.re_selfkill0.match(line)
+		if m:
+			debugMsg("Selfkill 0 (%s)" % line)
+			self.__parseKill(stamp, m.group(1), sk=True)
+			return
+		m = self.re_selfkill1.match(line)
+		if m:
+			debugMsg("Selfkill 1 (%s)" % line)
+			self.__parseKill(stamp, m.group(1), sk=True)
+			return
+		m = self.re_slowdown.match(line)
+		if m:
+			debugMsg("Slowdown (%s)" % line)
+			return
+		m = self.re_had_health.match(line)
+		if m:
+			debugMsg("Had health (%s)" % line)
+			return
+		m = self.re_flag_prot.match(line)
+		if m:
+			debugMsg("Protected flag (%s)" % line)
+			return
+		m = self.re_flag_ret.match(line)
+		if m:
+			debugMsg("Returned flag (%s)" % line)
+			return
+		m = self.re_flag_taken.match(line)
+		if m:
+			debugMsg("Took flag (%s)" % line)
+			return
+		m = self.re_flag_captured.match(line)
+		if m:
+			debugMsg("Captured flag (%s)" % line)
+			return
+		m = self.re_flag_dropped.match(line)
+		if m:
+			debugMsg("Dropped flag (%s)" % line)
+			return
+		debugMsg("UNKNOWN console message: '%s'" % line)
+
+def main():
+	return genericMain(scriptname="urbanterrorstats",
+			   usageinfo=" Example: Convert and log stats into directory:\n"
+				     "  ioUrbanTerror.x86_64 | urbanterrorstats -n mynick -l ./logs\n"
+				     "\n"
+				     " Example: Create stats from logfile:\n"
+				     "  urbanterrorstats -n mynick ./logs/2011....log",
+			   parserClass=UTParser)
+
+if __name__ == "__main__":
+	sys.exit(main())

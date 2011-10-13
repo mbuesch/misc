@@ -38,7 +38,7 @@ def filterPlayers(options, players):
 
 class Options(object):
 	def __init__(self):
-		self.myname = "self"
+		self.myname = None
 		self.liveUpdate = False
 		self.alwaysSortByFrags = False
 		self.filterLeft = False
@@ -236,8 +236,9 @@ class Game(object):
 		self.started = timestamp
 		self.ended = False
 		self.selfIDs = selfIDs
+		myname = self.options.myname if self.options.myname else "self"
 		self.players = {
-			"self"	: Player("self", self.options.myname, self)
+			"self"	: Player("self", myname, self)
 		}
 		debugMsg("New game: mode=%s" % mode)
 
@@ -255,6 +256,8 @@ class Game(object):
 		return "player_" + name
 
 	def player(self, name):
+		if self.options.myname and self.options.myname == name:
+			return self.me()
 		key = self.__mkPlayerKey(name)
 		return self.players.setdefault(key, Player(key, name, self))
 
