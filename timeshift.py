@@ -1513,7 +1513,8 @@ class MainWidget(QWidget):
 		fn = QFileDialog.getSaveFileName(self, "Datenbank laden", "",
 						 "Timeshift Dateien (*.tmd *.tms *.tmz);;"
 						 "Alle Dateien (*)",
-						 "", QFileDialog.DontConfirmOverwrite)
+						 "", QFileDialog.DontConfirmOverwrite |
+						     QFileDialog.DontUseNativeDialog)
 		if fn:
 			self.doLoadDatabase(fn)
 
