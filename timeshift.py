@@ -1698,13 +1698,13 @@ class MainWidget(QWidget):
 
 	def __calcAccountState(self, snapshot, endDate):
 		shiftConfig = self.db.getShiftConfigItems()
+		nrShiftConfigs = len(shiftConfig)
 		date = snapshot.date
 		shiftConfigIndex = snapshot.shiftConfigIndex
 		startOfTheDay = snapshot.accountValue
 		endOfTheDay = startOfTheDay
+		assert(date <= endDate)
 		while True:
-			assert(date <= endDate)
-
 			shiftConfigItem = shiftConfig[shiftConfigIndex]
 			currentShift = self.__getRealShift(date, shiftConfigItem)
 			workTime = self.__getRealWorkTime(date, shiftConfigItem)
@@ -1713,17 +1713,13 @@ class MainWidget(QWidget):
 
 			dtype = self.getDayType(date)
 			if dtype == DTYPE_DEFAULT:
-				if attendanceTime:
+				if attendanceTime > 0.001:
 					endOfTheDay += attendanceTime
 					endOfTheDay -= workTime
 					endOfTheDay -= breakTime
 			elif dtype == DTYPE_COMPTIME:
 				endOfTheDay -= workTime
-			elif dtype == DTYPE_HOLIDAY:
-				pass # no change
-			elif dtype == DTYPE_FEASTDAY:
-				pass # no change
-			elif dtype == DTYPE_SHORTTIME:
+			elif dtype in (DTYPE_HOLIDAY, DTYPE_FEASTDAY, DTYPE_SHORTTIME):
 				pass # no change
 			else:
 				assert(0)
@@ -1731,11 +1727,8 @@ class MainWidget(QWidget):
 			if date == endDate:
 				break
 			date = date.addDays(1)
-			shiftConfigIndex += 1
-			if shiftConfigIndex >= len(shiftConfig):
-				shiftConfigIndex = 0
+			shiftConfigIndex = (shiftConfigIndex + 1) % nrShiftConfigs
 			startOfTheDay = endOfTheDay
-
 		return (shiftConfigIndex, startOfTheDay, endOfTheDay)
 
 	def __holidaysLeft(self, date):
