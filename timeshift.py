@@ -192,6 +192,7 @@ class TsDatabase(QObject):
 	def __init__(self):
 		QObject.__init__(self)
 		self.commitTimer = QTimer(self)
+		self.commitTimer.setSingleShot(True)
 		self.connect(self.commitTimer, SIGNAL("timeout()"),
 			     self.__commitTimerTimeout)
 		self.__reset()
@@ -274,11 +275,10 @@ class TsDatabase(QObject):
 
 	def __commitTimerTimeout(self):
 		print("Committing database...")
-		self.commitTimer.stop()
 		self.commit()
 
-	def scheduleCommit(self):
-		self.commitTimer.start(5000)
+	def scheduleCommit(self, msec=5000):
+		self.commitTimer.start(msec)
 
 	def __initTables(self, conn):
 		script = (
@@ -1315,6 +1315,7 @@ class MainWidget(QWidget):
 		self.setLayout(QGridLayout())
 
 		self.worldUpdateTimer = QTimer(self)
+		self.worldUpdateTimer.setSingleShot(True)
 		self.connect(self.worldUpdateTimer, SIGNAL("timeout()"),
 			     self.__worldUpdateTimerTimeout)
 
@@ -1401,7 +1402,6 @@ class MainWidget(QWidget):
 		self.calendar.redraw()
 
 	def __worldUpdateTimerTimeout(self):
-		self.worldUpdateTimer.stop()
 		self.worldUpdate()
 
 	def scheduleWorldUpdate(self, msec=1000):
