@@ -163,7 +163,7 @@ class Snapshot(object):
 			raise TsException("Snapshot.fromString() "
 					  "invalid string: " + str(string))
 
-class TsDatabase:
+class TsDatabase(QObject):
 	INMEM = ":memory:"
 	VERSION = 1
 
@@ -194,6 +194,10 @@ class TsDatabase:
 	TAB_presets	= "presets(idx INTEGER, preset Preset)"
 
 	def __init__(self):
+		QObject.__init__(self)
+		self.commitTimer = QTimer(self)
+		self.connect(self.commitTimer, SIGNAL("timeout()"),
+			     self.__commitTimerTimeout)
 		self.conn = None
 		self.open(self.INMEM)
 
@@ -211,9 +215,10 @@ class TsDatabase:
 			return
 		try:
 			if not self.isInMemory():
+				print("Closing database...")
 				c = self.conn.cursor()
 				c.execute("VACUUM;")
-				self.conn.commit()
+				self.commit()
 			self.conn.close()
 			self.conn = None
 			self.filename = None
@@ -266,6 +271,14 @@ class TsDatabase:
 			self.conn.commit()
 		except (sql.Error), e:
 			self.__sqlError(e)
+
+	def __commitTimerTimeout(self):
+		print("Committing database...")
+		self.commitTimer.stop()
+		self.commit()
+
+	def scheduleCommit(self):
+		self.commitTimer.start(5000)
 
 	def __initTables(self, conn):
 		script = (
@@ -344,7 +357,7 @@ class TsDatabase:
 			if value is not None:
 				c.execute("INSERT INTO params(name, data) VALUES(?, ?);",
 					  (str(param), str(value)))
-			self.conn.commit()
+			self.scheduleCommit()
 		except (sql.Error), e:
 			self.__sqlError(e)
 
@@ -365,7 +378,7 @@ class TsDatabase:
 			c.execute("DELETE FROM dayFlags WHERE date=?;", (date,))
 			c.execute("INSERT INTO dayFlags(date, value) VALUES(?, ?);",
 				  (date, int(value) & 0xFFFFFFFF))
-			self.conn.commit()
+			self.scheduleCommit()
 		except (sql.Error), e:
 			self.__sqlError(e)
 
@@ -396,7 +409,7 @@ class TsDatabase:
 			if value is not None:
 				c.execute("INSERT INTO %s(date, value) VALUES(?, ?);" % table,
 					  (date, str(value)))
-			self.conn.commit()
+			self.scheduleCommit()
 		except (sql.Error), e:
 			self.__sqlError(e)
 
@@ -478,7 +491,7 @@ class TsDatabase:
 			for (index, item) in enumerate(items):
 				c.execute("INSERT INTO shiftConfig(idx, item) VALUES(?, ?);",
 					  (index, item))
-			self.conn.commit()
+			self.scheduleCommit()
 		except (sql.Error), e:
 			self.__sqlError(e)
 
@@ -500,7 +513,7 @@ class TsDatabase:
 			for (index, preset) in enumerate(presets):
 				c.execute("INSERT INTO presets(idx, preset) VALUES(?, ?);",
 					  (index, preset))
-			self.conn.commit()
+			self.scheduleCommit()
 		except (sql.Error), e:
 			self.__sqlError(e)
 
@@ -521,7 +534,7 @@ class TsDatabase:
 			if snapshot is not None:
 				c.execute("INSERT INTO snapshots(date, snapshot) VALUES(?, ?);",
 					  (date, snapshot))
-			self.conn.commit()
+			self.scheduleCommit()
 		except (sql.Error), e:
 			self.__sqlError(e)
 
@@ -565,7 +578,7 @@ class TsDatabase:
 			if comment:
 				c.execute("INSERT INTO comments(date, comment) VALUES(?, ?);",
 					  (date, unicode(comment)))
-			self.conn.commit()
+			self.scheduleCommit()
 		except (sql.Error), e:
 			self.__sqlError(e)
 
