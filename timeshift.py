@@ -194,7 +194,7 @@ class TsDatabase(QObject):
 		self.commitTimer = QTimer(self)
 		self.connect(self.commitTimer, SIGNAL("timeout()"),
 			     self.__commitTimerTimeout)
-		self.conn = None
+		self.__reset()
 		self.open(self.INMEM)
 
 	def __del__(self):
@@ -206,6 +206,11 @@ class TsDatabase(QObject):
 		traceback.print_stack()
 		raise TsException(msg)
 
+	def __reset(self):
+		self.conn = None
+		self.filename = None
+		self.cachedShiftConfig = None
+
 	def __close(self):
 		if not self.conn:
 			return
@@ -216,8 +221,7 @@ class TsDatabase(QObject):
 				c.execute("VACUUM;")
 				self.commit()
 			self.conn.close()
-			self.conn = None
-			self.filename = None
+			self.__reset()
 		except (sql.Error), e:
 			self.__sqlError(e)
 
@@ -480,6 +484,7 @@ class TsDatabase(QObject):
 			return None
 
 	def setShiftConfigItems(self, items):
+		self.cachedShiftConfig = items
 		try:
 			c = self.conn.cursor()
 			c.execute("DROP TABLE IF EXISTS shiftConfig;")
@@ -492,12 +497,16 @@ class TsDatabase(QObject):
 			self.__sqlError(e)
 
 	def getShiftConfigItems(self):
+		if self.cachedShiftConfig is not None:
+			return self.cachedShiftConfig
 		try:
 			c = self.conn.cursor()
 			c.execute("CREATE TABLE IF NOT EXISTS %s;" % self.TAB_shconf)
 			c.execute('SELECT item FROM shiftConfig ORDER BY "idx";')
 			items = c.fetchall()
-			return [ i[0] for i in items ]
+			items = [ i[0] for i in items ]
+			self.cachedShiftConfig = items
+			return items
 		except (sql.Error), e:
 			self.__sqlError(e)
 
