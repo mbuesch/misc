@@ -17,9 +17,6 @@ from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 
 
-MAX_SHIFTCONFIG_ITEMS	= 1024
-MAX_PRESETS		= 1024
-
 # Shift types
 SHIFT_EARLY		= 0
 SHIFT_LATE		= 1
@@ -752,8 +749,6 @@ class ShiftConfigDialog(QDialog):
 
 	def addItem(self):
 		shiftConfig = self.mainWidget.db.getShiftConfigItems()
-		if len(shiftConfig) >= MAX_SHIFTCONFIG_ITEMS:
-			return
 		index = self.itemList.currentRow()
 		if index < 0:
 			index = 0
@@ -1059,8 +1054,6 @@ class PresetDialog(QDialog):
 
 	def addPreset(self):
 		presets = self.mainWidget.db.getPresets()
-		if len(presets) >= MAX_PRESETS:
-			return
 		index = self.presetList.currentRow()
 		if index <= 0:
 			index = 1
@@ -1406,7 +1399,7 @@ class MainWidget(QWidget):
 		self.db.setHolidaysPerYear(p.getint("PARAMETERS", "holidaysPerYear"))
 
 		shiftConfig = []
-		for count in range(0, MAX_SHIFTCONFIG_ITEMS):
+		for count in range(0, 1024):
 			try:
 				name = p.get("SHIFTCONFIG", "name%d" % count)
 			except (ConfigParser.Error), e:
@@ -1424,7 +1417,7 @@ class MainWidget(QWidget):
 		self.db.setShiftConfigItems(shiftConfig)
 
 		presets = []
-		for count in range(0, MAX_PRESETS):
+		for count in range(0, 1024):
 			try:
 				name = p.get("PRESETS", "name%d" % count)
 			except (ConfigParser.Error), e:
