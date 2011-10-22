@@ -581,9 +581,10 @@ class TsDatabase:
 			self.__sqlError(e)
 
 class TimeSpinBox(QDoubleSpinBox):
-	def __init__(self, parent, val=0.0, minVal=0.0, maxVal=10.0,
-		     step=0.05, prefix=None, suffix="h"):
+	def __init__(self, parent, val=0.0, minVal=0.0, maxVal=24.0,
+		     step=0.1, decimals=2, prefix=None, suffix="h"):
 		QDoubleSpinBox.__init__(self, parent)
+		self.setDecimals(decimals)
 		self.setMinimum(minVal)
 		self.setMaximum(maxVal)
 		self.setValue(val)
@@ -1119,7 +1120,8 @@ class SnapshotDialog(QDialog):
 		l = QLabel("Kontostand:", self)
 		self.layout().addWidget(l, 2, 0)
 		self.accountValue = TimeSpinBox(self, val=accountValue,
-				minVal=-1000.0, maxVal=1000.0, step=0.1)
+				minVal=-1000.0, maxVal=1000.0,
+				step=0.1, decimals=1)
 		self.layout().addWidget(self.accountValue, 2, 1)
 
 		self.removeButton = QPushButton("Schnappschuss loeschen", self)
@@ -1781,8 +1783,9 @@ class MainWidget(QWidget):
 		self.overrideChangeBlocked = False
 
 		dateString = selDate.toString("dd.MM.yyyy")
-		self.output.setText("Konto am %s:  Beginn: %.2f  Ende: %.2f  Urlaub: %d" %\
-			(dateString, startOfTheDay, endOfTheDay, holidaysLeft))
+		self.output.setText("Konto am %s:  Beginn: %.1f  Ende: %.1f  Urlaub: %d" %\
+			(dateString, round(startOfTheDay, 1),
+			 round(endOfTheDay, 1), holidaysLeft))
 
 class MainWindow(QMainWindow):
 	def __init__(self, parent=None):
