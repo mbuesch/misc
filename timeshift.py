@@ -8,7 +8,6 @@
 import sys
 import os
 import errno
-import ConfigParser
 import base64
 import gzip
 import sqlite3 as sql
@@ -1390,120 +1389,19 @@ class MainWidget(QWidget):
 		self.recalculate()
 		self.calendar.redraw()
 
-	def __readOverrides(self, p, setCallback, section, floatFormat):
-		for date in p.options(section):
-			payload = p.get(section, date)
-			try:
-				if floatFormat:
-					payload = float(payload)
-				else:
-					payload = int(payload)
-			except (ValueError):
-				raise TsException("Datei defekt")
-			setCallback(QDate.fromString(date, Qt.ISODate), payload)
-
-	def __parseFile_ver2(self, p):
-		self.db.setHolidaysPerYear(p.getint("PARAMETERS", "holidaysPerYear"))
-
-		shiftConfig = []
-		for count in range(0, 1024):
-			try:
-				name = p.get("SHIFTCONFIG", "name%d" % count)
-			except (ConfigParser.Error), e:
-				break
-			shift = p.getint("SHIFTCONFIG", "shift%d" % count)
-			workTime = p.getfloat("SHIFTCONFIG", "workTime%d" % count)
-			breakTime = p.getfloat("SHIFTCONFIG", "breakTime%d" % count)
-			attendanceTime = p.getfloat("SHIFTCONFIG", "attendanceTime%d" % count)
-			shiftConfig.append(
-				ShiftConfigItem(name=base64ToQString(name),
-						shift=shift,
-						workTime=workTime, breakTime=breakTime,
-						attendanceTime=attendanceTime)
-			)
-		self.db.setShiftConfigItems(shiftConfig)
-
-		presets = []
-		for count in range(0, 1024):
-			try:
-				name = p.get("PRESETS", "name%d" % count)
-			except (ConfigParser.Error), e:
-				break
-			dayType = p.getint("PRESETS", "dayType%d" % count)
-			shift = p.getint("PRESETS", "shift%d" % count)
-			workTime = p.getfloat("PRESETS", "workTime%d" % count)
-			breakTime = p.getfloat("PRESETS", "breakTime%d" % count)
-			attendanceTime = p.getfloat("PRESETS", "attendanceTime%d" % count)
-			presets.append(
-				Preset(name=base64ToQString(name),
-					dayType=dayType, shift=shift, workTime=workTime,
-					breakTime=breakTime, attendanceTime=attendanceTime)
-			)
-		self.db.setPresets(presets)
-
-		for snap in p.options("SNAPSHOTS"):
-			date = QDate.fromString(snap, Qt.ISODate)
-			string = p.get("SNAPSHOTS", snap)
-			try:
-				elems = string.split(",")
-				shiftConfigIndex = int(elems[0])
-				accountValue = float(elems[1])
-			except (IndexError, ValueError):
-				raise TsException("Datei defekt")
-			snapshot = Snapshot(date, shiftConfigIndex, accountValue)
-			self.db.setSnapshot(date, snapshot)
-
-		self.__readOverrides(p, self.db.setDayTypeOverride, "DAYTYPE_OVERRIDES", False)
-		self.__readOverrides(p, self.db.setShiftOverride, "SHIFT_OVERRIDES", False)
-		self.__readOverrides(p, self.db.setWorkTimeOverride, "WORKTIME_OVERRIDES", True)
-		self.__readOverrides(p, self.db.setBreakTimeOverride, "BREAKTIME_OVERRIDES", True)
-		self.__readOverrides(p, self.db.setAttendanceTimeOverride, "ATTENDANCETIME_OVERRIDES", True)
-
-		for comm in p.options("COMMENTS"):
-			date = QDate.fromString(comm, Qt.ISODate)
-			comment = base64ToQString(p.get("COMMENTS", comm))
-			self.db.setComment(date, comment)
-
 	def doLoadDatabase(self, filename):
 		try:
-			exists = QFileInfo(filename).exists()
-			parser = None
-			if exists:
-				fd = gzip.GzipFile(filename, "rb")
-				try:
-					fd.read(1)
-					fd.rewind()
-				except (IOError):
-					fd = file(filename, "rb")
-				try:
-					p = ConfigParser.SafeConfigParser()
-					p.readfp(fd, filename)
-
-					ver = None
-					try:
-						ver = p.getint("TIMESHIFT_FILE", "version")
-					except (ConfigParser.Error):
-						pass
-					if ver == 2:
-						parser = self.__parseFile_ver2
-					else:
-						raise TsException("Dateiversion nicht unterstuetzt")
-				except (ConfigParser.Error):
-					pass
-			if parser:
-				self.db.close()
-				parser(p)
-			else:
-				if not exists and self.db.isInMemory():
-					# Clone the in-memory DB to the new file
-					self.db.clone(filename)
-				self.db.open(filename)
+			fi = QFileInfo(filename)
+			if not fi.exists() and self.db.isInMemory():
+				# Clone the in-memory DB to the new file
+				self.db.clone(filename)
+			self.db.open(filename)
 
 			self.updateTitle()
 			self.recalculate()
 			self.calendar.redraw()
 
-		except (ConfigParser.Error, TsException, IOError), e:
+		except (TsException), e:
 			QMessageBox.critical(self, "Laden fehlgeschlagen",
 					     "Laden fehlgeschlagen:\n" + str(e))
 			return False
