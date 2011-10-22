@@ -733,7 +733,7 @@ class ShiftConfigDialog(QDialog):
 	def updateItem(self, item):
 		item.name = self.nameEdit.text()
 		index = self.shiftCombo.currentIndex()
-		item.shift = self.shiftCombo.itemData(index).toInt()[0]
+		item.shift = self.shiftCombo.itemData(index).toPyObject()
 		item.workTime = self.workTime.value()
 		item.breakTime = self.breakTime.value()
 		item.attendanceTime = self.attendanceTime.value()
@@ -1061,8 +1061,8 @@ class PresetDialog(QDialog):
 		item.setText(self.nameEdit.text())
 		preset = item.data(Qt.UserRole).toPyObject()
 		preset.name = self.nameEdit.text()
-		preset.dayType = self.typeCombo.itemData(self.typeCombo.currentIndex()).toInt()[0]
-		preset.shift = self.shiftCombo.itemData(self.shiftCombo.currentIndex()).toInt()[0]
+		preset.dayType = self.typeCombo.itemData(self.typeCombo.currentIndex()).toPyObject()
+		preset.shift = self.shiftCombo.itemData(self.shiftCombo.currentIndex()).toPyObject()
 		preset.workTime = self.workTime.value()
 		preset.breakTime = self.breakTime.value()
 		preset.attendanceTime = self.attendanceTime.value()
@@ -1178,7 +1178,7 @@ class SnapshotDialog(QDialog):
 
 	def getSnapshot(self):
 		index = self.shiftConfig.currentIndex()
-		shiftConfigIndex = self.shiftConfig.itemData(index).toInt()[0]
+		shiftConfigIndex = self.shiftConfig.itemData(index).toPyObject()
 		value = self.accountValue.value()
 		return Snapshot(self.date, shiftConfigIndex, value)
 
@@ -1507,11 +1507,11 @@ class MainWidget(QWidget):
 
 		# Day type
 		index = self.typeCombo.currentIndex()
-		self.setDayType(date, self.typeCombo.itemData(index).toInt()[0])
+		self.setDayType(date, self.typeCombo.itemData(index).toPyObject())
 
 		# Shift override
 		index = self.shiftCombo.currentIndex()
-		shift = self.shiftCombo.itemData(index).toInt()[0]
+		shift = self.shiftCombo.itemData(index).toPyObject()
 		if shift == shiftConfigItem.shift:
 			shift = None
 		self.setShiftOverride(date, shift)
