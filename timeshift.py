@@ -813,6 +813,13 @@ class EnhancedDialog(QDialog):
 		cs = Qt.Checked if dayFlags & DFLAG_UNCERTAIN else Qt.Unchecked
 		self.uncertainCheckBox.setCheckState(cs)
 
+		self.connect(self.uncertainCheckBox, SIGNAL("stateChanged(int)"),
+			     self.__uncertainCheckBoxChanged)
+
+	def __uncertainCheckBoxChanged(self, newState):
+		self.commit()
+		self.accept()
+
 	def closeEvent(self, e):
 		self.commit()
 
