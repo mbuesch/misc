@@ -206,7 +206,7 @@ class TsDatabase(QObject):
 
 	def __sqlError(self, exception):
 		msg = "SQL error: " + str(exception)
-		print msg
+		print(msg)
 		traceback.print_stack()
 		raise TsException(msg)
 
