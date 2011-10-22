@@ -320,7 +320,7 @@ class TsDatabase(QObject):
 	def __cloneTab(self, sourceCursor, targetCursor, tabSignature):
 		tabName = tabSignature.split("(")[0].strip()
 		columns = tabSignature.split("(")[1].split(")")[0]
-		columns = map(lambda c: c.split()[0], columns.split(","))
+		columns = [ c.split()[0] for c in columns.split(",") ]
 		columns = ", ".join(columns)
 		targetCursor.execute("DROP TABLE IF EXISTS %s;" % tabName)
 		targetCursor.execute("CREATE TABLE %s;" % tabSignature)
@@ -443,7 +443,7 @@ class TsDatabase(QObject):
 				(value=? AND date>=? AND date<=?);
 			""", (daytype, beginDate, endDate))
 			dates = c.fetchall()
-			return map(lambda d: d[0], dates)
+			return [ d[0] for d in dates ]
 		except (ValueError, TypeError), e:
 			return None
 
@@ -501,7 +501,7 @@ class TsDatabase(QObject):
 			c.execute("CREATE TABLE IF NOT EXISTS %s;" % self.TAB_shconf)
 			c.execute('SELECT item FROM shiftConfig ORDER BY "idx";')
 			items = c.fetchall()
-			return map(lambda i: i[0], items)
+			return [ i[0] for i in items ]
 		except (sql.Error), e:
 			self.__sqlError(e)
 
@@ -523,7 +523,7 @@ class TsDatabase(QObject):
 			c.execute("CREATE TABLE IF NOT EXISTS %s;" % self.TAB_presets)
 			c.execute('SELECT preset FROM presets ORDER BY "idx";')
 			presets = c.fetchall()
-			return map(lambda i: i[0], presets)
+			return [ p[0] for p in presets ]
 		except (sql.Error), e:
 			self.__sqlError(e)
 
@@ -554,7 +554,7 @@ class TsDatabase(QObject):
 			c = self.conn.cursor()
 			c.execute("SELECT snapshot FROM snapshots;")
 			snapshots = c.fetchall()
-			return map(lambda s: s[0], snapshots)
+			return [ s[0] for s in snapshots ]
 		except (sql.Error), e:
 			self.__sqlError(e)
 
