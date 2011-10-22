@@ -901,7 +901,7 @@ class ManageDialog(QDialog):
 	def updateParams(self):
 		mainWidget = self.mainWidget
 		mainWidget.db.setHolidaysPerYear(self.holidays.value())
-		mainWidget.recalculate()
+		mainWidget.worldUpdate()
 
 	def loadDatabase(self):
 		self.mainWidget.loadDatabase()
@@ -919,7 +919,7 @@ class ManageDialog(QDialog):
 	def doShiftConfig(self):
 		dlg = ShiftConfigDialog(self.mainWidget)
 		dlg.exec_()
-		self.mainWidget.recalculate()
+		self.mainWidget.worldUpdate()
 		self.accept()
 
 class PresetDialog(QDialog):
@@ -1189,8 +1189,6 @@ class Calendar(QCalendarWidget):
 		self.mainWidget = mainWidget
 
 		self.setFirstDayOfWeek(Qt.Monday)
-		self.connect(self, SIGNAL("selectionChanged()"),
-			     self.selChanged)
 
 		self.today = QDate.currentDate()
 		self.armTodayTimer()
@@ -1304,9 +1302,6 @@ class Calendar(QCalendarWidget):
 
 		painter.restore()
 
-	def selChanged(self):
-		self.mainWidget.recalculate()
-
 	def redraw(self):
 		if self.isVisible():
 			self.hide()
@@ -1318,6 +1313,10 @@ class MainWidget(QWidget):
 
 		self.setFocusPolicy(Qt.StrongFocus)
 		self.setLayout(QGridLayout())
+
+		self.worldUpdateTimer = QTimer(self)
+		self.connect(self.worldUpdateTimer, SIGNAL("timeout()"),
+			     self.__worldUpdateTimerTimeout)
 
 		self.calendar = Calendar(self)
 		self.layout().addWidget(self.calendar, 0, 0, 5, 3)
@@ -1394,9 +1393,19 @@ class MainWidget(QWidget):
 
 	def resetState(self):
 		self.db.resetDatabase()
+		self.worldUpdate()
+
+	def worldUpdate(self):
 		self.updateTitle()
 		self.recalculate()
 		self.calendar.redraw()
+
+	def __worldUpdateTimerTimeout(self):
+		self.worldUpdateTimer.stop()
+		self.worldUpdate()
+
+	def scheduleWorldUpdate(self, msec=1000):
+		self.worldUpdateTimer.start(msec)
 
 	def doLoadDatabase(self, filename):
 		try:
@@ -1405,11 +1414,7 @@ class MainWidget(QWidget):
 				# Clone the in-memory DB to the new file
 				self.db.clone(filename)
 			self.db.open(filename)
-
-			self.updateTitle()
-			self.recalculate()
-			self.calendar.redraw()
-
+			self.worldUpdate()
 		except (TsException), e:
 			QMessageBox.critical(self, "Laden fehlgeschlagen",
 					     "Laden fehlgeschlagen:\n" + str(e))
@@ -1460,8 +1465,7 @@ class MainWidget(QWidget):
 
 	def removeSnapshot(self, date):
 		self.__removeSnapshot(date)
-		self.recalculate()
-		self.calendar.redraw()
+		self.worldUpdate()
 
 	def __setSnapshot(self, snapshot):
 		self.db.setSnapshot(snapshot.date, snapshot)
@@ -1490,7 +1494,7 @@ class MainWidget(QWidget):
 				     shiftConfigIndex, accountValue)
 		if dlg.exec_():
 			self.__setSnapshot(dlg.getSnapshot())
-			self.recalculate()
+			self.worldUpdate()
 
 	def dateHasSnapshot(self, date):
 		return bool(self.db.getSnapshot(date))
@@ -1534,8 +1538,7 @@ class MainWidget(QWidget):
 			attendanceTime = None
 		self.setAttendanceTimeOverride(date, attendanceTime)
 
-		self.recalculate()
-		self.calendar.redraw()
+		self.scheduleWorldUpdate()
 
 	def getShiftConfigIndexForDate(self, date):
 		# Find the shift config index that's valid for the date.
