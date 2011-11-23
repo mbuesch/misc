@@ -565,6 +565,17 @@ class TsDatabase(QObject):
 		except (sql.Error), e:
 			self.__sqlError(e)
 
+	def hasSnapshot(self, date):
+		try:
+			c = self.conn.cursor()
+			c.execute("SELECT COUNT(*) FROM snapshots WHERE date=?;", (date,))
+			value = c.fetchone()
+			if value:
+				return value[0] > 0
+			return False
+		except (sql.Error), e:
+			self.__sqlError(e)
+
 	def getSnapshot(self, date):
 		try:
 			c = self.conn.cursor()
@@ -606,6 +617,17 @@ class TsDatabase(QObject):
 				c.execute("INSERT INTO comments(date, comment) VALUES(?, ?);",
 					  (date, unicode(comment)))
 			self.scheduleCommit()
+		except (sql.Error), e:
+			self.__sqlError(e)
+
+	def hasComment(self, date):
+		try:
+			c = self.conn.cursor()
+			c.execute("SELECT COUNT(*) FROM comments WHERE date=?;", (date,))
+			value = c.fetchone()
+			if value:
+				return value[0] > 0
+			return False
 		except (sql.Error), e:
 			self.__sqlError(e)
 
@@ -1259,9 +1281,12 @@ class Calendar(QCalendarWidget):
 		QCalendarWidget.paintCell(self, painter, rect, date)
 		painter.save()
 
-		mainWidget = self.mainWidget
+		mainWidget, font = self.mainWidget, painter.font()
 		db = mainWidget.db
 		rx, ry, rw, rh = rect.x(), rect.y(), rect.width(), rect.height()
+
+		font.setBold(True)
+		painter.setFont(font)
 
 		if mainWidget.dateHasSnapshot(date):
 			painter.setPen(self.snapshotPen)
@@ -1283,10 +1308,6 @@ class Calendar(QCalendarWidget):
 		if mainWidget.dateHasTimeOverrides(date):
 			painter.setPen(self.overridesPen)
 			painter.drawPoint(rx + rw - 8, ry + 8)
-
-		font = painter.font()
-		font.setBold(True)
-		painter.setFont(font)
 
 		text = self.typeLetter[mainWidget.getDayType(date)]
 		if text:
@@ -1450,7 +1471,7 @@ class MainWidget(QWidget):
 		self.parent().setTitleSuffix(suffix)
 
 	def dateHasComment(self, date):
-		return bool(self.db.getComment(date))
+		return self.db.hasComment(date)
 
 	def getCommentFor(self, date):
 		comment = self.db.getComment(date)
@@ -1508,7 +1529,7 @@ class MainWidget(QWidget):
 			self.worldUpdate()
 
 	def dateHasSnapshot(self, date):
-		return bool(self.db.getSnapshot(date))
+		return self.db.hasSnapshot(date)
 
 	def getSnapshotFor(self, date):
 		return self.db.getSnapshot(date)
