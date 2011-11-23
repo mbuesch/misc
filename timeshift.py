@@ -45,18 +45,14 @@ def IdToQDate(id):
 	return QDateTime.fromTime_t(int(id)).date()
 
 def QStringToBase64(qstring):
-	if type(qstring) != type(QString()):
+	if not isinstance(qstring, QString):
 		qstring = QString(qstring)
-	qstring = qstring.toUtf8()
-	unistr = unicode(qstring, "utf-8").encode("utf-8")
-	b64str = base64.standard_b64encode(unistr)
-	return b64str
+	unistr = unicode(qstring.toUtf8(), "utf-8").encode("utf-8")
+	return base64.standard_b64encode(unistr)
 
 def base64ToQString(b64str):
-	unistr = base64.standard_b64decode(b64str)
-	unistr = unistr.decode("utf-8")
-	qstring = QString(unistr)
-	return qstring
+	unistr = base64.standard_b64decode(b64str).decode("utf-8")
+	return QString(unistr)
 
 class TsException(Exception): pass
 
