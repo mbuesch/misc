@@ -1563,42 +1563,30 @@ class MainWidget(QWidget):
 	def setShiftOverride(self, date, shift):
 		self.db.setShiftOverride(date, shift)
 
-	def __getRealShift(self, date, shiftConfigItem):
+	def getRealShift(self, date, shiftConfigItem):
 		shift = self.db.getShiftOverride(date)
-		if shift is not None:
-			return shift
-		# Use standard schedule
-		return shiftConfigItem.shift
+		return shift if shift is not None else shiftConfigItem.shift
 
 	def setWorkTimeOverride(self, date, workTime):
 		self.db.setWorkTimeOverride(date, workTime)
 
-	def __getRealWorkTime(self, date, shiftConfigItem):
-		workTime = self.db.getWorkTimeOverride(date)
-		if workTime is not None:
-			return workTime
-		# Use standard schedule
-		return shiftConfigItem.workTime
+	def getRealWorkTime(self, date, shiftConfigItem):
+		time = self.db.getWorkTimeOverride(date)
+		return time if time is not None else shiftConfigItem.workTime
 
 	def setBreakTimeOverride(self, date, breakTime):
 		self.db.setBreakTimeOverride(date, breakTime)
 
-	def __getRealBreakTime(self, date, shiftConfigItem):
-		breakTime = self.db.getBreakTimeOverride(date)
-		if breakTime is not None:
-			return breakTime
-		# Use standard schedule
-		return shiftConfigItem.breakTime
+	def getRealBreakTime(self, date, shiftConfigItem):
+		time = self.db.getBreakTimeOverride(date)
+		return time if time is not None else shiftConfigItem.breakTime
 
 	def setAttendanceTimeOverride(self, date, attendanceTime):
 		self.db.setAttendanceTimeOverride(date, attendanceTime)
 
-	def __getRealAttendanceTime(self, date, shiftConfigItem):
-		attendanceTime = self.db.getAttendanceTimeOverride(date)
-		if attendanceTime is not None:
-			return attendanceTime
-		# Use standard schedule
-		return shiftConfigItem.attendanceTime
+	def getRealAttendanceTime(self, date, shiftConfigItem):
+		time = self.db.getAttendanceTimeOverride(date)
+		return time if time is not None else shiftConfigItem.attendanceTime
 
 	def dateHasTimeOverrides(self, date):
 		return self.db.getWorkTimeOverride(date) is not None or\
@@ -1615,10 +1603,10 @@ class MainWidget(QWidget):
 		assert(date <= endDate)
 		while True:
 			shiftConfigItem = shiftConfig[shiftConfigIndex]
-			currentShift = self.__getRealShift(date, shiftConfigItem)
-			workTime = self.__getRealWorkTime(date, shiftConfigItem)
-			breakTime = self.__getRealBreakTime(date, shiftConfigItem)
-			attendanceTime = self.__getRealAttendanceTime(date, shiftConfigItem)
+			currentShift = self.getRealShift(date, shiftConfigItem)
+			workTime = self.getRealWorkTime(date, shiftConfigItem)
+			breakTime = self.getRealBreakTime(date, shiftConfigItem)
+			attendanceTime = self.getRealAttendanceTime(date, shiftConfigItem)
 
 			dtype = self.getDayType(date)
 			if dtype == DTYPE_DEFAULT:
@@ -1671,10 +1659,10 @@ class MainWidget(QWidget):
 
 		shiftConfigItem = shiftConfig[shiftConfigIndex]
 		dtype = self.getDayType(selDate)
-		shift = self.__getRealShift(selDate, shiftConfigItem)
-		workTime = self.__getRealWorkTime(selDate, shiftConfigItem)
-		breakTime = self.__getRealBreakTime(selDate, shiftConfigItem)
-		attendanceTime = self.__getRealAttendanceTime(selDate, shiftConfigItem)
+		shift = self.getRealShift(selDate, shiftConfigItem)
+		workTime = self.getRealWorkTime(selDate, shiftConfigItem)
+		breakTime = self.getRealBreakTime(selDate, shiftConfigItem)
+		attendanceTime = self.getRealAttendanceTime(selDate, shiftConfigItem)
 
 		self.overrideChangeBlocked = True
 		self.typeCombo.setCurrentIndex(self.typeCombo.findData(QVariant(dtype)))
