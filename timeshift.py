@@ -420,8 +420,22 @@ class TsDatabase(QObject):
 		except (sql.Error), e:
 			self.__sqlError(e)
 
+	def __hasOverride(self, table, date):
+		try:
+			c = self.conn.cursor()
+			c.execute("SELECT COUNT(*) FROM %s WHERE date=?;" % table, (date,))
+			value = c.fetchone()
+			if value:
+				return value[0] > 0
+			return False
+		except (sql.Error), e:
+			self.__sqlError(e)
+
 	def setDayTypeOverride(self, date, daytype):
 		self.__setOverride("override_dayType", date, daytype)
+
+	def hasDayTypeOverride(self, date):
+		return self.__hasOverride("override_dayType", date)
 
 	def getDayTypeOverride(self, date):
 		try:
@@ -446,6 +460,9 @@ class TsDatabase(QObject):
 	def setShiftOverride(self, date, shift):
 		self.__setOverride("override_shift", date, shift)
 
+	def hasShiftOverride(self, date):
+		return self.__hasOverride("override_shift", date)
+
 	def getShiftOverride(self, date):
 		try:
 			return int(self.__getOverride("override_shift", date))
@@ -454,6 +471,9 @@ class TsDatabase(QObject):
 
 	def setWorkTimeOverride(self, date, workTime):
 		self.__setOverride("override_workTime", date, workTime)
+
+	def hasWorkTimeOverride(self, date):
+		return self.__hasOverride("override_workTime", date)
 
 	def getWorkTimeOverride(self, date):
 		try:
@@ -464,6 +484,9 @@ class TsDatabase(QObject):
 	def setBreakTimeOverride(self, date, breakTime):
 		self.__setOverride("override_breakTime", date, breakTime)
 
+	def hasBreakTimeOverride(self, date):
+		return self.__hasOverride("override_breakTime", date)
+
 	def getBreakTimeOverride(self, date):
 		try:
 			return float(self.__getOverride("override_breakTime", date))
@@ -472,6 +495,9 @@ class TsDatabase(QObject):
 
 	def setAttendanceTimeOverride(self, date, attendanceTime):
 		self.__setOverride("override_attendanceTime", date, attendanceTime)
+
+	def hasAttendanceTimeOverride(self, date):
+		return self.__hasOverride("override_attendanceTime", date)
 
 	def getAttendanceTimeOverride(self, date):
 		try:
@@ -1589,9 +1615,9 @@ class MainWidget(QWidget):
 		return time if time is not None else shiftConfigItem.attendanceTime
 
 	def dateHasTimeOverrides(self, date):
-		return self.db.getWorkTimeOverride(date) is not None or\
-		       self.db.getBreakTimeOverride(date) is not None or\
-		       self.db.getAttendanceTimeOverride(date) is not None
+		return self.db.hasAttendanceTimeOverride(date) or\
+		       self.db.hasWorkTimeOverride(date) or\
+		       self.db.hasBreakTimeOverride(date)
 
 	def __calcAccountState(self, snapshot, endDate):
 		shiftConfig = self.db.getShiftConfigItems()
