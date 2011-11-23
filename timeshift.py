@@ -610,16 +610,6 @@ class TimeSpinBox(QDoubleSpinBox):
 		if prefix:
 			self.setPrefix(prefix + " ")
 
-defaultShiftConfig = [
-	ShiftConfigItem("Montag",     SHIFT_DAY, 7.0, 0.5, 8.5),
-	ShiftConfigItem("Dienstag",   SHIFT_DAY, 7.0, 0.5, 8.5),
-	ShiftConfigItem("Mittwoch",   SHIFT_DAY, 7.0, 0.5, 8.5),
-	ShiftConfigItem("Donnerstag", SHIFT_DAY, 7.0, 0.5, 8.5),
-	ShiftConfigItem("Freitag",    SHIFT_DAY, 7.0, 0.5, 8.5),
-	ShiftConfigItem("Samstag",    SHIFT_DAY, 0.0, 0.5, 0.0),
-	ShiftConfigItem("Sonntag",    SHIFT_DAY, 0.0, 0.0, 0.0),
-]
-
 class ShiftConfigDialog(QDialog):
 	def __init__(self, mainWidget):
 		QDialog.__init__(self, mainWidget)
@@ -758,8 +748,7 @@ class ShiftConfigDialog(QDialog):
 			index = 0
 		else:
 			index += 1
-		item = defaultShiftConfig[:][0]
-		item.name = "Unbenannt"
+		item = ShiftConfigItem("Unbenannt", SHIFT_DAY, 7.0, 0.5, 8.5)
 		shiftConfig.insert(index, item)
 		self.mainWidget.db.setShiftConfigItems(shiftConfig)
 		self.loadConfig()
