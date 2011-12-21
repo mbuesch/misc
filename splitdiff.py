@@ -56,7 +56,10 @@ while 1:
 	   line.startswith("+") or \
 	   line.startswith("-") or \
 	   line.startswith(" ") or \
+	   line.startswith("\\ No newline at end of file") or \
 	   line.startswith("index ") or \
+	   line.startswith("old mode") or \
+	   line.startswith("new mode") or \
 	   line.startswith("new file mode ") or \
 	   line.startswith("deleted file mode "):
 		if not inHeader:
