@@ -877,18 +877,23 @@ class EnhancedDialog(QDialog):
 	def commit(self):
 		date = self.mainWidget.calendar.selectedDate()
 
-		dayFlags = oldDayFlags = self.mainWidget.db.getDayFlags(date)
+		dayFlags = oldDayFlags = self.mainWidget.getDayFlags(date)
 		for checkBox, flag in ((self.uncertainCheckBox, DFLAG_UNCERTAIN),
 				       (self.attendantCheckBox, DFLAG_ATTENDANT)):
 			dayFlags &= ~flag
 			dayFlags |= flag if checkBox.checkState() == Qt.Checked else 0
 		if dayFlags != oldDayFlags:
-			self.mainWidget.db.setDayFlags(date, dayFlags)
+			self.mainWidget.setDayFlags(date, dayFlags)
+			if dayFlags & DFLAG_ATTENDANT:
+				# Automatically reset day type, if attendant flag was set.
+				self.mainWidget.setDayType(date, DTYPE_DEFAULT)
 
 		old = self.mainWidget.getCommentFor(date)
 		new = self.comment.document().toPlainText()
 		if old != new:
 			self.mainWidget.setCommentFor(date, new)
+
+		self.mainWidget.recalculate()
 
 class ManageDialog(QDialog):
 	def __init__(self, mainWidget):
@@ -1616,6 +1621,15 @@ class MainWidget(QWidget):
 	def setDayType(self, date, dtype):
 		dtype = dtype if dtype != DTYPE_DEFAULT else None
 		self.db.setDayTypeOverride(date, dtype)
+		if dtype:
+			# Automatically clear attendant flag, if a dtype is set.
+			self.setDayFlags(date, self.getDayFlags(date) & ~DFLAG_ATTENDANT)
+
+	def getDayFlags(self, date):
+		return self.db.getDayFlags(date)
+
+	def setDayFlags(self, date, newFlags):
+		self.db.setDayFlags(date, newFlags)
 
 	def setShiftOverride(self, date, shift):
 		self.db.setShiftOverride(date, shift)
