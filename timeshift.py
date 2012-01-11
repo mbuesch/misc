@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
-# timeshift.py
-# Copyright (c) 2009-2011 Michael Buesch <m@bues.ch>
+# timeshift - Simple work time scheduler
+# Copyright (c) 2009-2012 Michael Buesch <m@bues.ch>
 # Licensed under the GNU/GPL version 2 or later.
 """
 
@@ -9,7 +9,6 @@ import sys
 import os
 import errno
 import base64
-import gzip
 import sqlite3 as sql
 import traceback
 from PyQt4.QtCore import *
@@ -31,6 +30,7 @@ DTYPE_SHORTTIME		= 4
 
 # Day flags
 DFLAG_UNCERTAIN		= (1 << 0)
+DFLAG_ATTENDANT		= (1 << 1)
 
 
 def floatEqual(f0, f1):
@@ -854,25 +854,34 @@ class EnhancedDialog(QDialog):
 		cs = Qt.Checked if dayFlags & DFLAG_UNCERTAIN else Qt.Unchecked
 		self.uncertainCheckBox.setCheckState(cs)
 
-		self.connect(self.uncertainCheckBox, SIGNAL("stateChanged(int)"),
-			     self.__uncertainCheckBoxChanged)
+		self.attendantCheckBox = QCheckBox("Anwesenheitsmarker", self)
+		self.flagsGroup.layout().addWidget(self.attendantCheckBox, 1, 0)
+		cs = Qt.Checked if dayFlags & DFLAG_ATTENDANT else Qt.Unchecked
+		self.attendantCheckBox.setCheckState(cs)
 
-	def __uncertainCheckBoxChanged(self, newState):
+		self.connect(self.uncertainCheckBox, SIGNAL("stateChanged(int)"),
+			     self.__flagCheckBoxChanged)
+		self.connect(self.attendantCheckBox, SIGNAL("stateChanged(int)"),
+			     self.__flagCheckBoxChanged)
+
+	def __flagCheckBoxChanged(self, newState):
+		self.commitAndAccept()
+
+	def closeEvent(self, e):
+		self.commitAndAccept()
+
+	def commitAndAccept(self):
 		self.commit()
 		self.accept()
 
-	def closeEvent(self, e):
-		self.commit()
-
 	def commit(self):
 		date = self.mainWidget.calendar.selectedDate()
+
 		dayFlags = oldDayFlags = self.mainWidget.db.getDayFlags(date)
-
-		if self.uncertainCheckBox.checkState() == Qt.Checked:
-			dayFlags |= DFLAG_UNCERTAIN
-		else:
-			dayFlags &= ~DFLAG_UNCERTAIN
-
+		for checkBox, flag in ((self.uncertainCheckBox, DFLAG_UNCERTAIN),
+				       (self.attendantCheckBox, DFLAG_ATTENDANT)):
+			dayFlags &= ~flag
+			dayFlags |= flag if checkBox.checkState() == Qt.Checked else 0
 		if dayFlags != oldDayFlags:
 			self.mainWidget.db.setDayFlags(date, dayFlags)
 
@@ -880,8 +889,6 @@ class EnhancedDialog(QDialog):
 		new = self.comment.document().toPlainText()
 		if old != new:
 			self.mainWidget.setCommentFor(date, new)
-
-		self.accept()
 
 class ManageDialog(QDialog):
 	def __init__(self, mainWidget):
@@ -1284,6 +1291,7 @@ class Calendar(QCalendarWidget):
 		mainWidget, font = self.mainWidget, painter.font()
 		db = mainWidget.db
 		rx, ry, rw, rh = rect.x(), rect.y(), rect.width(), rect.height()
+		dayFlags = db.getDayFlags(date)
 
 		font.setBold(True)
 		painter.setFont(font)
@@ -1310,6 +1318,9 @@ class Calendar(QCalendarWidget):
 			painter.drawPoint(rx + rw - 8, ry + 8)
 
 		text = self.typeLetter[mainWidget.getDayType(date)]
+		if not text:
+			if dayFlags & DFLAG_ATTENDANT:
+				text = "A"
 		if text:
 			painter.setPen(self.lowerLeftPen)
 			painter.drawText(rx + 4, ry + rh - 4, text)
@@ -1323,7 +1334,6 @@ class Calendar(QCalendarWidget):
 					 ry + rh - 4,
 					 text)
 
-		dayFlags = db.getDayFlags(date)
 		if dayFlags & DFLAG_UNCERTAIN:
 			text = "???"
 			painter.setPen(self.centerPen)
