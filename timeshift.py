@@ -11,9 +11,18 @@ import errno
 import base64
 import sqlite3 as sql
 import traceback
-from PyQt4.QtCore import *
-from PyQt4.QtGui import *
 
+try:
+	# Try to use PySide
+	raise ImportError #XXX disabled
+	from PySide.QtCore import *
+	from PySide.QtGui import *
+	usingPySide = True
+except (ImportError), e:
+	# PyQt4 fallback
+	from PyQt4.QtCore import *
+	from PyQt4.QtGui import *
+	usingPySide = False
 
 # Shift types
 SHIFT_EARLY		= 0
@@ -33,6 +42,14 @@ DFLAG_UNCERTAIN		= (1 << 0)
 DFLAG_ATTENDANT		= (1 << 1)
 
 
+# Compat layer
+if usingPySide:
+	class QVariant(object):
+		def __init__(self, obj):
+			self.obj = obj
+		def toPyObject(self):
+			return self.obj
+
 def floatEqual(f0, f1):
 	return abs(f0 - f1) < 0.001
 
@@ -45,12 +62,16 @@ def IdToQDate(id):
 	return QDateTime.fromTime_t(int(id)).date()
 
 def QStringToBase64(qstring):
+	if usingPySide:
+		return base64.standard_b64encode(qstring)
 	if not isinstance(qstring, QString):
 		qstring = QString(qstring)
 	unistr = unicode(qstring.toUtf8(), "utf-8").encode("utf-8")
 	return base64.standard_b64encode(unistr)
 
 def base64ToQString(b64str):
+	if usingPySide:
+		return base64.standard_b64decode(b64str)
 	unistr = base64.standard_b64decode(b64str).decode("utf-8")
 	return QString(unistr)
 
@@ -159,7 +180,8 @@ class TsDatabase(QObject):
 	INMEM = ":memory:"
 	VERSION = 1
 
-	sql.register_adapter(QString, lambda s: str(s))
+	if not usingPySide:
+		sql.register_adapter(QString, lambda s: str(s))
 
 	sql.register_adapter(QDate, QDateToId)
 	sql.register_converter("QDate", IdToQDate)
@@ -1474,6 +1496,8 @@ class MainWidget(QWidget):
 						 "Alle Dateien (*)",
 						 "", QFileDialog.DontConfirmOverwrite |
 						     QFileDialog.DontUseNativeDialog)
+		if usingPySide:
+			fn = fn[0]
 		if fn:
 			self.doLoadDatabase(fn)
 
@@ -1773,6 +1797,7 @@ class MainWindow(QMainWindow):
 		self.centralWidget().shutdown()
 
 def main(argv):
+	print("Using PySide: %s" % usingPySide)
 	app = QApplication(argv)
 	mainwnd = MainWindow()
 	if len(argv) == 2:
