@@ -44,11 +44,10 @@ DFLAG_ATTENDANT		= (1 << 1)
 
 # Compat layer
 if usingPySide:
-	class QVariant(object):
-		def __init__(self, obj):
-			self.obj = obj
-		def toPyObject(self):
-			return self.obj
+	QVariant = lambda obj: obj
+	qvariantToPy = lambda variant: variant
+else:
+	qvariantToPy = lambda variant: variant.toPyObject()
 
 def floatEqual(f0, f1):
 	return abs(f0 - f1) < 0.001
@@ -789,7 +788,7 @@ class ShiftConfigDialog(QDialog):
 	def updateItem(self, item):
 		item.name = self.nameEdit.text()
 		index = self.shiftCombo.currentIndex()
-		item.shift = self.shiftCombo.itemData(index).toPyObject()
+		item.shift = qvariantToPy(self.shiftCombo.itemData(index))
 		item.workTime = self.workTime.value()
 		item.breakTime = self.breakTime.value()
 		item.attendanceTime = self.attendanceTime.value()
@@ -1087,8 +1086,10 @@ class PresetDialog(QDialog):
 
 	def commitPreset(self, preset):
 		mainWidget = self.mainWidget
-		mainWidget.typeCombo.setCurrentIndex(mainWidget.typeCombo.findData(preset.dayType))
-		mainWidget.shiftCombo.setCurrentIndex(mainWidget.shiftCombo.findData(preset.shift))
+		index = mainWidget.typeCombo.findData(QVariant(preset.dayType))
+		mainWidget.typeCombo.setCurrentIndex(index)
+		index = mainWidget.shiftCombo.findData(QVariant(preset.shift))
+		mainWidget.shiftCombo.setCurrentIndex(index)
 		mainWidget.workTime.setValue(preset.workTime)
 		mainWidget.breakTime.setValue(preset.breakTime)
 		mainWidget.attendanceTime.setValue(preset.attendanceTime)
@@ -1109,11 +1110,13 @@ class PresetDialog(QDialog):
 		item = self.presetList.currentItem()
 		if not item:
 			return
-		preset = item.data(Qt.UserRole).toPyObject()
+		preset = qvariantToPy(item.data(Qt.UserRole))
 		self.presetChangeBlocked = True
 		self.nameEdit.setText(preset.name)
-		self.typeCombo.setCurrentIndex(self.typeCombo.findData(preset.dayType))
-		self.shiftCombo.setCurrentIndex(self.shiftCombo.findData(preset.shift))
+		index = self.typeCombo.findData(QVariant(preset.dayType))
+		self.typeCombo.setCurrentIndex(index)
+		index = self.shiftCombo.findData(QVariant(preset.shift))
+		self.shiftCombo.setCurrentIndex(index)
 		self.workTime.setValue(preset.workTime)
 		self.breakTime.setValue(preset.breakTime)
 		self.attendanceTime.setValue(preset.attendanceTime)
@@ -1126,10 +1129,10 @@ class PresetDialog(QDialog):
 		if not item:
 			return
 		item.setText(self.nameEdit.text())
-		preset = item.data(Qt.UserRole).toPyObject()
+		preset = qvariantToPy(item.data(Qt.UserRole))
 		preset.name = self.nameEdit.text()
-		preset.dayType = self.typeCombo.itemData(self.typeCombo.currentIndex()).toPyObject()
-		preset.shift = self.shiftCombo.itemData(self.shiftCombo.currentIndex()).toPyObject()
+		preset.dayType = qvariantToPy(self.typeCombo.itemData(self.typeCombo.currentIndex()))
+		preset.shift = qvariantToPy(self.shiftCombo.itemData(self.shiftCombo.currentIndex()))
 		preset.workTime = self.workTime.value()
 		preset.breakTime = self.breakTime.value()
 		preset.attendanceTime = self.attendanceTime.value()
@@ -1175,7 +1178,7 @@ class PresetDialog(QDialog):
 	def commitPressed(self):
 		item = self.presetList.currentItem()
 		if item:
-			preset = item.data(Qt.UserRole).toPyObject()
+			preset = qvariantToPy(item.data(Qt.UserRole))
 			self.commitPreset(preset)
 			self.accept()
 
@@ -1245,7 +1248,7 @@ class SnapshotDialog(QDialog):
 
 	def getSnapshot(self):
 		index = self.shiftConfig.currentIndex()
-		shiftConfigIndex = self.shiftConfig.itemData(index).toPyObject()
+		shiftConfigIndex = qvariantToPy(self.shiftConfig.itemData(index))
 		value = self.accountValue.value()
 		return Snapshot(self.date, shiftConfigIndex, value)
 
@@ -1582,11 +1585,11 @@ class MainWidget(QWidget):
 
 		# Day type
 		index = self.typeCombo.currentIndex()
-		self.setDayType(date, self.typeCombo.itemData(index).toPyObject())
+		self.setDayType(date, qvariantToPy(self.typeCombo.itemData(index)))
 
 		# Shift override
 		index = self.shiftCombo.currentIndex()
-		shift = self.shiftCombo.itemData(index).toPyObject()
+		shift = qvariantToPy(self.shiftCombo.itemData(index))
 		if shift == shiftConfigItem.shift:
 			shift = None
 		self.setShiftOverride(date, shift)
