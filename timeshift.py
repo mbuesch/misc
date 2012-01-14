@@ -1084,7 +1084,7 @@ class PresetDialog(QDialog):
 			self.__addPreset(preset)
 		self.presetList.setCurrentRow(0)
 
-	def commitPreset(self, preset):
+	def applyPreset(self, preset):
 		mainWidget = self.mainWidget
 		index = mainWidget.typeCombo.findData(QVariant(preset.dayType))
 		mainWidget.typeCombo.setCurrentIndex(index)
@@ -1122,20 +1122,28 @@ class PresetDialog(QDialog):
 		self.attendanceTime.setValue(preset.attendanceTime)
 		self.presetChangeBlocked = False
 
-	def presetChanged(self):
-		if self.presetChangeBlocked:
-			return
-		item = self.presetList.currentItem()
-		if not item:
-			return
-		item.setText(self.nameEdit.text())
-		preset = qvariantToPy(item.data(Qt.UserRole))
+	def __updatePresetItem(self, preset):
 		preset.name = self.nameEdit.text()
-		preset.dayType = qvariantToPy(self.typeCombo.itemData(self.typeCombo.currentIndex()))
-		preset.shift = qvariantToPy(self.shiftCombo.itemData(self.shiftCombo.currentIndex()))
+		index = self.typeCombo.currentIndex()
+		preset.dayType = qvariantToPy(self.typeCombo.itemData(index))
+		index = self.shiftCombo.currentIndex()
+		preset.shift = qvariantToPy(self.shiftCombo.itemData(index))
 		preset.workTime = self.workTime.value()
 		preset.breakTime = self.breakTime.value()
 		preset.attendanceTime = self.attendanceTime.value()
+
+	def presetChanged(self):
+		if self.presetChangeBlocked:
+			return
+		row = self.presetList.currentRow()
+		if row <= 0:
+			return
+		item = self.presetList.item(row)
+		item.setText(self.nameEdit.text())
+		self.__updatePresetItem(qvariantToPy(item.data(Qt.UserRole)))
+		presets = self.mainWidget.db.getPresets()
+		self.__updatePresetItem(presets[row - 1])
+		self.mainWidget.db.setPresets(presets)
 
 	def addPreset(self):
 		presets = self.mainWidget.db.getPresets()
@@ -1179,7 +1187,7 @@ class PresetDialog(QDialog):
 		item = self.presetList.currentItem()
 		if item:
 			preset = qvariantToPy(item.data(Qt.UserRole))
-			self.commitPreset(preset)
+			self.applyPreset(preset)
 			self.accept()
 
 class SnapshotDialog(QDialog):
