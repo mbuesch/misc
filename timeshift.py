@@ -46,8 +46,24 @@ DFLAG_ATTENDANT		= (1 << 1)
 if usingPySide:
 	QVariant = lambda obj: obj
 	qvariantToPy = lambda variant: variant
-else:
+
+	def QStringToBase64(string):
+		return base64.standard_b64encode(string)
+
+	def base64ToQString(b64str):
+		return base64.standard_b64decode(b64str)
+else: # PyQT4
 	qvariantToPy = lambda variant: variant.toPyObject()
+
+	def QStringToBase64(qstring):
+		if not isinstance(qstring, QString):
+			qstring = QString(qstring)
+		unistr = unicode(qstring.toUtf8(), "utf-8").encode("utf-8")
+		return base64.standard_b64encode(unistr)
+
+	def base64ToQString(b64str):
+		unistr = base64.standard_b64decode(b64str).decode("utf-8")
+		return QString(unistr)
 
 def floatEqual(f0, f1):
 	return abs(f0 - f1) < 0.001
@@ -59,20 +75,6 @@ def QDateToId(qdate):
 def IdToQDate(id):
 	"Convert a unique integer ID to a QDate object"
 	return QDateTime.fromTime_t(int(id)).date()
-
-def QStringToBase64(qstring):
-	if usingPySide:
-		return base64.standard_b64encode(qstring)
-	if not isinstance(qstring, QString):
-		qstring = QString(qstring)
-	unistr = unicode(qstring.toUtf8(), "utf-8").encode("utf-8")
-	return base64.standard_b64encode(unistr)
-
-def base64ToQString(b64str):
-	if usingPySide:
-		return base64.standard_b64decode(b64str)
-	unistr = base64.standard_b64decode(b64str).decode("utf-8")
-	return QString(unistr)
 
 class TsException(Exception): pass
 
