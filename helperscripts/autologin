@@ -1,0 +1,18 @@
+#!/bin/sh
+
+trap true INT TERM
+
+tty="$1"
+user="$2"
+[ -z "$tty" -o -z "$user" ] && { echo "autologin: Invalid parameters"; exit 1; }
+tty="/dev/$tty"
+
+echo "$tty $user" >/run/autologin
+
+/bin/login -f "$user"
+
+while true; do
+	echo "Autologin as user '$user'"
+	/bin/login "$user"
+	sleep 1
+done
