@@ -12,7 +12,6 @@ echo "$tty $user" >/run/autologin
 /bin/login -f "$user"
 
 while true; do
-	echo "Autologin as user '$user'"
-	/bin/login "$user"
 	sleep 1
+	/bin/login
 done
