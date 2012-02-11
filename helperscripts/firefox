@@ -1,0 +1,12 @@
+#!/bin/sh
+#
+# Firefox wrapper
+#
+
+echo "Firefox wrapper..."
+
+/usr/bin/firefox $@
+
+sleep 1
+echo "Cleaning firefox environment..."
+rm -Rf $HOME/.macromedia $HOME/.adobe
