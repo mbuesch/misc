@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+gpg --check-sigs --with-colon $@ |\
+	awk -F: '$1 == "sig" && $2 == "?"  { print $5 }' |\
+	sort | uniq | xargs gpg --recv-keys
