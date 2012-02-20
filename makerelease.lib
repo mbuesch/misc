@@ -4,22 +4,44 @@
 #
 
 # Default hooks
-hook_pre_checkout()		{ true; }
-hook_post_checkout()		{ true; }
-hook_pre_relocate_checkout()	{ true; }
-hook_post_relocate_checkout()	{ true; }
-hook_pre_tarball()		{ true; }
-hook_post_tarball()		{ true; }
-hook_testbuild()		{ true; }
-hook_pre_checkout_remove()	{ true; }
-hook_post_checkout_remove()	{ true; }
-hook_pre_tarball_signature()	{ true; }
-hook_post_tarball_signature()	{ true; }
-hook_pre_tag()			{ true; }
-hook_post_tag()			{ true; }
-hook_pre_move_files()		{ true; }
-hook_post_move_files()		{ true; }
-hook_get_version()		{ die "Must supply hook_get_version()"; }
+default_hook_nothing()
+{
+	true
+}
+
+default_hook_required()
+{
+	die "ERROR: Must supply hook_$1()"
+}
+
+default_hook_testbuild()
+{
+	cd "$1"
+	[ -x ./configure ] && {
+		./configure
+	} || true
+	[ -r ./GNUmakefile -o -r ./makefile -o -r ./Makefile ] && {
+		make
+	} || true
+}
+
+# Assign default hooks
+hook_pre_checkout()		{ default_hook_nothing; }
+hook_post_checkout()		{ default_hook_nothing; }
+hook_pre_relocate_checkout()	{ default_hook_nothing; }
+hook_post_relocate_checkout()	{ default_hook_nothing; }
+hook_pre_tarball()		{ default_hook_nothing; }
+hook_post_tarball()		{ default_hook_nothing; }
+hook_testbuild()		{ default_hook_testbuild $@; }
+hook_pre_checkout_remove()	{ default_hook_nothing; }
+hook_post_checkout_remove()	{ default_hook_nothing; }
+hook_pre_tarball_signature()	{ default_hook_nothing; }
+hook_post_tarball_signature()	{ default_hook_nothing; }
+hook_pre_tag()			{ default_hook_nothing; }
+hook_post_tag()			{ default_hook_nothing; }
+hook_pre_move_files()		{ default_hook_nothing; }
+hook_post_move_files()		{ default_hook_nothing; }
+hook_get_version()		{ default_hook_required get_version; }
 
 cleanup()
 {
