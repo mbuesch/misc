@@ -208,6 +208,7 @@ make_tag()
 		} || {
 			opts="$opts -a" # unsigned
 		}
+		export GIT_DIR="$srcdir/.git"
 		dry_run git tag $opts -m "$tag_message" "$tag_name"
 		;;
 	*)
