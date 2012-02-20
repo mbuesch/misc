@@ -35,21 +35,21 @@ default_hook_testbuild()
 }
 
 # Assign default hooks
-hook_pre_checkout()		{ default_hook_nothing $@; }
-hook_post_checkout()		{ default_hook_post_checkout $@; }
-hook_pre_relocate_checkout()	{ default_hook_nothing $@; }
-hook_post_relocate_checkout()	{ default_hook_nothing $@; }
-hook_pre_tarball()		{ default_hook_nothing $@; }
-hook_post_tarball()		{ default_hook_nothing $@; }
-hook_testbuild()		{ default_hook_testbuild $@; }
-hook_pre_checkout_remove()	{ default_hook_nothing $@; }
-hook_post_checkout_remove()	{ default_hook_nothing $@; }
-hook_pre_tarball_signature()	{ default_hook_nothing $@; }
-hook_post_tarball_signature()	{ default_hook_nothing $@; }
-hook_pre_tag()			{ default_hook_nothing $@; }
-hook_post_tag()			{ default_hook_nothing $@; }
-hook_pre_move_files()		{ default_hook_nothing $@; }
-hook_post_move_files()		{ default_hook_nothing $@; }
+hook_pre_checkout()		{ default_hook_nothing "$@"; }
+hook_post_checkout()		{ default_hook_post_checkout "$@"; }
+hook_pre_relocate_checkout()	{ default_hook_nothing "$@"; }
+hook_post_relocate_checkout()	{ default_hook_nothing "$@"; }
+hook_pre_tarball()		{ default_hook_nothing "$@"; }
+hook_post_tarball()		{ default_hook_nothing "$@"; }
+hook_testbuild()		{ default_hook_testbuild "$@"; }
+hook_pre_checkout_remove()	{ default_hook_nothing "$@"; }
+hook_post_checkout_remove()	{ default_hook_nothing "$@"; }
+hook_pre_tarball_signature()	{ default_hook_nothing "$@"; }
+hook_post_tarball_signature()	{ default_hook_nothing "$@"; }
+hook_pre_tag()			{ default_hook_nothing "$@"; }
+hook_post_tag()			{ default_hook_nothing "$@"; }
+hook_pre_move_files()		{ default_hook_nothing "$@"; }
+hook_post_move_files()		{ default_hook_nothing "$@"; }
 hook_get_version()		{ default_hook_required get_version; }
 
 cleanup()
@@ -95,7 +95,7 @@ dry_run_prefix()
 # $1=program_name, $2+=program_args
 dry_run()
 {
-	$(dry_run_prefix) $@
+	$(dry_run_prefix) "$@"
 }
 
 # $1=program_name
@@ -119,7 +119,7 @@ execute_hook()
 	local hook_name="hook_$1"
 	shift
 	set -e
-	eval $hook_name $@
+	eval $hook_name "$@"
 	set +e
 }
 
@@ -267,8 +267,10 @@ make_tag()
 		} || {
 			opts="$opts -a" # unsigned
 		}
+		local branch=master
+		[ -n "$opt_ref" ] && branch="$opt_ref"
 		export GIT_DIR="$srcdir/.git"
-		dry_run git tag $opts -m "$tag_message" "$tag_name"
+		dry_run git tag $opts -m "$tag_message" "$tag_name" "$branch"
 		;;
 	*)
 		die "tagging: Unknown repos_type"
@@ -335,7 +337,7 @@ makerelease()
 	while [ $# -ge 1 ]; do
 		case "$1" in
 		--help|-h)
-			help $@
+			help "$@"
 			abort 0
 			;;
 		--dry-run)
