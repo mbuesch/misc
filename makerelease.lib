@@ -304,10 +304,10 @@ help()
 	echo
 	echo "Options:"
 	echo "  --dry-run             Do not make persistent changes"
-	echo "  --no-tag              Do not create the repository tag"
-	echo "  --no-sign             Do not sign"
-	echo "  --no-build            Do not run build test"
-	echo "  --ref REF             Checkout REF"
+	echo "  -t|--no-tag           Do not create the repository tag"
+	echo "  -s|--no-sign          Do not sign"
+	echo "  -b|--no-build         Do not run build test"
+	echo "  -r|--ref REF          Checkout version control reference REF"
 	echo "  -c|--compress TYPE    TYPE can be bzip2 (default), gz, xz or none"
 	echo "  -h|--help             Show this help text"
 }
@@ -343,16 +343,16 @@ makerelease()
 		--dry-run)
 			opt_dryrun=1
 			;;
-		--no-tag)
+		-t|--no-tag)
 			opt_notag=1
 			;;
-		--no-sign)
+		-s|--no-sign)
 			opt_nosign=1
 			;;
-		--no-build)
+		-b|--no-build)
 			opt_nobuild=1
 			;;
-		--ref)
+		-r|--ref)
 			shift
 			opt_ref=$1
 			[ -n "$opt_ref" ] || die "Invalid --ref"
