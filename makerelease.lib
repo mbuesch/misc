@@ -1,0 +1,315 @@
+#
+# Release script library
+# Copyright (c) 2012 Michael Buesch <m@bues.ch>
+#
+
+# Default hooks
+hook_pre_checkout()		{ true; }
+hook_post_checkout()		{ true; }
+hook_pre_tarball()		{ true; }
+hook_post_tarball()		{ true; }
+hook_testbuild()		{ true; }
+hook_pre_checkout_remove()	{ true; }
+hook_post_checkout_remove()	{ true; }
+hook_pre_tarball_signature()	{ true; }
+hook_post_tarball_signature()	{ true; }
+hook_pre_tag()			{ true; }
+hook_post_tag()			{ true; }
+hook_pre_move_files()		{ true; }
+hook_post_move_files()		{ true; }
+
+cleanup()
+{
+	[ -d "$tmpdir" ] && rm -rf "$tmpdir"
+}
+
+# $1=code
+abort()
+{
+	cleanup
+	exit $1
+}
+
+# $*=message
+die()
+{
+	echo "$*"
+	abort 1
+}
+
+terminating_signal()
+{
+	die "Terminating signal received"
+}
+
+# $*=message
+info()
+{
+	echo "--- $*"
+}
+
+is_dry_run()
+{
+	[ $opt_dryrun -ne 0 ]
+}
+
+dry_run_prefix()
+{
+	is_dry_run && echo -n "echo dry-run " || true
+}
+
+# $1=program_name, $2+=program_args
+dry_run()
+{
+	$(dry_run_prefix) $@
+}
+
+# $1=program_name
+have_program()
+{
+	which "$1" >/dev/null 2>&1
+}
+
+# $1=program_name, ($2=description)
+assert_program()
+{
+	local bin="$1"
+	local desc="$2"
+	[ -n "$desc" ] || desc="$bin"
+	have_program "$bin" || die "$bin not found. Please install $desc."
+}
+
+# $1=hook_name, $2+=hook_parameters
+execute_hook()
+{
+	local hook_name="hook_$1"
+	shift
+	set -e
+	eval $hook_name $@
+	set +e
+}
+
+detect_repos_type()
+{
+	[ -n "$repos_type" ] || {
+		[ -d "$srcdir/.git" ] && repos_type=git
+	}
+	case "$repos_type" in
+		none|git) ;; # ok
+		*) die "Invalid \$repos_type=$repos_type" ;;
+	esac
+}
+
+make_checkout()
+{
+	checkout_dir="$tmpdir/$release_name"
+	mkdir -p "$checkout_dir" || die "Failed to make checkout dir"
+	execute_hook pre_checkout "$checkout_dir"
+	case "$repos_type" in
+	none)
+		info "Copying source tree"
+		cp -r "$srcdir" "$checkout_dir" ||\
+			die "Failed to copy source tree"
+		;;
+	git)
+		info "Creating git checkout"
+		assert_program git
+		export GIT_DIR="$srcdir/.git"
+		cd "$checkout_dir" || die "Internal error: cd"
+		git checkout -f || die "GIT checkout failed"
+		;;
+	*)
+		die "checkout: Unknown repos_type"
+		;;
+	esac
+	execute_hook post_checkout "$checkout_dir"
+}
+
+make_tarball()
+{
+	local opts="-c"
+	tarball="$release_name.tar"
+	case "$opt_compress" in
+	none)
+		;;
+	bzip2)
+		opts="$opts -j"
+		tarball="$tarball.bz2"
+		;;
+	gz)
+		opts="$opts -z"
+		tarball="$tarball.gz"
+		;;
+	xz)
+		opts="$opts -J"
+		tarball="$tarball.xz"
+		;;
+	*)
+		die "Internal error: opt_compress"
+		;;
+	esac
+	info "Creating $tarball"
+	execute_hook pre_tarball "$tmpdir" "$tarball"
+	cd "$tmpdir" || die "Internal error: cd"
+	tar $opts -f "$tarball" "$release_name" || \
+		die "Failed to create tarball"
+	execute_hook post_tarball "$tmpdir" "$tarball"
+}
+
+make_testbuild()
+{
+	[ $opt_nobuild -eq 0 ] || return
+	info "Running test build"
+	execute_hook testbuild "$checkout_dir"
+}
+
+make_checkout_remove()
+{
+	info "Removing the checkout"
+	execute_hook pre_checkout_remove "$checkout_dir" "$tmpdir"
+	rm -rf "$checkout_dir" || die "Failed to remove checkout"
+	execute_hook post_checkout_remove "$checkout_dir" "$tmpdir"
+}
+
+make_tarball_signature()
+{
+	tarball_signature=
+	[ $opt_nosign -ne 0 ] && return
+	tarball_signature="$tarball.asc"
+	info "Creating signature $tarball_signature"
+	execute_hook pre_tarball_signature "$tmpdir" "$tarball"
+	local opts=
+	[ -n "$GPG_KEY_RELEASE" ] && opts="--default-key $GPG_KEY_RELEASE"
+	cd "$tmpdir" || die "Internal error: cd"
+	assert_program gpg "GNU Privacy Guard"
+	gpg $opts -ab "$tarball" || die "Failed to sign tarball"
+	execute_hook post_tarball_signature "$tmpdir" "$tarball"
+}
+
+make_tag()
+{
+	[ $opt_notag -ne 0 ] && return
+	[ "$repos_type" = "none" ] && return
+	info "Tagging repository"
+	tag_name="$project-$version"
+	tag_message="$project-$version release"
+	execute_hook pre_tag "$srcdir"
+	cd "$srcdir" || die "Internal error: cd"
+	case "$repos_type" in
+	git)
+		assert_program git
+		local opts=
+		[ $opt_nosign -eq 0 ] && {
+			[ -n "$GPG_KEY_RELEASE" ] && {
+				opts="$opts -u $GPG_KEY_RELEASE"
+			} || {
+				opts="$opts -s" # default key
+			}
+		} || {
+			opts="$opts -a" # unsigned
+		}
+		dry_run git tag $opts -m "$tag_message" "$tag_name"
+		;;
+	*)
+		die "tagging: Unknown repos_type"
+		;;
+	esac
+	execute_hook post_tag "$srcdir"
+}
+
+move_files()
+{
+	info "Moving files"
+	execute_hook pre_move_files "$tmpdir" "$srcdir"
+	dry_run mv "$tmpdir/$tarball" "$srcdir" || \
+		die "Failed to move tarball"
+	[ -n "$tarball_signature" ] && {
+		dry_run mv "$tmpdir/$tarball_signature" "$srcdir" || \
+			die "Failed to move signature file"
+	}
+	execute_hook post_move_files "$tmpdir" "$srcdir"
+
+	echo
+	info "Built $project release $version"
+}
+
+help()
+{
+	echo "Usage: $0 [OPTIONS]"
+	echo
+	echo "Environment:"
+	echo "  MAKERELEASE_LIB       May be set to makerelease.lib"
+	echo
+	echo "Options:"
+	echo "  --dry-run             Do not make persistent changes"
+	echo "  --no-tag              Do not create the repository tag"
+	echo "  --no-sign             Do not sign"
+	echo "  --no-build            Do not run build test"
+	echo "  -c|--compress TYPE    TYPE can be bzip2 (default), gz, xz or none"
+	echo "  -h|--help             Show this help text"
+}
+
+# This is the main function called from the main script.
+# Parameters to this functions must be the main script arguments.
+makerelease()
+{
+	[ -n "$project" ] || die "\$project variable not set"
+	[ -n "$version" ] || die "\$version variable not set"
+	[ -n "$srcdir" ] || die "\$srcdir variable not set"
+	[ -n "$release_name" ] || release_name="$project-$version"
+	[ -n "$tmp_basedir" ] || tmp_basedir="/tmp"
+
+	trap terminating_signal TERM INT
+	trap cleanup EXIT
+
+	local template="makerelease-$project.XXXXXXXX"
+	tmpdir="$(mktemp -d --tmpdir="$tmp_basedir" "$template")"
+	[ -d "$tmpdir" ] || die "Failed to create temporary directory"
+
+	opt_dryrun=0
+	opt_notag=0
+	opt_nosign=0
+	opt_nobuild=0
+	opt_compress=bzip2
+
+	while [ $# -ge 1 ]; do
+		case "$1" in
+		--help|-h)
+			help $@
+			abort 0
+			;;
+		--dry-run)
+			opt_dryrun=1
+			;;
+		--no-tag)
+			opt_notag=1
+			;;
+		--no-sign)
+			opt_nosign=1
+			;;
+		--no-build)
+			opt_nobuild=1
+			;;
+		-c|--compress)
+			shift
+			opt_compress="$1"
+			case "$opt_compress" in
+				none|bzip2|gzip|xz) ;; # ok
+				*) die "Invalid compression method" ;;
+			esac
+		esac
+		shift
+	done
+
+	detect_repos_type
+	make_checkout
+	make_tarball
+	make_testbuild
+	make_checkout_remove
+	make_tarball_signature
+	make_tag
+	move_files
+	cleanup
+}
+
+# vim: syntax=sh
