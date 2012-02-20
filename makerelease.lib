@@ -108,15 +108,21 @@ make_checkout()
 	case "$repos_type" in
 	none)
 		info "Copying source tree"
-		cp -r "$srcdir" "$checkout_dir" ||\
+		cp -r "$srcdir" "$checkout_dir" || \
 			die "Failed to copy source tree"
 		;;
 	git)
 		info "Creating git checkout"
 		assert_program git
-		export GIT_DIR="$srcdir/.git"
+		local branch=master
+		[ -n "$opt_ref" ] && branch="$opt_ref"
+		export GIT_DIR="$checkout_dir/.git"
+		git clone --shared --no-checkout \
+			"$srcdir/.git" "$checkout_dir" || \
+			die "Failed to clone git repository"
 		cd "$checkout_dir" || die "Internal error: cd"
-		git checkout -f || die "GIT checkout failed"
+		git checkout -b "__tmp_makerelease-$branch" "$branch" || \
+			die "git checkout failed"
 		;;
 	*)
 		die "checkout: Unknown repos_type"
@@ -246,6 +252,7 @@ help()
 	echo "  --no-tag              Do not create the repository tag"
 	echo "  --no-sign             Do not sign"
 	echo "  --no-build            Do not run build test"
+	echo "  --ref REF             Checkout REF"
 	echo "  -c|--compress TYPE    TYPE can be bzip2 (default), gz, xz or none"
 	echo "  -h|--help             Show this help text"
 }
@@ -271,6 +278,7 @@ makerelease()
 	opt_notag=0
 	opt_nosign=0
 	opt_nobuild=0
+	opt_ref=
 	opt_compress=bzip2
 
 	while [ $# -ge 1 ]; do
@@ -291,6 +299,11 @@ makerelease()
 		--no-build)
 			opt_nobuild=1
 			;;
+		--ref)
+			shift
+			opt_ref=$1
+			[ -n "$opt_ref" ] || die "Invalid --ref"
+			;;
 		-c|--compress)
 			shift
 			opt_compress="$1"
@@ -298,6 +311,10 @@ makerelease()
 				none|bzip2|gzip|xz) ;; # ok
 				*) die "Invalid compression method" ;;
 			esac
+			;;
+		*)
+			die "Invalid option: $1"
+			;;
 		esac
 		shift
 	done
