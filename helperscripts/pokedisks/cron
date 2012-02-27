@@ -1,0 +1,3 @@
+SHELL=/bin/sh
+# m h dom mon dow user	command
+* *	* * *	root	test -x /usr/local/bin/pokedisks && /usr/local/bin/pokedisks
