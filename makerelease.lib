@@ -169,7 +169,7 @@ detect_versioning()
 {
 	version=
 	release_name=
-	execute_hook get_version "$checkout_dir"
+	execute_hook get_version "$checkout_dir/$srcsubdir"
 	[ -n "$version" ] || die "\$version not set in hook_get_version()"
 	[ -n "$release_name" ] || release_name="$project-$version"
 }
@@ -178,8 +178,9 @@ relocate_checkout()
 {
 	execute_hook pre_relocate_checkout "$tmpdir" "$checkout_dir"
 	local new_checkout_dir="$tmpdir/$release_name"
-	mv "$checkout_dir" "$new_checkout_dir" || \
+	mv "$checkout_dir/$srcsubdir" "$new_checkout_dir" || \
 		die "Failed to relocate checkout"
+	rm -rf "$checkout_dir"
 	checkout_dir="$new_checkout_dir"
 	execute_hook post_relocate_checkout "$tmpdir" "$checkout_dir"
 }
@@ -282,14 +283,14 @@ make_tag()
 move_files()
 {
 	info "Moving files"
-	execute_hook pre_move_files "$tmpdir" "$srcdir"
-	dry_run mv "$tmpdir/$tarball" "$srcdir" || \
+	execute_hook pre_move_files "$tmpdir" "$srcdir/$srcsubdir"
+	dry_run mv "$tmpdir/$tarball" "$srcdir/$srcsubdir" || \
 		die "Failed to move tarball"
 	[ -n "$tarball_signature" ] && {
-		dry_run mv "$tmpdir/$tarball_signature" "$srcdir" || \
+		dry_run mv "$tmpdir/$tarball_signature" "$srcdir/$srcsubdir" || \
 			die "Failed to move signature file"
 	}
-	execute_hook post_move_files "$tmpdir" "$srcdir"
+	execute_hook post_move_files "$tmpdir" "$srcdir/$srcsubdir"
 
 	echo
 	info "Built $project release $version"
@@ -318,6 +319,7 @@ makerelease()
 {
 	[ -n "$project" ] || die "\$project variable not set"
 	[ -n "$srcdir" ] || die "\$srcdir variable not set"
+	[ -n "$srcsubdir" ] || srcsubdir=""
 	[ -n "$tmp_basedir" ] || tmp_basedir="/tmp"
 
 	trap terminating_signal TERM INT
