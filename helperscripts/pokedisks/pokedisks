@@ -1,8 +1,14 @@
 #!/bin/sh
 
-random="$(hexdump -n 2 -e '/2 "%u"' /dev/urandom)"
+models='(^EZRX)|(^HDS5C)'
 
+block="$(hexdump -n 2 -e '/2 "%u"' /dev/urandom)"
 for disk in /dev/hd? /dev/sd?; do
 	[ -b "$disk" ] || continue
-	dd if="$disk" of=/dev/null bs=512 count=1 skip=$random >/dev/null 2>&1
+	base="$(basename "$disk")"
+	grep -qEe "$models" "/sys/block/$base/device/model" || continue
+#	echo "Poking $disk block $block"
+	dd if="$disk" of=/dev/null bs=512 count=1 skip="$block" >/dev/null 2>&1
 done
+
+exit 0
