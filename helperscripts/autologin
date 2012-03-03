@@ -7,7 +7,7 @@ user="$2"
 [ -z "$tty" -o -z "$user" ] && { echo "autologin: Invalid parameters"; exit 1; }
 tty="/dev/$tty"
 
-echo "$tty $user" >/run/autologin
+echo "$tty $user" >/var/run/autologin
 
 /bin/login -f "$user"
 
