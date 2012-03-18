@@ -1,0 +1,40 @@
+#!/bin/sh
+
+DISABLED=0
+
+LOGPRIO="cron.info"
+LOGTAG="apt-cron-download"
+
+is_on_ac_power()
+{
+	# Assume on-ac, if files are not found.
+	local basedir="/sys/bus/acpi/drivers/ac"
+	[ -d "$basedir" ] || return 0
+	local acpidir="$(echo $basedir/ACPI* | awk '{print $1;}')"
+	[ -d "$acpidir" ] || return 0
+	local acdir="$(echo $acpidir/power_supply/AC* | awk '{print $1;}')"
+	[ -d "$acdir" ] || return 0
+	local onlinefile="$acdir/online"
+	[ -r "$onlinefile" ] || return 0
+
+	[ "$(cat "$onlinefile")" != "0" ]
+}
+
+[ -z "$DISABLED" -o "$DISABLED" = "0" ] || exit 0
+
+# Only, if on AC power.
+is_on_ac_power || exit 0
+
+# Only, if we are on the IPv4 LAN.
+ping -c1 lan-router >/dev/null 2>&1 || exit 0
+
+# Only, if we have IPv4 internet connectivity.
+ping -c1 ftp.de.debian.org >/dev/null 2>&1 || exit 0
+
+# Do the package database update and package download
+aptitude update 2>&1 |\
+	logger -p "$LOGPRIO" -t "$LOGTAG" || exit 0
+aptitude --download-only safe-upgrade 2>&1 |\
+	logger -p "$LOGPRIO" -t "$LOGTAG" || exit 0
+
+exit 0
