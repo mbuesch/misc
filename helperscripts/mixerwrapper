@@ -5,12 +5,6 @@ command="$1"
 lockfile="/run/lock/mixerwrapper.lock"
 
 
-do_lock()
-{
-	touch "$lockfile"
-	flock -x "$lockfile"
-}
-
 main_ctl_name()
 {
 	for c in PCM Master; do
@@ -25,28 +19,30 @@ main_ctl_name()
 
 do_mute_toggle()
 {
-	do_lock
-	ctl="$(main_ctl_name)"
-	amixer set "$ctl" toggle
-	sleep 0.5
+	( flock -xn 9 || exit 1
+		ctl="$(main_ctl_name)"
+		amixer set "$ctl" toggle >/dev/null
+		sleep 0.5
+	) 9>$lockfile
 }
 
 do_volume_step_down()
 {
-	do_lock
-	ctl="$(main_ctl_name)"
-	amixer set "$ctl" '5%-'
-	sleep 0.15
+	( flock -xn 9 || exit 1
+		ctl="$(main_ctl_name)"
+		amixer set "$ctl" '5%-' >/dev/null
+		sleep 0.15
+	) 9>$lockfile
 }
 
 do_volume_step_up()
 {
-	do_lock
-	ctl="$(main_ctl_name)"
-	echo "CTL=$ctl"
-	amixer set "$ctl" unmute
-	amixer set "$ctl" '5%+'
-	sleep 0.15
+	( flock -xn 9 || exit 1
+		ctl="$(main_ctl_name)"
+		amixer set "$ctl" unmute >/dev/null
+		amixer set "$ctl" '5%+' >/dev/null
+		sleep 0.15
+	) 9>$lockfile
 }
 
 case "$command" in
