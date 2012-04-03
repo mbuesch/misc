@@ -1,0 +1,11 @@
+#!/bin/sh
+
+[ $# -eq 1 -a x"$1" = x"-m" ] && {
+	[ x"$debian_chroot_arch" != x ] && exec echo "$debian_chroot_arch"
+}
+[ "$(which -a uname | wc -l)" -le 1 ] && {
+	echo "Did not find real uname" >&2
+	exit 1
+}
+real_uname="$(which -a uname | tail -n1)"
+exec "$real_uname" "$@"
