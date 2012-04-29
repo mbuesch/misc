@@ -1275,6 +1275,7 @@ class Calendar(QCalendarWidget):
 
 	def todayTimer(self):
 		self.today = self.today.addDays(1)
+		self.setSelectedDate(self.today)
 		self.armTodayTimer()
 		self.redraw()
 
