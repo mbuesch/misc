@@ -25,6 +25,7 @@ except (ImportError), e:
 	usingPySide = False
 
 # Shift types
+SHIFT_DEFAULT		= -1 # (not DB ABI)
 SHIFT_EARLY		= 0
 SHIFT_LATE		= 1
 SHIFT_NIGHT		= 2
@@ -77,6 +78,277 @@ def IdToQDate(id):
 	return QDateTime.fromTime_t(int(id)).date()
 
 class TsException(Exception): pass
+
+class ICal(object):
+	"Simple iCalendar parser"
+
+	class Event(object):
+		def __init__(self):
+			self.props = { }
+
+		def addProp(self, prop):
+			self.props[prop.name] = prop
+
+		def getProp(self, name):
+			try:
+				return self.props[name]
+			except (KeyError), e:
+				return None
+
+		def getDateRange(self):
+			# Returns a list of QDate objects
+			start = self.getProp("DTSTART")
+			if not start:
+				raise TsException("No DTSTART property")
+			end = self.getProp("DTEND")
+			if not end:
+				dur = self.getProp("DURATION")
+				if not dur:
+					return [ start.toQDate() ]
+				raise TsException("TODO: DURATION property "
+					"not implemented, yet.")
+			ret, date = [], start.toQDate()
+			while date < end.toQDate():
+				ret.append(date)
+				date = date.addDays(1)
+			return ret
+
+	class Prop(object):
+		def __init__(self, name, params, value):
+			self.name = name
+			self.params = params
+			self.value = value
+
+		def toQDate(self):
+			date = QDate.fromString(self.value, Qt.ISODate)
+			if date.isValid():
+				return date
+			date = QDate.fromString(self.value, "yyyyMMdd")
+			if date.isValid():
+				return date
+			raise TsException("Date property '%s' "
+				"format error" % self.name)
+
+	def __init__(self):
+		pass
+
+	def getEvents(self):
+		return self.__events
+
+	def __parseParams(self, params):
+		# Returns a list of tuples: (paramName, paramValue)
+		ret = []
+		for param in params:
+			p = param.split('=')
+			if len(p) != 2:
+				raise TsException("Invalid parameter '%s'" % param)
+			p[0] = p[0].upper()
+			ret.append(tuple(p))
+		return ret
+
+	def __unknown(self, propName, value):
+		print("ical: Ignoring unexpected '%s:%s'" %\
+		      (propName, value))
+
+	def parseICal(self, data):
+		self.__events = []
+		inCalendar = False
+		curEvent = None
+		for line in data.splitlines():
+			if not line.strip():
+				continue
+			vstart = line.find(':')
+			value = line[vstart+1:]
+			prop = line[:vstart].split(';')
+			propName = prop[0].strip().upper()
+			try:
+				propParams = prop[1:]
+			except (IndexError), e:
+				propParams = []
+			propParams = self.__parseParams(propParams)
+			if not inCalendar:
+				if propName == "BEGIN" and\
+				   value.strip().upper() == "VCALENDAR":
+					inCalendar = True
+					continue
+				self.__unknown(propName, value)
+				continue
+			if not curEvent:
+				if propName in ("METHOD", "PRODID", "VERSION"):
+					continue
+				if propName == "BEGIN" and\
+				   value.strip().upper() == "VEVENT":
+					curEvent = self.Event()
+					continue
+				if propName == "END" and\
+				   value.strip().upper() == "VCALENDAR":
+				   	curEvent = None
+					inCalendar = False
+					continue
+				self.__unknown(propName, value)
+				continue
+			if propName == "END" and\
+			   value.strip().upper() == "VEVENT":
+				self.__events.append(curEvent)
+				curEvent = None
+				continue
+			curEvent.addProp(self.Prop(propName, propParams, value))
+
+class ICalImport(ICal):
+	class Opts(object):
+		def __init__(self, setShift, setDayType):
+			self.setShift = setShift
+			self.setDayType = setDayType
+
+	def __init__(self, widget, db):
+		ICal.__init__(self)
+		self.widget = widget
+		self.db = db
+
+	def importICal(self, data, opts):
+		self.parseICal(data)
+		for event in self.getEvents():
+			summary = event.getProp("SUMMARY")
+			if not summary:
+				raise TsException(
+					"Event does not have SUMMARY attribute")
+			for date in event.getDateRange():
+				self.__doImport(event, date, opts)
+
+	def __doImport(self, event, date, opts):
+		if opts.setDayType != DTYPE_DEFAULT:
+			newDType = opts.setDayType
+			curDType = self.db.getDayTypeOverride(date)
+			if curDType is not None and\
+			   curDType != newDType:
+			   	yes = self.__question(date,
+					"Has day-type override",
+					date.toString() + ": "
+					"Already has day type. Override?")
+				if not yes:
+					newDType = curDType
+			if curDType != newDType:
+				self.db.setDayTypeOverride(date, newDType)
+		if opts.setShift != SHIFT_DEFAULT:
+			newShift = opts.setShift
+			curShift = self.db.getShiftOverride(date)
+			if curShift is not None and\
+			   curShift != newShift:
+			   	yes = self.__question(date,
+					"Has shift override",
+					date.toString() + ": "
+					"Already has shift. Override?")
+				if not yes:
+					newShift = curShift
+			if curShift != newShift:
+				self.db.setShiftOverride(date, newShift)
+		summary = event.getProp("SUMMARY").value
+		newComment = summary
+		curComment = self.db.getComment(date)
+		if curComment and\
+		   curComment != newComment:
+			yes = self.__question(date, "Comment exists",
+				"A comment exists:\n'" + curComment +\
+				"'\n\nAppend '%s'?" % summary)
+			if yes:
+				newComment = curComment + '\n' + summary
+			else:
+				newComment = curComment
+		if curComment != newComment:
+			self.db.setComment(date, newComment)
+
+	def __question(self, date, caption, text):
+		res = QMessageBox.question(self.widget,
+			date.toString() + ": " + caption,
+			text,
+			QMessageBox.Yes | QMessageBox.No |\
+			QMessageBox.Cancel)
+		if res & QMessageBox.Cancel:
+			raise TsException("Cancelled")
+		return bool(res & QMessageBox.Yes)
+
+class ICalImportDialog(QDialog, ICalImport):
+	def __init__(self, parent, db):
+		QWidget.__init__(self, parent)
+		ICalImport.__init__(self, self, db)
+
+		self.setWindowTitle("iCalendar Import")
+		self.setLayout(QGridLayout())
+
+		self.modGroup = QGroupBox("Tagesoptionen pro ical-event setzen")
+		self.modGroup.setLayout(QGridLayout())
+		self.layout().addWidget(self.modGroup, 0, 0)
+
+		self.typeCombo = DayTypeComboBox(self)
+		self.modGroup.layout().addWidget(self.typeCombo, 0, 0)
+
+		self.shiftCombo = ShiftComboBox(self, defaultShift=True)
+		self.modGroup.layout().addWidget(self.shiftCombo, 1, 0)
+
+		self.fileButton = QPushButton("iCal Datei Import")
+		self.layout().addWidget(self.fileButton, 1, 0)
+		self.connect(self.fileButton, SIGNAL("released()"),
+			     self.fileImport)
+
+	def fileImport(self):
+		ret = QFileDialog.getOpenFileName(self, "iCalendar Datei", "",
+			"iCalendar Dateien (*.ics);;"
+			"Alle Dateien (*)")
+		if usingPySide:
+			fn, selFilter = ret
+		else:
+			fn = ret
+		if not fn:
+			return
+		self.__fileImport(fn)
+		self.accept()
+
+	def __fileImport(self, filename):
+		try:
+			fd = open(filename, "rb")
+			data = fd.read()
+			fd.close()
+		except (IOError), e:
+			QMessageBox.critical(self,
+				"iCal Laden fehlgeschlagen",
+				"Laden fehlgeschlagen:\n" + str(e))
+			return
+		opts = ICalImport.Opts(
+			setShift = self.shiftCombo.selectedShift(),
+			setDayType = self.typeCombo.selectedDayType()
+		)
+		try:
+			self.importICal(data, opts)
+		except (TsException), e:
+			QMessageBox.critical(self,
+				"iCal Import fehlgeschlagen",
+				"Import fehlgeschagen:\n" + str(e))
+
+class DayTypeComboBox(QComboBox):
+	def __init__(self, parent=None):
+		QComboBox.__init__(self, parent)
+		self.addItem("---", QVariant(DTYPE_DEFAULT))
+		self.addItem("Zeitausgleich", QVariant(DTYPE_COMPTIME))
+		self.addItem("Urlaub", QVariant(DTYPE_HOLIDAY))
+		self.addItem("Feiertag", QVariant(DTYPE_FEASTDAY))
+		self.addItem("Kurzarbeit", QVariant(DTYPE_SHORTTIME))
+
+	def selectedDayType(self):
+		return qvariantToPy(self.itemData(self.currentIndex()))
+
+class ShiftComboBox(QComboBox):
+	def __init__(self, parent=None, shortNames=False, defaultShift=False):
+		QComboBox.__init__(self, parent)
+		sfx = "" if shortNames else "schicht"
+		if defaultShift:
+			self.addItem("Regulaere Schicht", QVariant(SHIFT_DEFAULT))
+		self.addItem("Frueh" + sfx, QVariant(SHIFT_EARLY))
+		self.addItem("Nacht" + sfx, QVariant(SHIFT_NIGHT))
+		self.addItem("Spaet" + sfx, QVariant(SHIFT_LATE))
+		self.addItem("Normal" + sfx, QVariant(SHIFT_DAY))
+
+	def selectedShift(self):
+		return qvariantToPy(self.itemData(self.currentIndex()))
 
 class ShiftConfigItem(object):
 	def __init__(self, name, shift, workTime, breakTime, attendanceTime):
@@ -704,11 +976,7 @@ class ShiftConfigDialog(QDialog):
 
 		label = QLabel("Schicht", self)
 		self.layout().addWidget(label, 1, 2)
-		self.shiftCombo = QComboBox(self)
-		self.shiftCombo.addItem("Frueh", QVariant(SHIFT_EARLY))
-		self.shiftCombo.addItem("Nacht", QVariant(SHIFT_NIGHT))
-		self.shiftCombo.addItem("Spaet", QVariant(SHIFT_LATE))
-		self.shiftCombo.addItem("Normal", QVariant(SHIFT_DAY))
+		self.shiftCombo = ShiftComboBox(self, shortNames=True)
 		self.layout().addWidget(self.shiftCombo, 1, 3)
 
 		label = QLabel("Arbeitszeit", self)
@@ -944,6 +1212,11 @@ class ManageDialog(QDialog):
 		self.connect(self.schedConfButton, SIGNAL("released()"),
 			     self.doShiftConfig)
 
+		self.icalButton = QPushButton("iCalendar import", self)
+		self.fileGroup.layout().addWidget(self.icalButton, 3, 0)
+		self.connect(self.icalButton, SIGNAL("released()"),
+			     self.icalImport)
+
 		self.paramsGroup = QGroupBox("Parameter", self)
 		self.paramsGroup.setLayout(QGridLayout())
 		self.layout().addWidget(self.paramsGroup, 0, 2)
@@ -990,6 +1263,12 @@ class ManageDialog(QDialog):
 		self.mainWidget.worldUpdate()
 		self.accept()
 
+	def icalImport(self):
+		dlg = ICalImportDialog(self.mainWidget, self.mainWidget.db)
+		dlg.exec_()
+		self.mainWidget.worldUpdate()
+		self.accept()
+
 class PresetDialog(QDialog):
 	def __init__(self, mainWidget):
 		QDialog.__init__(self, mainWidget)
@@ -1012,19 +1291,10 @@ class PresetDialog(QDialog):
 		self.nameEdit = QLineEdit(self)
 		self.layout().addWidget(self.nameEdit, 0, 2)
 
-		self.typeCombo = QComboBox(self)
-		self.typeCombo.addItem("---", QVariant(DTYPE_DEFAULT))
-		self.typeCombo.addItem("Zeitausgleich", QVariant(DTYPE_COMPTIME))
-		self.typeCombo.addItem("Urlaub", QVariant(DTYPE_HOLIDAY))
-		self.typeCombo.addItem("Feiertag", QVariant(DTYPE_FEASTDAY))
-		self.typeCombo.addItem("Kurzarbeit", QVariant(DTYPE_SHORTTIME))
+		self.typeCombo = DayTypeComboBox(self)
 		self.layout().addWidget(self.typeCombo, 1, 2)
 
-		self.shiftCombo = QComboBox(self)
-		self.shiftCombo.addItem("Fruehschicht", QVariant(SHIFT_EARLY))
-		self.shiftCombo.addItem("Nachtschicht", QVariant(SHIFT_NIGHT))
-		self.shiftCombo.addItem("Spaetschicht", QVariant(SHIFT_LATE))
-		self.shiftCombo.addItem("Normalschicht", QVariant(SHIFT_DAY))
+		self.shiftCombo = ShiftComboBox(self)
 		self.layout().addWidget(self.shiftCombo, 2, 2)
 
 		self.workTime = TimeSpinBox(self, prefix="Arb.zeit")
@@ -1405,19 +1675,10 @@ class MainWidget(QWidget):
 		self.calendar = Calendar(self)
 		self.layout().addWidget(self.calendar, 0, 0, 5, 3)
 
-		self.typeCombo = QComboBox(self)
-		self.typeCombo.addItem("---", QVariant(DTYPE_DEFAULT))
-		self.typeCombo.addItem("Zeitausgleich", QVariant(DTYPE_COMPTIME))
-		self.typeCombo.addItem("Urlaub", QVariant(DTYPE_HOLIDAY))
-		self.typeCombo.addItem("Feiertag", QVariant(DTYPE_FEASTDAY))
-		self.typeCombo.addItem("Kurzarbeit", QVariant(DTYPE_SHORTTIME))
+		self.typeCombo = DayTypeComboBox(self)
 		self.layout().addWidget(self.typeCombo, 0, 4)
 
-		self.shiftCombo = QComboBox(self)
-		self.shiftCombo.addItem("Fruehschicht", QVariant(SHIFT_EARLY))
-		self.shiftCombo.addItem("Nachtschicht", QVariant(SHIFT_NIGHT))
-		self.shiftCombo.addItem("Spaetschicht", QVariant(SHIFT_LATE))
-		self.shiftCombo.addItem("Normalschicht", QVariant(SHIFT_DAY))
+		self.shiftCombo = ShiftComboBox(self)
 		self.layout().addWidget(self.shiftCombo, 1, 4)
 
 		self.workTime = TimeSpinBox(self, prefix="Arb.zeit")
