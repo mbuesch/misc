@@ -14,7 +14,6 @@ import traceback
 
 try:
 	# Try to use PySide
-	raise ImportError #XXX disabled
 	from PySide.QtCore import *
 	from PySide.QtGui import *
 	usingPySide = True
@@ -49,10 +48,10 @@ if usingPySide:
 	qvariantToPy = lambda variant: variant
 
 	def QStringToBase64(string):
-		return base64.standard_b64encode(string)
+		return base64.standard_b64encode(unicode(string, "utf-8"))
 
 	def base64ToQString(b64str):
-		return base64.standard_b64decode(b64str)
+		return base64.standard_b64decode(b64str).decode("utf-8")
 else: # PyQT4
 	qvariantToPy = lambda variant: variant.toPyObject()
 
