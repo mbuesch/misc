@@ -268,7 +268,7 @@ class ICalImport(ICal):
 
 class ICalImportDialog(QDialog, ICalImport):
 	def __init__(self, parent, db):
-		QWidget.__init__(self, parent)
+		QDialog.__init__(self, parent)
 		ICalImport.__init__(self, self, db)
 
 		self.setWindowTitle("iCalendar Import")
