@@ -375,7 +375,7 @@ class ShiftConfigItem(object):
 		try:
 			return ShiftConfigItem(
 				base64ToQString(elems[0]),
-				int(elems[1]),
+				int(elems[1], 10),
 				float(elems[2]),
 				float(elems[3]),
 				float(elems[4])
@@ -411,8 +411,8 @@ class Preset(object):
 		try:
 			return Preset(
 				base64ToQString(elems[0]),
-				int(elems[1]),
-				int(elems[2]),
+				int(elems[1], 10),
+				int(elems[2], 10),
 				float(elems[3]),
 				float(elems[4]),
 				float(elems[5])
@@ -446,10 +446,10 @@ class Snapshot(object):
 			elems.append("0") # Holidays. db-v1 compat
 		try:
 			return Snapshot(
-				IdToQDate(int(elems[0])),
-				int(elems[1]),
+				IdToQDate(int(elems[0], 10)),
+				int(elems[1], 10),
 				float(elems[2]),
-				int(elems[3])
+				int(elems[3], 10)
 			)
 		except (IndexError, ValueError), e:
 			raise TsException("Snapshot.fromString() "
@@ -550,7 +550,7 @@ class TsDatabase(QObject):
 
 	def __checkDatabaseVersion(self):
 		try:
-			dbVer = int(self.__getParameter("dbVersion"))
+			dbVer = int(self.__getParameter("dbVersion"), 10)
 			if dbVer not in self.COMPAT_VERSIONS:
 				raise TsException("Unsupported database "
 					"version v%d" % dbVer)
@@ -743,7 +743,7 @@ class TsDatabase(QObject):
 
 	def getDayTypeOverride(self, date):
 		try:
-			return int(self.__getOverride("override_dayType", date))
+			return int(self.__getOverride("override_dayType", date), 10)
 		except (ValueError, TypeError), e:
 			return None
 
@@ -770,7 +770,7 @@ class TsDatabase(QObject):
 
 	def getShiftOverride(self, date):
 		try:
-			return int(self.__getOverride("override_shift", date))
+			return int(self.__getOverride("override_shift", date), 10)
 		except (ValueError, TypeError), e:
 			return None
 
