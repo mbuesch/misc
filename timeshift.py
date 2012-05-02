@@ -422,10 +422,12 @@ class Preset(object):
 					  "invalid string: " + str(string))
 
 class Snapshot(object):
-	def __init__(self, date, shiftConfigIndex, accountValue):
+	def __init__(self, date, shiftConfigIndex, accountValue,
+		     holidaysLeft):
 		self.date = date
 		self.shiftConfigIndex = shiftConfigIndex
 		self.accountValue = accountValue
+		self.holidaysLeft = holidaysLeft
 
 	@staticmethod
 	def toString(snapshot):
@@ -433,25 +435,30 @@ class Snapshot(object):
 			(	str(QDateToId(snapshot.date)),
 				str(snapshot.shiftConfigIndex),
 				str(snapshot.accountValue),
+				str(snapshot.holidaysLeft),
 			)
 		)
 
 	@staticmethod
 	def fromString(string):
 		elems = string.split(";")
+		if len(elems) == 3:
+			elems.append("0") # Holidays. db-v1 compat
 		try:
 			return Snapshot(
 				IdToQDate(int(elems[0])),
 				int(elems[1]),
-				float(elems[2])
+				float(elems[2]),
+				int(elems[3])
 			)
 		except (IndexError, ValueError), e:
 			raise TsException("Snapshot.fromString() "
 					  "invalid string: " + str(string))
 
 class TsDatabase(QObject):
-	INMEM = ":memory:"
-	VERSION = 1
+	INMEM		= ":memory:"
+	VERSION		= 2
+	COMPAT_VERSIONS	= ( 1, 2 )
 
 	if not usingPySide:
 		sql.register_adapter(QString, lambda s: str(s))
@@ -544,9 +551,20 @@ class TsDatabase(QObject):
 	def __checkDatabaseVersion(self):
 		try:
 			dbVer = int(self.__getParameter("dbVersion"))
-			if dbVer != self.VERSION:
-				raise TsException(
-					"Unsupported database version")
+			if dbVer not in self.COMPAT_VERSIONS:
+				raise TsException("Unsupported database "
+					"version v%d" % dbVer)
+			if dbVer < self.VERSION:
+				print("Converting database from "
+				      "v%d to v%d" % (dbVer, self.VERSION))
+				# Convert all snapshots.
+				for snapshot in self.getAllSnapshots():
+					self.setSnapshot(snapshot.date,
+							 snapshot)
+				# Remove "HolidaysPerYear" parameter.
+				self.__setParameter("HolidaysPerYear", None)
+				# Update DB version
+				self.__setDatabaseVersion()
 		except (sql.Error), e:
 			self.__sqlError(e)
 		except (ValueError), e:
@@ -684,15 +702,6 @@ class TsDatabase(QObject):
 		except (sql.Error), e:
 			self.__sqlError(e)
 
-	def setHolidaysPerYear(self, count):
-		self.__setParameter("holidaysPerYear", count)
-
-	def getHolidaysPerYear(self):
-		try:
-			return int(self.__getParameter("HolidaysPerYear"))
-		except (ValueError, TypeError), e:
-			return 30
-
 	def __setOverride(self, table, date, value):
 		try:
 			c = self.conn.cursor()
@@ -741,6 +750,7 @@ class TsDatabase(QObject):
 	def findDayTypeDates(self, daytype, beginDate, endDate):
 		# Find all dates with the specified "daytype" between
 		# "beginDate" and "endDate".
+		# XXX: Currently unused.
 		try:
 			c = self.conn.cursor()
 			c.execute("""
@@ -948,6 +958,19 @@ class TimeSpinBox(QDoubleSpinBox):
 		self.setSingleStep(step)
 		self.setAccelerated(True)
 		self.setKeyboardTracking(False)
+		if suffix:
+			self.setSuffix(" " + suffix)
+		if prefix:
+			self.setPrefix(prefix + " ")
+
+class DaySpinBox(QSpinBox):
+	def __init__(self, parent, val=0, minVal=0, maxVal=365,
+		     step=1, prefix=None, suffix="Tage"):
+		QSpinBox.__init__(self, parent)
+		self.setMinimum(minVal)
+		self.setMaximum(maxVal)
+		self.setValue(val)
+		self.setSingleStep(step)
 		if suffix:
 			self.setSuffix(" " + suffix)
 		if prefix:
@@ -1217,33 +1240,6 @@ class ManageDialog(QDialog):
 		self.connect(self.icalButton, SIGNAL("released()"),
 			     self.icalImport)
 
-		self.paramsGroup = QGroupBox("Parameter", self)
-		self.paramsGroup.setLayout(QGridLayout())
-		self.layout().addWidget(self.paramsGroup, 0, 2)
-
-		self.holidays = QSpinBox(self)
-		self.holidays.setMinimum(0)
-		self.holidays.setMaximum(1024)
-		self.holidays.setSingleStep(1)
-		self.holidays.setAccelerated(True)
-		self.holidays.setPrefix("Urlaub/a = ")
-		self.holidays.setSuffix(" Tage")
-		self.paramsGroup.layout().addWidget(self.holidays, 0, 0, 1, 2)
-
-		self.loadParams()
-
-		self.connect(self.holidays, SIGNAL("valueChanged(int)"),
-			     self.updateParams)
-
-	def loadParams(self):
-		mainWidget = self.mainWidget
-		self.holidays.setValue(mainWidget.db.getHolidaysPerYear())
-
-	def updateParams(self):
-		mainWidget = self.mainWidget
-		mainWidget.db.setHolidaysPerYear(self.holidays.value())
-		mainWidget.worldUpdate()
-
 	def loadDatabase(self):
 		self.mainWidget.loadDatabase()
 		self.accept()
@@ -1463,7 +1459,8 @@ class PresetDialog(QDialog):
 			self.accept()
 
 class SnapshotDialog(QDialog):
-	def __init__(self, mainWidget, date, shiftConfigIndex=0, accountValue=0.0):
+	def __init__(self, mainWidget, date,
+		     shiftConfigIndex=0, accountValue=0.0, holidays=0):
 		QDialog.__init__(self, mainWidget)
 		self.setWindowTitle("Schnappschuss setzen")
 		self.setLayout(QGridLayout())
@@ -1495,20 +1492,25 @@ class SnapshotDialog(QDialog):
 				step=0.1, decimals=1)
 		self.layout().addWidget(self.accountValue, 2, 1)
 
+		l = QLabel("Urlaubsstand:", self)
+		self.layout().addWidget(l, 3, 0)
+		self.holidays = DaySpinBox(self, val=holidays)
+		self.layout().addWidget(self.holidays, 3, 1)
+
 		self.removeButton = QPushButton("Schnappschuss loeschen", self)
-		self.layout().addWidget(self.removeButton, 3, 0, 1, 2)
+		self.layout().addWidget(self.removeButton, 4, 0, 1, 2)
 		self.connect(self.removeButton, SIGNAL("released()"),
 			     self.removeSnapshot)
 		if not mainWidget.dateHasSnapshot(date):
 			self.removeButton.hide()
 
 		self.okButton = QPushButton("Setzen", self)
-		self.layout().addWidget(self.okButton, 4, 0)
+		self.layout().addWidget(self.okButton, 5, 0)
 		self.connect(self.okButton, SIGNAL("released()"),
 			     self.ok)
 
 		self.cancelButton = QPushButton("Abbrechen", self)
-		self.layout().addWidget(self.cancelButton, 4, 1)
+		self.layout().addWidget(self.cancelButton, 5, 1)
 		self.connect(self.cancelButton, SIGNAL("released()"),
 			     self.cancel)
 
@@ -1529,8 +1531,10 @@ class SnapshotDialog(QDialog):
 	def getSnapshot(self):
 		index = self.shiftConfig.currentIndex()
 		shiftConfigIndex = qvariantToPy(self.shiftConfig.itemData(index))
-		value = self.accountValue.value()
-		return Snapshot(self.date, shiftConfigIndex, value)
+		accValue = self.accountValue.value()
+		holidaysLeft = self.holidays.value()
+		return Snapshot(self.date, shiftConfigIndex,
+				accValue, holidaysLeft)
 
 class Calendar(QCalendarWidget):
 	def __init__(self, mainWidget):
@@ -1659,6 +1663,18 @@ class Calendar(QCalendarWidget):
 		if self.isVisible():
 			self.hide()
 			self.show()
+
+class AccountState(object):
+	"Calculated account state."
+
+	def __init__(self, date, shiftConfigIndex,
+		     accountAtStartOfDay, accountAtEndOfDay,
+		     holidaysLeft):
+		self.date = date
+		self.shiftConfigIndex = shiftConfigIndex
+		self.accountAtStartOfDay = accountAtStartOfDay
+		self.accountAtEndOfDay = accountAtEndOfDay
+		self.holidaysLeft = holidaysLeft
 
 class MainWidget(QWidget):
 	def __init__(self, parent=None):
@@ -1825,19 +1841,24 @@ class MainWidget(QWidget):
 		snapshot = self.getSnapshotFor(date)
 		shiftConfigIndex = 0
 		accountValue = 0.0
+		holidays = 0
 		if snapshot is None:
 			# Calculate the account state w.r.t. the
 			# last shapshot.
 			snapshot = self.db.findSnapshotForDate(date)
 			if snapshot:
-				(shiftConfigIndex, startOfTheDay, endOfTheDay) = self.__calcAccountState(snapshot, date)
-				accountValue = startOfTheDay
+				accState = self.__calcAccountState(
+					snapshot, date)
+				accountValue = accState.accountAtStartOfDay
+				holidays = accState.holidaysLeft #FIXME at start of day.
 		else:
 			# We already have a snapshot on that day. Modify it.
 			shiftConfigIndex = snapshot.shiftConfigIndex
 			accountValue = snapshot.accountValue
+			holidays = snapshot.holidaysLeft
 		dlg = SnapshotDialog(self, date,
-				     shiftConfigIndex, accountValue)
+				     shiftConfigIndex, accountValue,
+				     holidays)
 		if dlg.exec_():
 			self.__setSnapshot(dlg.getSnapshot())
 			self.worldUpdate()
@@ -1970,6 +1991,7 @@ class MainWidget(QWidget):
 		shiftConfigIndex = snapshot.shiftConfigIndex
 		startOfTheDay = snapshot.accountValue
 		endOfTheDay = startOfTheDay
+		holidaysLeft = snapshot.holidaysLeft
 		assert(date <= endDate)
 		while True:
 			shiftConfigItem = shiftConfig[shiftConfigIndex]
@@ -1986,7 +2008,9 @@ class MainWidget(QWidget):
 					endOfTheDay -= breakTime
 			elif dtype == DTYPE_COMPTIME:
 				endOfTheDay -= workTime
-			elif dtype in (DTYPE_HOLIDAY, DTYPE_FEASTDAY, DTYPE_SHORTTIME):
+			elif dtype == DTYPE_HOLIDAY:
+				holidaysLeft -= 1
+			elif dtype in (DTYPE_FEASTDAY, DTYPE_SHORTTIME):
 				pass # no change
 			else:
 				assert(0)
@@ -1996,12 +2020,9 @@ class MainWidget(QWidget):
 			date = date.addDays(1)
 			shiftConfigIndex = (shiftConfigIndex + 1) % nrShiftConfigs
 			startOfTheDay = endOfTheDay
-		return (shiftConfigIndex, startOfTheDay, endOfTheDay)
-
-	def __holidaysLeft(self, date):
-		beginDate = QDate(date.year(), 1, 1)
-		dates = self.db.findDayTypeDates(DTYPE_HOLIDAY, beginDate, date)
-		return self.db.getHolidaysPerYear() - len(dates)
+		return AccountState(endDate, shiftConfigIndex,
+				    startOfTheDay, endOfTheDay,
+				    holidaysLeft)
 
 	def recalculate(self):
 		selDate = self.calendar.selectedDate()
@@ -2024,10 +2045,9 @@ class MainWidget(QWidget):
 		self.enableOverrideControls(True)
 
 		# Then calculate the account state
-		(shiftConfigIndex, startOfTheDay, endOfTheDay) = self.__calcAccountState(snapshot, selDate)
-		holidaysLeft = self.__holidaysLeft(selDate)
+		accState = self.__calcAccountState(snapshot, selDate)
 
-		shiftConfigItem = shiftConfig[shiftConfigIndex]
+		shiftConfigItem = shiftConfig[accState.shiftConfigIndex]
 		dtype = self.getDayType(selDate)
 		shift = self.getRealShift(selDate, shiftConfigItem)
 		workTime = self.getRealWorkTime(selDate, shiftConfigItem)
@@ -2044,8 +2064,9 @@ class MainWidget(QWidget):
 
 		dateString = selDate.toString("dd.MM.yyyy")
 		self.output.setText("Konto am %s:  Beginn: %.1f  Ende: %.1f  Urlaub: %d" %\
-			(dateString, round(startOfTheDay, 1),
-			 round(endOfTheDay, 1), holidaysLeft))
+			(dateString, round(accState.accountAtStartOfDay, 1),
+			 round(accState.accountAtEndOfDay, 1),
+			 accState.holidaysLeft))
 
 class MainWindow(QMainWindow):
 	def __init__(self, parent=None):
