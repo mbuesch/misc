@@ -79,11 +79,12 @@ def IdToQDate(id):
 
 class TsException(Exception): pass
 
-class ICal(object):
+class ICal(QObject):
 	"Simple iCalendar parser"
 
-	class Event(object):
+	class Event(QObject):
 		def __init__(self):
+			QObject.__init__(self)
 			self.props = { }
 
 		def addProp(self, prop):
@@ -113,8 +114,9 @@ class ICal(object):
 				date = date.addDays(1)
 			return ret
 
-	class Prop(object):
+	class Prop(QObject):
 		def __init__(self, name, params, value):
+			QObject.__init__(self)
 			self.name = name
 			self.params = params
 			self.value = value
@@ -130,7 +132,7 @@ class ICal(object):
 				"format error" % self.name)
 
 	def __init__(self):
-		pass
+		QObject.__init__(self)
 
 	def getEvents(self):
 		return self.__events
@@ -195,8 +197,9 @@ class ICal(object):
 			curEvent.addProp(self.Prop(propName, propParams, value))
 
 class ICalImport(ICal):
-	class Opts(object):
+	class Opts(QObject):
 		def __init__(self, setShift, setDayType):
+			QObject.__init__(self)
 			self.setShift = setShift
 			self.setDayType = setDayType
 
@@ -350,8 +353,9 @@ class ShiftComboBox(QComboBox):
 	def selectedShift(self):
 		return qvariantToPy(self.itemData(self.currentIndex()))
 
-class ShiftConfigItem(object):
+class ShiftConfigItem(QObject):
 	def __init__(self, name, shift, workTime, breakTime, attendanceTime):
+		QObject.__init__(self)
 		self.name = name
 		self.shift = shift
 		self.workTime = workTime
@@ -384,8 +388,9 @@ class ShiftConfigItem(object):
 			raise TsException("ShiftConfigItem.fromString() "
 					  "invalid string: " + str(string))
 
-class Preset(object):
+class Preset(QObject):
 	def __init__(self, name, dayType, shift, workTime, breakTime, attendanceTime):
+		QObject.__init__(self)
 		self.name = name
 		self.dayType = dayType
 		self.shift = shift
@@ -421,9 +426,10 @@ class Preset(object):
 			raise TsException("Preset.fromString() "
 					  "invalid string: " + str(string))
 
-class Snapshot(object):
+class Snapshot(QObject):
 	def __init__(self, date, shiftConfigIndex, accountValue,
 		     holidaysLeft):
+		QObject.__init__(self)
 		self.date = date
 		self.shiftConfigIndex = shiftConfigIndex
 		self.accountValue = accountValue
@@ -1664,12 +1670,13 @@ class Calendar(QCalendarWidget):
 			self.hide()
 			self.show()
 
-class AccountState(object):
+class AccountState(QObject):
 	"Calculated account state."
 
 	def __init__(self, date, shiftConfigIndex,
 		     accountAtStartOfDay, accountAtEndOfDay,
 		     holidaysAtStartOfDay, holidaysAtEndOfDay):
+		QObject.__init__(self)
 		self.date = date
 		self.shiftConfigIndex = shiftConfigIndex
 		self.accountAtStartOfDay = accountAtStartOfDay
