@@ -45,8 +45,8 @@ DFLAG_ATTENDANT		= (1 << 1)
 
 # Compat layer
 if usingPySide:
-	makeQVariant = lambda obj: obj
-	qvariantToPy = lambda variant: variant
+	constructQVariant = lambda obj: obj
+	dereferenceQVariant = lambda variant: variant
 
 	def QStringToBase64(string):
 		return base64.standard_b64encode(unicode(string, "utf-8"))
@@ -54,20 +54,8 @@ if usingPySide:
 	def base64ToQString(b64str):
 		return base64.standard_b64decode(b64str).decode("utf-8")
 else: # PyQT4
-	class QVariantContainer(object):
-		def __init__(self, obj):
-			self.obj = obj
-
-	def makeQVariant(obj):
-		if isinstance(obj, int):
-			return QVariant(obj)
-		return QVariant(QVariantContainer(obj))
-
-	def qvariantToPy(variant):
-		pyObj = variant.toPyObject()
-		if isinstance(pyObj, int):
-			return pyObj
-		return pyObj.obj
+	constructQVariant = lambda obj: QVariant(obj)
+	dereferenceQVariant = lambda variant: variant.toPyObject()
 
 	def QStringToBase64(qstring):
 		if not isinstance(qstring, QString):
@@ -78,6 +66,21 @@ else: # PyQT4
 	def base64ToQString(b64str):
 		unistr = base64.standard_b64decode(b64str).decode("utf-8")
 		return QString(unistr)
+
+class QVariantContainer(object): # Must not be QObject derived.
+	def __init__(self, obj):
+		self.obj = obj
+
+def makeQVariant(obj):
+	if isinstance(obj, int):
+		return constructQVariant(obj)
+	return constructQVariant(QVariantContainer(obj))
+
+def qvariantToPy(variant):
+	pyObj = dereferenceQVariant(variant)
+	if isinstance(pyObj, QVariantContainer):
+		return pyObj.obj
+	return pyObj
 
 def floatEqual(f0, f1):
 	return abs(f0 - f1) < 0.001
