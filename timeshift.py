@@ -1669,12 +1669,13 @@ class AccountState(object):
 
 	def __init__(self, date, shiftConfigIndex,
 		     accountAtStartOfDay, accountAtEndOfDay,
-		     holidaysLeft):
+		     holidaysAtStartOfDay, holidaysAtEndOfDay):
 		self.date = date
 		self.shiftConfigIndex = shiftConfigIndex
 		self.accountAtStartOfDay = accountAtStartOfDay
 		self.accountAtEndOfDay = accountAtEndOfDay
-		self.holidaysLeft = holidaysLeft
+		self.holidaysAtStartOfDay = holidaysAtStartOfDay
+		self.holidaysAtEndOfDay = holidaysAtEndOfDay
 
 class MainWidget(QWidget):
 	def __init__(self, parent=None):
@@ -1850,7 +1851,7 @@ class MainWidget(QWidget):
 				accState = self.__calcAccountState(
 					snapshot, date)
 				accountValue = accState.accountAtStartOfDay
-				holidays = accState.holidaysLeft #FIXME at start of day.
+				holidays = accState.holidaysAtStartOfDay
 		else:
 			# We already have a snapshot on that day. Modify it.
 			shiftConfigIndex = snapshot.shiftConfigIndex
@@ -1987,42 +1988,44 @@ class MainWidget(QWidget):
 	def __calcAccountState(self, snapshot, endDate):
 		shiftConfig = self.db.getShiftConfigItems()
 		nrShiftConfigs = len(shiftConfig)
-		date = snapshot.date
-		shiftConfigIndex = snapshot.shiftConfigIndex
-		startOfTheDay = snapshot.accountValue
-		endOfTheDay = startOfTheDay
-		holidaysLeft = snapshot.holidaysLeft
-		assert(date <= endDate)
+		state = AccountState(
+			date = snapshot.date,
+			shiftConfigIndex = snapshot.shiftConfigIndex,
+			accountAtStartOfDay = snapshot.accountValue,
+			accountAtEndOfDay = snapshot.accountValue,
+			holidaysAtStartOfDay = snapshot.holidaysLeft,
+			holidaysAtEndOfDay = snapshot.holidaysLeft
+		)
+		assert(state.date <= endDate)
 		while True:
-			shiftConfigItem = shiftConfig[shiftConfigIndex]
-			currentShift = self.getRealShift(date, shiftConfigItem)
-			workTime = self.getRealWorkTime(date, shiftConfigItem)
-			breakTime = self.getRealBreakTime(date, shiftConfigItem)
-			attendanceTime = self.getRealAttendanceTime(date, shiftConfigItem)
+			shiftConfigItem = shiftConfig[state.shiftConfigIndex]
+			currentShift = self.getRealShift(state.date, shiftConfigItem)
+			workTime = self.getRealWorkTime(state.date, shiftConfigItem)
+			breakTime = self.getRealBreakTime(state.date, shiftConfigItem)
+			attendanceTime = self.getRealAttendanceTime(state.date, shiftConfigItem)
 
-			dtype = self.getDayType(date)
+			dtype = self.getDayType(state.date)
 			if dtype == DTYPE_DEFAULT:
 				if attendanceTime > 0.001:
-					endOfTheDay += attendanceTime
-					endOfTheDay -= workTime
-					endOfTheDay -= breakTime
+					state.accountAtEndOfDay += attendanceTime
+					state.accountAtEndOfDay -= workTime
+					state.accountAtEndOfDay -= breakTime
 			elif dtype == DTYPE_COMPTIME:
-				endOfTheDay -= workTime
+				state.accountAtEndOfDay -= workTime
 			elif dtype == DTYPE_HOLIDAY:
-				holidaysLeft -= 1
+				state.holidaysAtEndOfDay -= 1
 			elif dtype in (DTYPE_FEASTDAY, DTYPE_SHORTTIME):
 				pass # no change
 			else:
 				assert(0)
 
-			if date == endDate:
+			if state.date == endDate:
 				break
-			date = date.addDays(1)
-			shiftConfigIndex = (shiftConfigIndex + 1) % nrShiftConfigs
-			startOfTheDay = endOfTheDay
-		return AccountState(endDate, shiftConfigIndex,
-				    startOfTheDay, endOfTheDay,
-				    holidaysLeft)
+			state.date = state.date.addDays(1)
+			state.shiftConfigIndex = (state.shiftConfigIndex + 1) % nrShiftConfigs
+			state.accountAtStartOfDay = state.accountAtEndOfDay
+			state.holidaysAtStartOfDay = state.holidaysAtEndOfDay
+		return state
 
 	def recalculate(self):
 		selDate = self.calendar.selectedDate()
@@ -2066,7 +2069,7 @@ class MainWidget(QWidget):
 		self.output.setText("Konto am %s:  Beginn: %.1f  Ende: %.1f  Urlaub: %d" %\
 			(dateString, round(accState.accountAtStartOfDay, 1),
 			 round(accState.accountAtEndOfDay, 1),
-			 accState.holidaysLeft))
+			 accState.holidaysAtEndOfDay))
 
 class MainWindow(QMainWindow):
 	def __init__(self, parent=None):
