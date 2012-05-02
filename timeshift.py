@@ -45,7 +45,7 @@ DFLAG_ATTENDANT		= (1 << 1)
 
 # Compat layer
 if usingPySide:
-	QVariant = lambda obj: obj
+	makeQVariant = lambda obj: obj
 	qvariantToPy = lambda variant: variant
 
 	def QStringToBase64(string):
@@ -54,7 +54,20 @@ if usingPySide:
 	def base64ToQString(b64str):
 		return base64.standard_b64decode(b64str).decode("utf-8")
 else: # PyQT4
-	qvariantToPy = lambda variant: variant.toPyObject()
+	class QVariantContainer(object):
+		def __init__(self, obj):
+			self.obj = obj
+
+	def makeQVariant(obj):
+		if isinstance(obj, int):
+			return QVariant(obj)
+		return QVariant(QVariantContainer(obj))
+
+	def qvariantToPy(variant):
+		pyObj = variant.toPyObject()
+		if isinstance(pyObj, int):
+			return pyObj
+		return pyObj.obj
 
 	def QStringToBase64(qstring):
 		if not isinstance(qstring, QString):
@@ -330,11 +343,11 @@ class ICalImportDialog(QDialog, ICalImport):
 class DayTypeComboBox(QComboBox):
 	def __init__(self, parent=None):
 		QComboBox.__init__(self, parent)
-		self.addItem("---", QVariant(DTYPE_DEFAULT))
-		self.addItem("Zeitausgleich", QVariant(DTYPE_COMPTIME))
-		self.addItem("Urlaub", QVariant(DTYPE_HOLIDAY))
-		self.addItem("Feiertag", QVariant(DTYPE_FEASTDAY))
-		self.addItem("Kurzarbeit", QVariant(DTYPE_SHORTTIME))
+		self.addItem("---", makeQVariant(DTYPE_DEFAULT))
+		self.addItem("Zeitausgleich", makeQVariant(DTYPE_COMPTIME))
+		self.addItem("Urlaub", makeQVariant(DTYPE_HOLIDAY))
+		self.addItem("Feiertag", makeQVariant(DTYPE_FEASTDAY))
+		self.addItem("Kurzarbeit", makeQVariant(DTYPE_SHORTTIME))
 
 	def selectedDayType(self):
 		return qvariantToPy(self.itemData(self.currentIndex()))
@@ -344,11 +357,11 @@ class ShiftComboBox(QComboBox):
 		QComboBox.__init__(self, parent)
 		sfx = "" if shortNames else "schicht"
 		if defaultShift:
-			self.addItem("Regulaere Schicht", QVariant(SHIFT_DEFAULT))
-		self.addItem("Frueh" + sfx, QVariant(SHIFT_EARLY))
-		self.addItem("Nacht" + sfx, QVariant(SHIFT_NIGHT))
-		self.addItem("Spaet" + sfx, QVariant(SHIFT_LATE))
-		self.addItem("Normal" + sfx, QVariant(SHIFT_DAY))
+			self.addItem("Regulaere Schicht", makeQVariant(SHIFT_DEFAULT))
+		self.addItem("Frueh" + sfx, makeQVariant(SHIFT_EARLY))
+		self.addItem("Nacht" + sfx, makeQVariant(SHIFT_NIGHT))
+		self.addItem("Spaet" + sfx, makeQVariant(SHIFT_LATE))
+		self.addItem("Normal" + sfx, makeQVariant(SHIFT_DAY))
 
 	def selectedShift(self):
 		return qvariantToPy(self.itemData(self.currentIndex()))
@@ -1077,7 +1090,7 @@ class ShiftConfigDialog(QDialog):
 		self.attendanceTime.setValue(0.0)
 		if item:
 			self.nameEdit.setText(item.name)
-			index = self.shiftCombo.findData(QVariant(item.shift))
+			index = self.shiftCombo.findData(makeQVariant(item.shift))
 			self.shiftCombo.setCurrentIndex(index)
 			self.workTime.setValue(item.workTime)
 			self.breakTime.setValue(item.breakTime)
@@ -1337,7 +1350,7 @@ class PresetDialog(QDialog):
 
 	def __addPreset(self, preset):
 		item = QListWidgetItem(preset.name)
-		item.setData(Qt.UserRole, QVariant(preset))
+		item.setData(Qt.UserRole, makeQVariant(preset))
 		self.presetList.addItem(item)
 
 	def loadPresets(self):
@@ -1360,9 +1373,9 @@ class PresetDialog(QDialog):
 
 	def applyPreset(self, preset):
 		mainWidget = self.mainWidget
-		index = mainWidget.typeCombo.findData(QVariant(preset.dayType))
+		index = mainWidget.typeCombo.findData(makeQVariant(preset.dayType))
 		mainWidget.typeCombo.setCurrentIndex(index)
-		index = mainWidget.shiftCombo.findData(QVariant(preset.shift))
+		index = mainWidget.shiftCombo.findData(makeQVariant(preset.shift))
 		mainWidget.shiftCombo.setCurrentIndex(index)
 		mainWidget.workTime.setValue(preset.workTime)
 		mainWidget.breakTime.setValue(preset.breakTime)
@@ -1387,9 +1400,9 @@ class PresetDialog(QDialog):
 		preset = qvariantToPy(item.data(Qt.UserRole))
 		self.presetChangeBlocked = True
 		self.nameEdit.setText(preset.name)
-		index = self.typeCombo.findData(QVariant(preset.dayType))
+		index = self.typeCombo.findData(makeQVariant(preset.dayType))
 		self.typeCombo.setCurrentIndex(index)
-		index = self.shiftCombo.findData(QVariant(preset.shift))
+		index = self.shiftCombo.findData(makeQVariant(preset.shift))
 		self.shiftCombo.setCurrentIndex(index)
 		self.workTime.setValue(preset.workTime)
 		self.breakTime.setValue(preset.breakTime)
@@ -1484,10 +1497,10 @@ class SnapshotDialog(QDialog):
 		index = 0
 		for cfg in shiftConfig:
 			name = "%d \"%s\"" % (index + 1, cfg.name)
-			self.shiftConfig.addItem(name, QVariant(index))
+			self.shiftConfig.addItem(name, makeQVariant(index))
 			index += 1
 		self.layout().addWidget(self.shiftConfig, 1, 1)
-		index = self.shiftConfig.findData(QVariant(shiftConfigIndex))
+		index = self.shiftConfig.findData(makeQVariant(shiftConfigIndex))
 		if index >= 0:
 			self.shiftConfig.setCurrentIndex(index)
 
@@ -2065,8 +2078,8 @@ class MainWidget(QWidget):
 		attendanceTime = self.getRealAttendanceTime(selDate, shiftConfigItem)
 
 		self.overrideChangeBlocked = True
-		self.typeCombo.setCurrentIndex(self.typeCombo.findData(QVariant(dtype)))
-		self.shiftCombo.setCurrentIndex(self.shiftCombo.findData(QVariant(shift)))
+		self.typeCombo.setCurrentIndex(self.typeCombo.findData(makeQVariant(dtype)))
+		self.shiftCombo.setCurrentIndex(self.shiftCombo.findData(makeQVariant(shift)))
 		self.workTime.setValue(workTime)
 		self.breakTime.setValue(breakTime)
 		self.attendanceTime.setValue(attendanceTime)
