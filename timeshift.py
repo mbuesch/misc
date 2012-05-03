@@ -49,7 +49,9 @@ if usingPySide:
 	dereferenceQVariant = lambda variant: variant
 
 	def QStringToBase64(string):
-		return base64.standard_b64encode(unicode(string, "utf-8"))
+		if not isinstance(string, unicode):
+			string = unicode(string, "utf-8")
+		return base64.standard_b64encode(string)
 
 	def base64ToQString(b64str):
 		return base64.standard_b64decode(b64str).decode("utf-8")
