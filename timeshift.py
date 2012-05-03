@@ -6,11 +6,8 @@
 """
 
 import sys
-import os
-import errno
 import base64
 import sqlite3 as sql
-import traceback
 
 try:
 	# Try to use PySide
@@ -526,6 +523,7 @@ class TsDatabase(QObject):
 	def __sqlError(self, exception):
 		msg = "SQL error: " + str(exception)
 		print(msg)
+		import traceback
 		traceback.print_stack()
 		raise TsException(msg)
 
