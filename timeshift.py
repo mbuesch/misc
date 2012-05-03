@@ -1481,15 +1481,14 @@ class PresetDialog(QDialog):
 			self.accept()
 
 class SnapshotDialog(QDialog):
-	def __init__(self, mainWidget, date,
-		     shiftConfigIndex=0, accountValue=0.0, holidays=0):
+	def __init__(self, mainWidget, accountState):
 		QDialog.__init__(self, mainWidget)
 		self.setWindowTitle("Schnappschuss setzen")
 		self.setLayout(QGridLayout())
 		self.mainWidget = mainWidget
-		self.date = date
+		self.date = accountState.date
 
-		self.dateLabel = QLabel(date.toString("dddd, dd.MM.yyyy"), self)
+		self.dateLabel = QLabel(self.date.toString("dddd, dd.MM.yyyy"), self)
 		self.layout().addWidget(self.dateLabel, 0, 0)
 
 		l = QLabel("Startschicht:", self)
@@ -1497,33 +1496,34 @@ class SnapshotDialog(QDialog):
 		self.shiftConfig = QComboBox(self)
 		shiftConfig = mainWidget.db.getShiftConfigItems()
 		assert(shiftConfig)
-		index = 0
-		for cfg in shiftConfig:
+		for index, cfg in enumerate(shiftConfig):
 			name = "%d \"%s\"" % (index + 1, cfg.name)
 			self.shiftConfig.addItem(name, makeQVariant(index))
-			index += 1
 		self.layout().addWidget(self.shiftConfig, 1, 1)
-		index = self.shiftConfig.findData(makeQVariant(shiftConfigIndex))
+		index = self.shiftConfig.findData(
+				makeQVariant(accountState.shiftConfigIndex))
 		if index >= 0:
 			self.shiftConfig.setCurrentIndex(index)
 
-		l = QLabel("Kontostand:", self)
+		l = QLabel("Zeitkontostand:", self)
 		self.layout().addWidget(l, 2, 0)
-		self.accountValue = TimeSpinBox(self, val=accountValue,
+		self.accountValue = TimeSpinBox(self,
+				val=accountState.accountAtStartOfDay,
 				minVal=-1000.0, maxVal=1000.0,
 				step=0.1, decimals=1)
 		self.layout().addWidget(self.accountValue, 2, 1)
 
 		l = QLabel("Urlaubsstand:", self)
 		self.layout().addWidget(l, 3, 0)
-		self.holidays = DaySpinBox(self, val=holidays)
+		self.holidays = DaySpinBox(self,
+				val=accountState.holidaysAtStartOfDay)
 		self.layout().addWidget(self.holidays, 3, 1)
 
 		self.removeButton = QPushButton("Schnappschuss loeschen", self)
 		self.layout().addWidget(self.removeButton, 4, 0, 1, 2)
 		self.connect(self.removeButton, SIGNAL("released()"),
 			     self.removeSnapshot)
-		if not mainWidget.dateHasSnapshot(date):
+		if not mainWidget.dateHasSnapshot(self.date):
 			self.removeButton.hide()
 
 		self.okButton = QPushButton("Setzen", self)
@@ -1689,9 +1689,9 @@ class Calendar(QCalendarWidget):
 class AccountState(QObject):
 	"Calculated account state."
 
-	def __init__(self, date, shiftConfigIndex,
-		     accountAtStartOfDay, accountAtEndOfDay,
-		     holidaysAtStartOfDay, holidaysAtEndOfDay):
+	def __init__(self, date, shiftConfigIndex=0,
+		     accountAtStartOfDay=0.0, accountAtEndOfDay=0.0,
+		     holidaysAtStartOfDay=0, holidaysAtEndOfDay=0):
 		QObject.__init__(self)
 		self.date = date
 		self.shiftConfigIndex = shiftConfigIndex
@@ -1863,9 +1863,7 @@ class MainWidget(QWidget):
 			return
 		date = self.calendar.selectedDate()
 		snapshot = self.getSnapshotFor(date)
-		shiftConfigIndex = 0
-		accountValue = 0.0
-		holidays = 0
+		accState = AccountState(date)
 		if snapshot is None:
 			# Calculate the account state w.r.t. the
 			# last shapshot.
@@ -1873,16 +1871,12 @@ class MainWidget(QWidget):
 			if snapshot:
 				accState = self.__calcAccountState(
 					snapshot, date)
-				accountValue = accState.accountAtStartOfDay
-				holidays = accState.holidaysAtStartOfDay
 		else:
 			# We already have a snapshot on that day. Modify it.
-			shiftConfigIndex = snapshot.shiftConfigIndex
-			accountValue = snapshot.accountValue
-			holidays = snapshot.holidaysLeft
-		dlg = SnapshotDialog(self, date,
-				     shiftConfigIndex, accountValue,
-				     holidays)
+			accState.shiftConfigIndex = snapshot.shiftConfigIndex
+			accState.accountAtStartOfDay = snapshot.accountValue
+			accState.holidaysAtStartOfDay = snapshot.holidaysLeft
+		dlg = SnapshotDialog(self, accState)
 		if dlg.exec_():
 			self.__setSnapshot(dlg.getSnapshot())
 			self.worldUpdate()
