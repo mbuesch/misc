@@ -48,24 +48,24 @@ if usingPySide:
 	constructQVariant = lambda obj: obj
 	dereferenceQVariant = lambda variant: variant
 
-	def QStringToBase64(string):
+	def toBase64(string):
 		if not isinstance(string, unicode):
 			string = unicode(string, "utf-8")
 		return base64.standard_b64encode(string)
 
-	def base64ToQString(b64str):
+	def fromBase64(b64str):
 		return base64.standard_b64decode(b64str).decode("utf-8")
 else: # PyQT4
 	constructQVariant = lambda obj: QVariant(obj)
 	dereferenceQVariant = lambda variant: variant.toPyObject()
 
-	def QStringToBase64(qstring):
-		if not isinstance(qstring, QString):
-			qstring = QString(qstring)
-		unistr = unicode(qstring.toUtf8(), "utf-8").encode("utf-8")
+	def toBase64(string):
+		if not isinstance(string, QString):
+			string = QString(string)
+		unistr = unicode(string.toUtf8(), "utf-8").encode("utf-8")
 		return base64.standard_b64encode(unistr)
 
-	def base64ToQString(b64str):
+	def fromBase64(b64str):
 		unistr = base64.standard_b64decode(b64str).decode("utf-8")
 		return QString(unistr)
 
@@ -383,7 +383,7 @@ class ShiftConfigItem(QObject):
 	@staticmethod
 	def toString(item):
 		return ";".join(
-			(	QStringToBase64(item.name),
+			(	toBase64(item.name),
 				str(item.shift),
 				str(item.workTime),
 				str(item.breakTime),
@@ -396,7 +396,7 @@ class ShiftConfigItem(QObject):
 		elems = string.split(";")
 		try:
 			return ShiftConfigItem(
-				base64ToQString(elems[0]),
+				fromBase64(elems[0]),
 				int(elems[1], 10),
 				float(elems[2]),
 				float(elems[3]),
@@ -419,7 +419,7 @@ class Preset(QObject):
 	@staticmethod
 	def toString(preset):
 		return ";".join(
-			(	QStringToBase64(preset.name),
+			(	toBase64(preset.name),
 				str(preset.dayType),
 				str(preset.shift),
 				str(preset.workTime),
@@ -433,7 +433,7 @@ class Preset(QObject):
 		elems = string.split(";")
 		try:
 			return Preset(
-				base64ToQString(elems[0]),
+				fromBase64(elems[0]),
 				int(elems[1], 10),
 				int(elems[2], 10),
 				float(elems[3]),
