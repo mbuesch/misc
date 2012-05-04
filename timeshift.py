@@ -11,7 +11,6 @@ import sqlite3 as sql
 
 try:
 	# Try to use PySide
-	raise ImportError #FIXME
 	from PySide.QtCore import *
 	from PySide.QtGui import *
 	usingPySide = True
