@@ -26,12 +26,15 @@ default_hook_post_checkout()
 default_hook_testbuild()
 {
 	cd "$1"
-	[ -x ./configure ] && {
+	if [ -x ./configure ]; then
 		./configure
-	} || true
-	[ -r ./GNUmakefile -o -r ./makefile -o -r ./Makefile ] && {
+	fi
+	if [ -r ./GNUmakefile -o -r ./makefile -o -r ./Makefile ]; then
 		make
-	} || true
+	fi
+	if [ -x ./setup.py ]; then
+		./setup.py build
+	fi
 }
 
 # Assign default hooks
