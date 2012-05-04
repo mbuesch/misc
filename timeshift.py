@@ -29,7 +29,7 @@ SHIFT_NIGHT		= 2
 SHIFT_DAY		= 3
 
 # Day type overrides
-DTYPE_DEFAULT		= 0
+DTYPE_DEFAULT		= 0 # (not DB ABI)
 DTYPE_COMPTIME		= 1
 DTYPE_HOLIDAY		= 2
 DTYPE_FEASTDAY		= 3
@@ -46,12 +46,21 @@ if usingPySide:
 	dereferenceQVariant = lambda variant: variant
 
 	def toBase64(string):
-		if not isinstance(string, unicode):
-			string = unicode(string, "utf-8")
-		return base64.standard_b64encode(string)
+		try:
+			if isinstance(string, str):
+				string = string.decode("utf-8")
+			string = string.encode("utf-8")
+			return base64.standard_b64encode(string)
+		except (Exception), e:
+			print("base64 encoding error: %s" % str(e))
+			return ""
 
 	def fromBase64(b64str):
-		return base64.standard_b64decode(b64str).decode("utf-8")
+		try:
+			return base64.standard_b64decode(b64str).decode("utf-8")
+		except (Exception), e:
+			print("base64 decoding error: %s" % str(e))
+			return ""
 else: # PyQT4
 	constructQVariant = lambda obj: QVariant(obj)
 	dereferenceQVariant = lambda variant: variant.toPyObject()
