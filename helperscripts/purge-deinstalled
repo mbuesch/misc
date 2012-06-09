@@ -1,0 +1,80 @@
+#!/bin/sh
+#
+# Purge deinstalled packages on Debian
+# Copyright (c) 2012 Michael Buesch <m@bues.ch>
+#
+
+die()
+{
+	echo "$*"
+	exit 1
+}
+
+usage()
+{
+	echo "Purge deinstalled packages on Debian"
+	echo
+	echo "Usage: purge-deinstalled [OPTIONS]"
+	echo
+	echo "Options:"
+	echo " -y|--yes         Don't ask for confirmation"
+	echo " --dry-run        Simulate purge"
+}
+
+# $1=pkgname
+do_purge()
+{
+	local pkg="$1"
+
+	[ -n "$opt_dryrun" ] && {
+		echo "Dryrun: purge $pkg"
+		return 0
+	}
+
+	dpkg --purge "$pkg" || die "Failed to purge '$pkg'"
+	echo
+}
+
+opt_yes=
+opt_dryrun=
+
+while [ $# -ge 1 ]; do
+	case "$1" in
+	-h|--help)
+		usage
+		exit 0
+		;;
+	-y|--yes)
+		opt_yes=1
+		;;
+	--dry-run)
+		opt_dryrun=1
+		;;
+	*)
+		die "Unknown option: $1"
+		;;
+	esac
+	shift
+done
+
+[ "$(id -u)" = "0" ] || die "Permission denied"
+
+for pkg in $(dpkg --get-selections |\
+	     grep -Ee '[[:space:]]deinstall$' |\
+	     grep -Eoe '^[^[:space:]]+'); do
+	[ -n "$opt_yes" ] && {
+		do_purge "$pkg"
+		continue
+	}
+	res=
+	read -p "Purge package '$pkg'? [y] " res || die "aborted"
+	[ "x$res" = "x" -o\
+	  "x$res" = "xy" -o "x$res" = "xY" -o\
+	  "x$res" = "xyes" -o "x$res" = "xYES" -o\
+	  "x$res" = "x1" ] && {
+		do_purge "$pkg"
+		continue
+	}
+done
+
+exit 0
