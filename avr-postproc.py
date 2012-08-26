@@ -34,7 +34,11 @@ def generate_io_table(inc_file):
 	# Parse the file and get the IO section
 	in_io = False
 	rawtab = []
-	for line in open(inc_file, "r").readlines():
+	try:
+		lines = open(inc_file, "r").readlines()
+	except IOError as e:
+		die("Failed to read INC-FILE '%s': %s" % (inc_file, str(e)))
+	for line in lines:
 		line = line.strip()
 		if line.startswith("; ***** I/O REGISTER DEFINITIONS"):
 			in_io = True
