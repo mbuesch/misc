@@ -78,7 +78,7 @@ class Insn:
 		if len(s) == 0 or s[0] == "...":
 			raise Insn.StringIgnore()
 		# Look for comments
-		self.comment = None
+		self.comment = ""
 		for i in range(0, len(s)):
 			if s[i][0] != ";":
 				continue
@@ -95,7 +95,7 @@ class Insn:
 		if len(s) < 2:
 			raise Insn.StringErr()
 		# Remove opcodes
-		while ishex(s[1]):
+		while len(s[1]) == 2 and ishex(s[1]):
 			s.pop(1)
 		# Extract offset (2ab:)
 		off = s[0]
@@ -121,26 +121,34 @@ class Insn:
 		s = ""
 		if self.callers:
 			s += "\n; FUNCTION called by "
-			i = 0
-			for caller in self.callers:
+			for i, caller in enumerate(self.callers):
 				s += "0x%04X " % caller.get_offset()
-				i += 1
-				if i > 20:
-					s += "\n; "
-					i = 0
+				if i != 0 and \
+				   (i + 1) % 6 == 0 and \
+				   i != len(self.callers) - 1:
+					s += "\n;\t\t"
 			s += "\n"
-		s += (LABEL_FMT + ":\t%s\t") % (self.get_offset(), self.get_insn())
-		first = True
-		for o in self.get_operands():
-			if not first:
-				s += ", "
-			first = False
-			s += o
+		s += (LABEL_FMT + ":\t%s\t") % (self.get_offset(),
+						self.get_insn())
+		s += ", ".join(self.get_operands())
 		comm = self.get_comment()
+		comm_space = ""
+		while 1:
+			l = 0
+			for c in s + comm_space:
+				if c == '\t':
+					l = (l + 8) // 8 * 8
+				else:
+					l += 1
+			if l >= 40:
+				break
+			comm_space += "\t"
+		if comm or self.jmpsources:
+			s += comm_space
 		if comm:
-			s += "\t\t;" + comm
+			s += ";" + comm + "\t"
 		if self.jmpsources:
-			s += "\t; JUMPTARGET from "
+			s += ";JUMPTARGET from "
 			for jmpsrc in self.jmpsources:
 				s += "0x%04X " % jmpsrc.get_offset()
 		return s
