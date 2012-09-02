@@ -5,13 +5,12 @@ trap true INT TERM
 tty="$1"
 user="$2"
 [ -z "$tty" -o -z "$user" ] && { echo "autologin: Invalid parameters"; exit 1; }
-tty="/dev/$tty"
 
-echo "$tty $user" >/var/run/autologin
+echo "/dev/$tty $user" >/var/run/autologin
 
-/bin/login -f "$user"
+/sbin/agetty --noclear -a "$user" "$tty" 38400
 
 while true; do
 	sleep 1
-	/bin/login
+	/sbin/agetty "$tty" 38400
 done
