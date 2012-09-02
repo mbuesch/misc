@@ -54,10 +54,20 @@ getconn()
 	xrandr | grep -Exe '^'$1'[0-9\-]* connected.*$' | head -n1 | cut -d' ' -f1
 }
 
+getdisconn()
+{
+	# Assumes there is only one of each connection type
+	xrandr | grep -Exe '^'$1'[0-9\-]* disconnected.*$' | head -n1 | cut -d' ' -f1
+}
+
 DVI="$(getconn DVI)"
+DVI_DISCONN="$(getdisconn DVI)"
 HDMI="$(getconn HDMI)"
+HDMI_DISCONN="$(getdisconn HDMI)"
 VGA="$(getconn VGA)"
+VGA_DISCONN="$(getdisconn VGA)"
 LVDS="$(getconn LVDS)"
+LVDS_DISCONN="$(getdisconn LVDS)"
 
 [ $nodvi -ne 0 ] && { OFF_DVI="$DVI"; ON_DVI=; } || { OFF_DVI=; ON_DVI="$DVI"; }
 [ $nohdmi -ne 0 ] && { OFF_HDMI="$HDMI"; ON_HDMI=; } || { OFF_HDMI=; ON_HDMI="$HDMI"; }
@@ -67,20 +77,21 @@ LVDS="$(getconn LVDS)"
 ALL="$LVDS $DVI $HDMI $VGA"
 ON_ALL="$ON_LVDS $ON_DVI $ON_HDMI $ON_VGA"
 OFF_ALL="$OFF_LVDS $OFF_DVI $OFF_HDMI $OFF_VGA"
+ALL_DISCONN="$LVDS_DISCONN $DVI_DISCONN $HDMI_DISCONN $VGA_DISCONN"
 
 
 for out in $ALL; do
 	xrandr --output $out --auto
 done
-for out in $OFF_ALL; do
+for out in $OFF_ALL $ALL_DISCONN; do
 	xrandr --output $out --off
 done
 last_out=
 for out in $ON_ALL; do
-	[ -z "$last_out" -o $unified -ne 0 ] && {
+	if [ -z "$last_out" -o $unified -ne 0 ]; then
 		xrandr --output $out --pos 0x0
-	} || {
+	else
 		xrandr --output $out --right-of $last_out
-	}
+	fi
 	last_out=$out
 done
