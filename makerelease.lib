@@ -29,6 +29,9 @@ default_hook_testbuild()
 	if [ -x ./configure ]; then
 		./configure
 	fi
+	if [ -r ./CMakeLists.txt ]; then
+		cmake .
+	fi
 	if [ -r ./GNUmakefile -o -r ./makefile -o -r ./Makefile ]; then
 		make
 	fi
