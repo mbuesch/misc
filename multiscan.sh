@@ -54,10 +54,22 @@ do_scanimage()
 	scanimage "$@"
 }
 
+find_device()
+{
+	scanimage -L | while read line; do
+		echo "$line" | grep -qe '/dev/video' || {
+			echo -n "$line" | cut -d'`' -f2 | cut -d\' -f1
+		}
+	done
+}
+
+dev="$(find_device)"
+[ -n "$dev" ] || die "Did not find a scanner"
+
 while cont_prompt; do
 	filename="$(printf '%s-%03d.pnm' "$filename_base" "$count")"
-	do_scanimage --mode Color --depth 8 --resolution 300 \
-		--lamp-off-at-exit=no \
+	do_scanimage -d "$dev" \
+		--mode Color --depth 8 --resolution 300 \
 		-l 0 -t 0 -x 210 -y 297 \
 		--format=pnm \
 		"$@" > "$filename"
