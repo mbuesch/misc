@@ -193,22 +193,28 @@ relocate_checkout()
 
 make_tarball()
 {
-	local opts="-c"
-	tarball="$release_name.tar"
+	local opts=
 	case "$opt_compress" in
 	none)
+		tarball="$release_name.tar"
 		;;
 	bzip2)
 		opts="$opts -j"
-		tarball="$tarball.bz2"
+		tarball="$release_name.tar.bz2"
 		;;
 	gz)
 		opts="$opts -z"
-		tarball="$tarball.gz"
+		tarball="$release_name.tar.gz"
 		;;
 	xz)
 		opts="$opts -J"
-		tarball="$tarball.xz"
+		tarball="$release_name.tar.xz"
+		;;
+	zip)
+		tarball="$release_name.zip"
+		;;
+	7z)
+		tarball="$release_name.7z"
 		;;
 	*)
 		die "Internal error: opt_compress"
@@ -217,8 +223,20 @@ make_tarball()
 	info "Creating $tarball"
 	execute_hook pre_tarball "$tmpdir" "$tarball"
 	cd "$tmpdir" || die "Internal error: cd"
-	tar $opts -f "$tarball" "$release_name" || \
-		die "Failed to create tarball"
+	case "$opt_compress" in
+	zip)
+		zip -9 -r "$tarball" "$release_name" || \
+			die "Failed to create ZIP archive"
+		;;
+	7z)
+		7z -mx=9 a "$tarball" "$release_name" || \
+			die "Failed to create 7-ZIP archive"
+		;;
+	*)
+		tar -c $opts -f "$tarball" "$release_name" || \
+			die "Failed to create tarball"
+		;;
+	esac
 	execute_hook post_tarball "$tmpdir" "$tarball"
 }
 
@@ -315,7 +333,7 @@ help()
 	echo "  -s|--no-sign          Do not sign"
 	echo "  -b|--no-build         Do not run build test"
 	echo "  -r|--ref REF          Checkout version control reference REF"
-	echo "  -c|--compress TYPE    TYPE can be bzip2 (default), gz, xz or none"
+	echo "  -c|--compress TYPE    TYPE can be bzip2 (default), gz, xz, zip, 7z or none"
 	echo "  -h|--help             Show this help text"
 }
 
@@ -369,7 +387,7 @@ makerelease()
 			shift
 			opt_compress="$1"
 			case "$opt_compress" in
-				none|bzip2|gzip|xz) ;; # ok
+				none|bzip2|gzip|xz|zip|7z) ;; # ok
 				*) die "Invalid compression method" ;;
 			esac
 			;;
