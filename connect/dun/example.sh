@@ -1,0 +1,73 @@
+# example rfcomm DUN config script
+
+dun_prepare()
+{
+	example_rfcomm_dev="$(get_unused_dev_node rfcomm)"
+	[ -n "$example_rfcomm_dev" ] || die "Failed to get rfcomm devnode"
+	example_rfcomm_pid=
+	example_rfcomm_log="$(mktemp /tmp/example.rfcomm.log.XXXXXX)"
+	[ -w "$example_rfcomm_log" ] || die "Failed to create example rfcomm log"
+	example_chatscript="$(mktemp /tmp/example.chatscript.XXXXXX)"
+	[ -w "$example_chatscript" ] || die "Failed to create example chatscript"
+	example_pppd_pid=
+	example_pppd_log="$(mktemp /tmp/example.pppd.log.XXXXXX)"
+	[ -w "$example_pppd_log" ] || die "Failed to create example pppd log"
+	example_pppd_linkname="example-dun-$$"
+}
+
+dun_stop()
+{
+	pppd_kill "example" "$example_pppd_pid" "$example_pppd_log"
+	example_pppd_pid=
+	rfcomm_kill "example" "$example_rfcomm_pid" "$example_rfcomm_log"
+	example_rfcomm_pid=
+}
+
+dun_start()
+{
+	# Connect rfcomm
+	rfcomm connect "$example_rfcomm_dev" \
+		"AA:BB:CC:DD:EE:FF" \
+		> "$example_rfcomm_log" 2>&1 &
+	example_rfcomm_pid=$!
+	rfcomm_wait_connect example "$example_rfcomm_pid" "$example_rfcomm_log"
+
+	# Connect pppd
+	#TODO Adjust the APN to your provider!
+	make_chatscript "internet.t-d1.de" > "$example_chatscript"
+	pppd "$example_rfcomm_dev" \
+		115200 \
+		logfile "$example_pppd_log" \
+		linkname "$example_pppd_linkname" \
+		debug \
+		lock \
+		show-password \
+		noauth \
+		defaultroute \
+		noipdefault \
+		crtscts \
+		local \
+		ipcp-accept-local \
+		maxfail 10 \
+		"lcp-echo-failure" 0 \
+		"lcp-echo-interval" 0 \
+		novj \
+		nobsdcomp \
+		novjccomp \
+		nopcomp \
+		noaccomp \
+		mtu 1500 \
+		mru 1500 \
+		persist \
+		passive \
+		connect "/usr/sbin/chat -v -f $example_chatscript"
+	sleep 0.5
+	example_pppd_pid="$(cat "/var/run/ppp-${example_pppd_linkname}.pid")"
+	[ -n "$example_pppd_pid" ] || die "Failed to get pppd pid"
+	pppd_wait_connect example "$example_pppd_pid" "$example_pppd_log"
+}
+
+dun_destroy()
+{
+	rm -f "$example_rfcomm_log" "$example_pppd_log" "$example_chatscript"
+}
