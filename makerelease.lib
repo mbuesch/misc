@@ -369,7 +369,8 @@ makerelease()
 	opt_nobuild=0
 	opt_notests=0
 	opt_ref=
-	opt_compress=bzip2
+	opt_compress="$default_compress"
+	[ -n "$opt_compress" ] || opt_compress=bzip2
 
 	while [ $# -ge 1 ]; do
 		case "$1" in
