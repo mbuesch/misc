@@ -48,6 +48,7 @@ hook_post_relocate_checkout()	{ default_hook_nothing "$@"; }
 hook_pre_tarball()		{ default_hook_nothing "$@"; }
 hook_post_tarball()		{ default_hook_nothing "$@"; }
 hook_testbuild()		{ default_hook_testbuild "$@"; }
+hook_regression_tests()		{ default_hook_nothing "$@"; }
 hook_pre_checkout_remove()	{ default_hook_nothing "$@"; }
 hook_post_checkout_remove()	{ default_hook_nothing "$@"; }
 hook_pre_tarball_signature()	{ default_hook_nothing "$@"; }
@@ -247,6 +248,14 @@ make_testbuild()
 	execute_hook testbuild "$checkout_dir"
 }
 
+make_regression_tests()
+{
+	[ $opt_nobuild -eq 0 ] || return
+	[ $opt_notests -eq 0 ] || return
+	info "Running regression tests"
+	execute_hook regression_tests "$checkout_dir"
+}
+
 make_checkout_remove()
 {
 	info "Removing the checkout"
@@ -331,7 +340,8 @@ help()
 	echo "  --dry-run             Do not make persistent changes"
 	echo "  -t|--no-tag           Do not create the repository tag"
 	echo "  -s|--no-sign          Do not sign"
-	echo "  -b|--no-build         Do not run build test"
+	echo "  -b|--no-build         Do not run build. (implies no regression tests)"
+	echo "  -T|--no-tests         Do not run regression tests"
 	echo "  -r|--ref REF          Checkout version control reference REF"
 	echo "  -c|--compress TYPE    TYPE can be bzip2 (default), gz, xz, zip, 7z or none"
 	echo "  -h|--help             Show this help text"
@@ -357,6 +367,7 @@ makerelease()
 	opt_notag=0
 	opt_nosign=0
 	opt_nobuild=0
+	opt_notests=0
 	opt_ref=
 	opt_compress=bzip2
 
@@ -377,6 +388,9 @@ makerelease()
 			;;
 		-b|--no-build)
 			opt_nobuild=1
+			;;
+		-T|--no-tests)
+			opt_notests=1
 			;;
 		-r|--ref)
 			shift
@@ -404,6 +418,7 @@ makerelease()
 	relocate_checkout
 	make_tarball
 	make_testbuild
+	make_regression_tests
 	make_checkout_remove
 	make_tarball_signature
 	make_tag
