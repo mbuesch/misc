@@ -325,8 +325,10 @@ move_files()
 	}
 	execute_hook post_move_files "$tmpdir" "$srcdir/$srcsubdir"
 
+	local dry=
+	is_dry_run && dry=" (DRY RUN)"
 	echo
-	info "Built $project release $version"
+	info "Built $project release ${version}${dry}"
 }
 
 help()
