@@ -591,7 +591,7 @@ usage()
 	echo " -m|--macspoof MAC/FILE/no Use MAC address or FILE."
 	echo " -S|--suppconf FILE   WPA-supplicant config"
 	echo " -D|--nodhcp          Don't configure DHCP"
-	echo " -R|--resolver IP     Resolver IP address (default no change)"
+	echo " -R|--resolver IP     Resolver IP address (default dhcp or 127.0.0.1)"
 	echo " -u|--dun NAME        Connect Dial Up Network NAME"
 	echo " -V|--vpn NAME        Connect to VPN"
 	echo " -P|--httpproxy IP:PORT[:AUTH:PASS]  Use HTTP proxy"
@@ -687,6 +687,11 @@ parse_args "$@"
 	# DUN implies no WLAN and no DHCP
 	opt_wlanif=none
 	opt_nodhcp=1
+}
+
+[ -z "$opt_resolver" -a -n "$opt_nodhcp" ] && {
+	# Default resolver to localhost
+	opt_resolver="127.0.0.1"
 }
 
 TRAPPED_SIGS="INT TERM"
