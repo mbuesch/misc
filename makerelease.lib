@@ -223,7 +223,7 @@ make_tarball()
 		;;
 	esac
 	info "Creating $tarball"
-	execute_hook pre_tarball "$tmpdir" "$tarball"
+	execute_hook pre_tarball "$tmpdir" "$checkout_dir" "$tarball"
 	cd "$tmpdir" || die "Internal error: cd"
 	case "$opt_compress" in
 	zip)
@@ -239,7 +239,7 @@ make_tarball()
 			die "Failed to create tarball"
 		;;
 	esac
-	execute_hook post_tarball "$tmpdir" "$tarball"
+	execute_hook post_tarball "$tmpdir" "$checkout_dir" "$tarball"
 }
 
 make_testbuild()
