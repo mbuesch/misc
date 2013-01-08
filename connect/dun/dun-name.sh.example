@@ -7,6 +7,7 @@ dun_prepare()
 	example_rfcomm_pid=
 	example_rfcomm_log="$(mktemp /tmp/example.rfcomm.log.XXXXXX)"
 	[ -w "$example_rfcomm_log" ] || die "Failed to create example rfcomm log"
+	example_hci_dev="hci0"
 	example_chatscript="$(mktemp /tmp/example.chatscript.XXXXXX)"
 	[ -w "$example_chatscript" ] || die "Failed to create example chatscript"
 	example_pppd_pid=
@@ -19,12 +20,17 @@ dun_stop()
 {
 	pppd_kill "example" "$example_pppd_pid" "$example_pppd_log"
 	example_pppd_pid=
+
 	rfcomm_kill "example" "$example_rfcomm_pid" "$example_rfcomm_log"
 	example_rfcomm_pid=
+
+	hci_dev_down "$example_hci_dev"
 }
 
 dun_start()
 {
+	hci_dev_up "$example_hci_dev"
+
 	# Connect rfcomm
 	rfcomm connect "$example_rfcomm_dev" \
 		"AA:BB:CC:DD:EE:FF" \

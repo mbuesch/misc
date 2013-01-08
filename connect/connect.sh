@@ -233,6 +233,24 @@ wait_pid_dead_or_logmsg()
 		dead_callback "$timeout_decisec"
 }
 
+# $1=hcidev
+hci_dev_up()
+{
+	local hcidev="$1"
+
+	hciconfig "$hcidev" up ||\
+		die "Failed to bring bluetooth device '$hcidev' up"
+}
+
+# $1=hcidev
+hci_dev_down()
+{
+	local hcidev="$1"
+
+	hciconfig "$hcidev" down ||\
+		warn "Failed to bring bluetooth device '$hcidev' down"
+}
+
 # $1=name, $2=PID, $3=logfile
 openvpn_wait_connect()
 {
