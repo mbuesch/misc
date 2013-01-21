@@ -399,11 +399,22 @@ wlan_connect()
 {
 	[ "$opt_wlanif" = "none" -o "$opt_wlanif" = "-" ] && return
 
+	debug "Shutting down system wpa_supplicant..."
+	(
+		local wpa_funcs="/etc/wpa_supplicant/functions.sh"
+		[ -f "$wpa_funcs" ] && {
+			. "$wpa_funcs"
+			kill_wpa_cli
+			kill_wpa_supplicant
+		}
+	)
+	pkill wpa_supplicant
+
 	wlan_macaddr_spoof
 
 	info "Connecting WLAN..."
 
-	wpa_supplicant_pidfile="/var/run/wpa_supplicant-$opt_wlanif.pid"
+	wpa_supplicant_pidfile="/var/run/wpa_supplicant-connect-$opt_wlanif.pid"
 	wpa_supplicant -B -Dnl80211 \
 		-i "$opt_wlanif" -c "$opt_suppconf" \
 		-P "$wpa_supplicant_pidfile"
