@@ -1,0 +1,20 @@
+#!/usr/bin/awk -f
+
+BEGIN {
+	print "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+	print "<metalink xmlns=\"urn:ietf:params:xml:ns:metalink\">"
+}
+
+{
+	gsub(/\x27/,"",$1);
+	split($4, hash, /:/)
+	printf "<file name=\"%s\">",$2
+	printf "<size>%d</size>", $3
+	printf "<hash type=\"%s\">%s</hash>", hash[1], hash[2]
+	printf "<url priority=\"1\">%s</url>", $1
+	print "</file>"
+}
+
+END {
+	print "</metalink>"
+}
