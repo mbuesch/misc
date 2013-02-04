@@ -1,6 +1,6 @@
 #!/bin/sh
 
-listfile=/tmp/update-files.list
+listfile=update-files.list.XXXXXXXX
 aria2c_jobs=16
 
 die()
@@ -14,12 +14,29 @@ info()
 	echo "--- $*"
 }
 
+usage()
+{
+	echo "update [OPTIONS]"
+	echo
+	echo "Options:"
+	echo " -p|--parallel          Parallel download"
+	echo " --full                 Full upgrade"
+}
+
+parallel=0
 full=0
 
 while [ $# -ge 1 ]; do
 	case "$1" in
+	-p|--parallel)
+		parallel=1
+		;;
 	--full)
 		full=1
+		;;
+	-h|--help)
+		usage
+		exit 0
 		;;
 	*)
 		die "Unknown parameter: $1"
@@ -39,18 +56,22 @@ aptitude update || die "Update failed"
 	aptitude_param="full-upgrade"
 }
 
-info "Generating package list for '$aptitude_param'"
-apt-uri-list $apt_param | apturi2metalink > "$listfile" ||\
-	die "Failed to generate file list"
+if [ $parallel -ne 0 ]; then
+	info "Generating package list for '$aptitude_param'"
+	listfile="$(mktemp "$listfile")"
+	[ -w "$listfile" ] || die "Failed to create temporary file"
+	apt-uri-list $apt_param | apturi2metalink > "$listfile" ||\
+		die "Failed to generate file list"
 
-info "Downloading packages"
-while true; do
-	aria2c -j "$aria2c_jobs" -s "$aria2c_jobs" -x "$aria2c_jobs" -t 120 \
-		-k 1048576 --retry-wait=1 -d /var/cache/apt/archives/ \
-		"$listfile" && break
-	sleep 10
-done
-rm "$listfile"
+	info "Downloading packages"
+	while ! aria2c -j "$aria2c_jobs" -s "$aria2c_jobs" -x "$aria2c_jobs" \
+			-t 120 -k 1048576 \
+			--retry-wait=1 -d /var/cache/apt/archives/ \
+			"$listfile"; do
+		sleep 10
+	done
+	rm "$listfile"
+fi
 
 info "Performing '$aptitude_param'"
 aptitude $aptitude_param || die "Upgrade failed"
