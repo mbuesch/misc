@@ -1,6 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
-#  Copyright (C) 2012 Michael Buesch <m@bues.ch>
+#  Copyright (C) 2012-2013 Michael Buesch <m@bues.ch>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License version 3
@@ -20,8 +20,8 @@ import getopt
 try:
 	from serial.serialposix import *
 except ImportError:
-	print "ERROR: pyserial module not available."
-	print "On Debian Linux please do:  apt-get install python-serial"
+	print("ERROR: pyserial module not available.")
+	print("On Debian Linux please do:  apt-get install python3-serial")
 	sys.exit(1)
 
 
@@ -32,24 +32,24 @@ def str2bool(string):
 		return False
 	try:
 		return bool(int(string))
-	except (ValueError), e:
+	except ValueError as e:
 		pass
 	return False
 
 def hexdump(data):
 	ret = []
 	for c in data:
-		ret.append("%02X" % ord(c))
+		ret.append("%02X" % c)
 	return "".join(ret)
 
 class MySmartUsbError(Exception): pass
 
 class MySmartUsb(object):
-	PREFIX		= "\xE6\xB5\xBA\xB9\xB2\xB3\xA9"
+	PREFIX		= b"\xE6\xB5\xBA\xB9\xB2\xB3\xA9"
 
-	MODE_PROG	= 'p'
-	MODE_DATA	= 'd'
-	MODE_QUIET	= 'q'
+	MODE_PROG	= b'p'
+	MODE_DATA	= b'd'
+	MODE_QUIET	= b'q'
 
 	def __init__(self, ttyDev, debug=False):
 		self.debug = debug
@@ -58,19 +58,19 @@ class MySmartUsb(object):
 		self.serial.flushOutput()
 
 	def resetBoard(self):
-		self.__sendCmd('r')
+		self.__sendCmd(b'r')
 
 	def resetProg(self):
-		self.__sendCmd('R')
+		self.__sendCmd(b'R')
 
 	def power(self, on):
-		self.__sendCmd('+' if on else '-')
+		self.__sendCmd(b'+' if on else b'-')
 
 	def setMode(self, mode):
 		self.__sendCmd(mode)
 
 	def getStatus(self):
-		self.__sendCmd('i')
+		self.__sendCmd(b'i')
 
 	def close(self):
 		self.serial.close()
@@ -80,27 +80,27 @@ class MySmartUsb(object):
 		if self.debug:
 			print("Sending command: " + hexdump(data))
 		self.serial.write(data)
-		if cmd == 'R':
+		if cmd == b'R':
 			return
 		ret = self.serial.read(1)
-		if ret == "\x00" or ret == "\x0D":
+		if ret == b"\x00" or ret == b"\x0D":
 			ret = self.serial.read(5)
 		else:
 			ret += self.serial.read(4)
 		if self.debug:
 			print("Command returned: " + hexdump(ret))
-		if ret[0:2] != "\xF7\xB1":
+		if ret[0:2] != b"\xF7\xB1":
 			raise MySmartUsbError(
 				"Invalid command return prefix: %02X%02X" %\
-				(ord(ret[0]), ord(ret[1])))
-		if cmd != 'i' and ret[2] != cmd:
+				(ret[0], ret[1]))
+		if cmd != b'i' and ret[2] != ord(cmd):
 			raise MySmartUsbError(
 				"Invalid command return: %02X" %\
-				(ord(ret[2])))
-		if ret[3:5] != "\x0D\x0A":
+				(ret[2]))
+		if ret[3:5] != b"\x0D\x0A":
 			raise MySmartUsbError(
 				"Invalid command return postfix: %02X%02X" %\
-				(ord(ret[3]), ord(ret[4])))
+				(ret[3], ret[4]))
 
 def usage():
 	print("mysmartusb [OPTIONS] /dev/ttyUSBx")
@@ -167,7 +167,7 @@ def main():
 			else:
 				assert(0)
 		msu.close()
-	except (MySmartUsbError), e:
+	except MySmartUsbError as e:
 		print("ERROR: " + str(e))
 		return 1
 	return 0
