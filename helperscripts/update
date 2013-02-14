@@ -20,7 +20,7 @@ usage()
 	echo
 	echo "Options:"
 	echo " -p|--parallel          Parallel download"
-	echo " --full                 Full upgrade"
+	echo " -f|--full              Full upgrade"
 }
 
 parallel=0
@@ -31,7 +31,7 @@ while [ $# -ge 1 ]; do
 	-p|--parallel)
 		parallel=1
 		;;
-	--full)
+	-f|--full)
 		full=1
 		;;
 	-h|--help)
