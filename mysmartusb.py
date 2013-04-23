@@ -17,8 +17,9 @@
 
 import sys
 import getopt
+import time
 try:
-	from serial.serialposix import *
+	from serial import *
 except ImportError:
 	print("ERROR: pyserial module not available.")
 	print("On Debian Linux please do:  apt-get install python3-serial")
@@ -67,12 +68,19 @@ class MySmartUsb(object):
 		self.__sendCmd(b'+' if on else b'-')
 
 	def setMode(self, mode):
+		if self.getMode() == mode:
+			return
 		self.__sendCmd(mode)
+		time.sleep(0.5)
+		if self.getMode() == mode:
+			return
+		raise MySmartUsbError("Failed to set mode")
 
-	def getStatus(self):
-		self.__sendCmd(b'i')
+	def getMode(self):
+		return self.__sendCmd(b'i')
 
 	def close(self):
+		self.serial.flush()
 		self.serial.close()
 
 	def __sendCmd(self, cmd):
@@ -101,6 +109,7 @@ class MySmartUsb(object):
 			raise MySmartUsbError(
 				"Invalid command return postfix: %02X%02X" %\
 				(ret[3], ret[4]))
+		return bytes( (ret[2], ) )
 
 def usage():
 	print("mysmartusb [OPTIONS] /dev/ttyUSBx")
