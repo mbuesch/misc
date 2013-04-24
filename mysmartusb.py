@@ -79,6 +79,13 @@ class MySmartUsb(object):
 	def getMode(self):
 		return self.__sendCmd(b'i')
 
+	def getVersion(self):
+		b = self.__sendCmd(b'v')
+		try:
+			return b.decode('ASCII')
+		except UnicodeError:
+			raise MySmartUsbError("Failed to read version string")
+
 	def close(self):
 		self.serial.flush()
 		self.serial.close()
@@ -88,8 +95,16 @@ class MySmartUsb(object):
 		if self.debug:
 			print("Sending command: " + hexdump(data))
 		self.serial.write(data)
+		self.serial.flush()
 		if cmd == b'R':
 			return
+		if cmd == b'v':
+			time.sleep(0.25)
+			count = self.serial.inWaiting()
+			ret = self.serial.read(count)
+			ret = ret[ret.find(b'\xF7')+1:]
+			ret = ret[:ret.find(b'\xF7')]
+			return ret
 		ret = self.serial.read(1)
 		if ret == b"\x00" or ret == b"\x0D":
 			ret = self.serial.read(5)
@@ -119,6 +134,7 @@ def usage():
 	print(" -R|--reset-prog          Reset the programmer")
 	print(" -p|--power 1/0           Turn on board power on/off")
 	print(" -m|--mode p/d/q          Enter progmode/datamode/quietmode")
+	print(" -V|--getversion          Read and display the mysmartusb version")
 	print("")
 	print(" -D|--debug               Enable debugging")
 
@@ -127,9 +143,9 @@ def main():
 	debug = False
 	try:
 		(opts, args) = getopt.getopt(sys.argv[1:],
-			"hrRp:m:D",
+			"hrRp:m:VD",
 			[ "help", "reset-board", "reset-prog", "prog=",
-			  "mode=", "debug", ])
+			  "mode=", "getversion", "debug", ])
 	except getopt.GetoptError:
 		usage()
 		return 1
@@ -154,6 +170,8 @@ def main():
 				print("Invalid mode: " + v)
 				return 1
 			actions.append( ("mode", mode) )
+		if o in ("-V", "--getversion"):
+			actions.append( ("getversion",) )
 		if o in ("-D", "--debug"):
 			debug = True
 	if len(args) != 1:
@@ -173,6 +191,8 @@ def main():
 				msu.power(action[1])
 			elif action[0] == "mode":
 				msu.setMode(action[1])
+			elif action[0] == "getversion":
+				print(msu.getVersion())
 			else:
 				assert(0)
 		msu.close()
