@@ -284,7 +284,7 @@ rfcomm_wait_disconnect()
 pppd_wait_connect()
 {
 	wait_pid_alife_and_logmsg "pppd" "$1" "$2" "$3" \
-		"local  IP address" 600
+		"local  IP address" 1000
 	sleep 0.5
 }
 
