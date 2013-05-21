@@ -45,6 +45,16 @@ die()
 	exit 1
 }
 
+# $1=option
+check_bool_opt()
+{
+	local option="$1"
+
+	[ "$option" = "1" -o \
+	  "$option" = "on" -o \
+	  "$option" = "true" ]
+}
+
 rfcomm()
 {
 	# Force rfcomm into line buffered stdout
@@ -426,6 +436,11 @@ wlan_connect()
 
 	wait_pid_alife_and_callback "WLAN" "$opt_wlanif" \
 		"$(cat "$wpa_supplicant_pidfile")" ready_callback 600
+
+	local ps="off"
+	check_bool_opt "$opt_powersave" && ps="on"
+	iw dev "$opt_wlanif" set power_save "$ps" || \
+		warn "Failed to turn power saving on '$opt_wlanif' $ps"
 }
 
 wlan_disconnect()
@@ -618,6 +633,7 @@ usage()
 	echo "Options:"
 	echo " -w|--wlanif IF       WLAN interface (default wlan0)"
 	echo " -m|--macspoof MAC/FILE/no Use MAC address or FILE."
+	echo " -p|--powersave on/off  Turn WLAN power-saving on/off."
 	echo " -S|--suppconf FILE   WPA-supplicant config"
 	echo " -D|--nodhcp          Don't configure DHCP"
 	echo " -R|--resolver IP     Resolver IP address (default dhcp or 127.0.0.1)"
@@ -649,6 +665,12 @@ parse_args()
 			local path="$1"
 			[ -n "$path" ] || die "-m|--macspoof needs an argument"
 			opt_macspoof="$path"
+			;;
+		-p|--powersave)
+			shift
+			local ps="$1"
+			[ -n "$ps" ] || die "-p|--powersave needs an argument"
+			opt_powersave="$ps"
 			;;
 		-R|--resolver)
 			shift
@@ -702,6 +724,7 @@ opt_debug=
 opt_vpns=
 opt_wlanif="wlan0"
 opt_macspoof=
+opt_powersave="on"
 opt_suppconf="/etc/wpa_supplicant/wpa_supplicant.conf"
 opt_duns=
 opt_nodhcp=
