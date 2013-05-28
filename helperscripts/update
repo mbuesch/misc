@@ -21,10 +21,12 @@ usage()
 	echo "Options:"
 	echo " -p|--parallel          Parallel download"
 	echo " -f|--full              Full upgrade"
+	echo " -d|--download-only     Download only"
 }
 
 parallel=0
 full=0
+download_only=0
 
 while [ $# -ge 1 ]; do
 	case "$1" in
@@ -33,6 +35,9 @@ while [ $# -ge 1 ]; do
 		;;
 	-f|--full)
 		full=1
+		;;
+	-d|--download-only)
+		download_only=1
 		;;
 	-h|--help)
 		usage
@@ -74,9 +79,13 @@ if [ $parallel -ne 0 ]; then
 fi
 
 info "Performing '$aptitude_param'"
-aptitude $aptitude_param || die "Upgrade failed"
+dl_flags=
+[ $download_only -ne 0 ] && dl_flags="--download-only"
+aptitude $dl_flags $aptitude_param || die "Upgrade failed"
 
-info "Cleaning"
-aptitude clean || die "Clean failed"
+[ $download_only -eq 0 ] && {
+	info "Cleaning"
+	aptitude clean || die "Clean failed"
+}
 
 exit 0
