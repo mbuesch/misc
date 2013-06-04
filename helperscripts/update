@@ -1,7 +1,7 @@
 #!/bin/sh
 
-listfile=update-files.list.XXXXXXXX
 aria2c_jobs=16
+listfile=
 
 die()
 {
@@ -14,6 +14,14 @@ info()
 	echo "--- $*"
 }
 
+cleanup()
+{
+	[ -f "$listfile" ] && {
+		rm "$listfile"
+		listfile=
+	}
+}
+
 usage()
 {
 	echo "update [OPTIONS]"
@@ -23,6 +31,8 @@ usage()
 	echo " -f|--full              Full upgrade"
 	echo " -d|--download-only     Download only"
 }
+
+trap cleanup INT EXIT
 
 parallel=0
 full=0
@@ -63,7 +73,7 @@ aptitude update || die "Update failed"
 
 if [ $parallel -ne 0 ]; then
 	info "Generating package list for '$aptitude_param'"
-	listfile="$(mktemp "$listfile")"
+	listfile="$(mktemp --tmpdir=/tmp update-files.list.XXXXXXXX)"
 	[ -w "$listfile" ] || die "Failed to create temporary file"
 	apt-uri-list $apt_param | apturi2metalink > "$listfile" ||\
 		die "Failed to generate file list"
@@ -75,7 +85,6 @@ if [ $parallel -ne 0 ]; then
 			"$listfile"; do
 		sleep 10
 	done
-	rm "$listfile"
 fi
 
 info "Performing '$aptitude_param'"
