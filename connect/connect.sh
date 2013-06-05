@@ -434,6 +434,7 @@ wlan_connect()
 			grep -qe 'wpa_state=COMPLETED'
 	}
 
+	sleep 0.5
 	wait_pid_alife_and_callback "WLAN" "$opt_wlanif" \
 		"$(cat "$wpa_supplicant_pidfile")" ready_callback 600
 
