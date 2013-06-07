@@ -55,7 +55,7 @@ kvm_init()
 
 usage()
 {
-	echo "qemu-script.sh [OPTIONS] [-] [QEMU-OPTIONS]"
+	echo "qemu-script.sh [OPTIONS] [--] [QEMU-OPTIONS]"
 	echo
 	echo "Options:"
 	echo " -m RAM                      Amount of RAM. Default: 1024m"
@@ -100,7 +100,7 @@ run()
 			shift
 			opt_spice="$1"
 			;;
-		-)
+		--)
 			end=1
 			;;
 		*)
