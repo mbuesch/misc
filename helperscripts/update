@@ -61,18 +61,16 @@ while [ $# -ge 1 ]; do
 done
 
 info "Updating package list"
-aptitude update || die "Update failed"
+apt-get update || die "Update failed"
 
 [ $full -eq 0 ] && {
 	apt_param="upgrade"
-	aptitude_param="safe-upgrade"
 } || {
 	apt_param="dist-upgrade"
-	aptitude_param="full-upgrade"
 }
 
 if [ $parallel -ne 0 ]; then
-	info "Generating package list for '$aptitude_param'"
+	info "Generating package list for '$apt_param'"
 	listfile="$(mktemp --tmpdir=/tmp update-files.list.XXXXXXXX)"
 	[ -w "$listfile" ] || die "Failed to create temporary file"
 	apt-uri-list $apt_param | apturi2metalink > "$listfile" ||\
@@ -87,14 +85,14 @@ if [ $parallel -ne 0 ]; then
 	done
 fi
 
-info "Performing '$aptitude_param'"
+info "Performing '$apt_param'"
 dl_flags=
 [ $download_only -ne 0 ] && dl_flags="--download-only"
-aptitude $dl_flags $aptitude_param || die "Upgrade failed"
+apt-get $dl_flags $apt_param || die "Upgrade failed"
 
 [ $download_only -eq 0 ] && {
 	info "Cleaning"
-	aptitude clean || die "Clean failed"
+	apt-get clean || die "Clean failed"
 }
 
 exit 0
