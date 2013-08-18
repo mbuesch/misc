@@ -63,16 +63,16 @@ usage()
 	echo " --spice 1|0                 Use spice client"
 }
 
-# Global variables: basedir, image
+# Global variables: basedir, image, qemu_opts
 run()
 {
 	[ -n "$spice_host" ] || spice_host="127.0.0.1"
 	[ -n "$spice_port" ] || spice_port="12345"
 
-	opt_ram="1024m"
-	opt_netrestrict="on"
-	opt_dryrun=0
-	opt_spice=0
+	[ -n "$opt_ram" ] || opt_ram="1024m"
+	[ -n "$opt_netrestrict" ] || opt_netrestrict="on"
+	[ -n "$opt_dryrun" ] || opt_dryrun=0
+	[ -n "$opt_spice" ] || opt_spice=0
 
 	share_init
 	serial_init
@@ -132,6 +132,7 @@ run()
 		-usb \
 		-serial "pipe:${serialdir}/0" -serial "pipe:${serialdir}/1" \
 		-vga qxl \
+		$qemu_opts \
 		"$@"
 	run_spice_client
 }
