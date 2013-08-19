@@ -60,7 +60,7 @@ usage()
 	echo "Options:"
 	echo " -m RAM                      Amount of RAM. Default: 1024m"
 	echo " -n|--net-restrict on|off    Turn net restrict on/off. Default: on"
-	echo " --spice 1|0                 Use spice client"
+	echo " --spice 1|0                 Use spice client. Default: 1"
 }
 
 # Global variables: basedir, image, qemu_opts
@@ -72,7 +72,7 @@ run()
 	[ -n "$opt_ram" ] || opt_ram="1024m"
 	[ -n "$opt_netrestrict" ] || opt_netrestrict="on"
 	[ -n "$opt_dryrun" ] || opt_dryrun=0
-	[ -n "$opt_spice" ] || opt_spice=0
+	[ -n "$opt_spice" ] || opt_spice=1
 
 	share_init
 	serial_init
