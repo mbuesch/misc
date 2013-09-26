@@ -57,7 +57,10 @@ shift
 cont_prompt()
 {
 	printf '\nGoing to scan page %03d\n' "$count"
-	read -p "[Press enter to continue or ^C to abort]" RES
+	[ $first -eq 0 ] && {
+		read -p "[Press enter to continue or ^C to abort]" RES
+	}
+	first=0
 }
 
 do_scanimage()
@@ -81,6 +84,7 @@ dev="$(find_device)"
 [ -n "$dev" ] || die "Did not find a scanner"
 echo "Using scanner '$dev'"
 
+first=1
 while cont_prompt; do
 	filename="$(printf '%s-%03d.pnm' "$filename_base" "$count")"
 	do_scanimage -d "$dev" \
