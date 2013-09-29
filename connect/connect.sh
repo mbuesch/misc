@@ -61,6 +61,22 @@ rfcomm()
 	stdbuf -oL rfcomm "$@"
 }
 
+# Start bluetooth-agent.
+# Returns the PID of bluetooth-agent
+# $1=passkey (optional. Defaults to 1234)
+bluetooth_agent_start()
+{
+	local passkey="$1"
+	local pid=
+
+	[ -n "$passkey" ] || passkey="1234"
+	info "Starting bluetooth agent with passkey '$passkey'"
+	bluetooth-agent "$passkey" &
+	pid=$!
+	sleep 1
+	return $pid
+}
+
 # $1=apn
 make_chatscript()
 {
@@ -279,7 +295,7 @@ openvpn_wait_disconnect()
 rfcomm_wait_connect()
 {
 	wait_pid_alife_and_logmsg "rfcomm" "$1" "$2" "$3" \
-		"Connected /dev/rfcomm" 300
+		"Connected /dev/rfcomm" 600
 	sleep 0.5
 }
 
@@ -345,6 +361,16 @@ openvpn_kill()
 
 	generic_kill_with_logfile "OpenVPN" "$name" "$pid" \
 		wait_callback "$logfile"
+}
+
+# $1=name, $2=PID
+bluetooth_agent_kill()
+{
+	local name="$1"
+	local pid="$2"
+
+	debug "Killing '$name' bluetooth-agent..."
+	kill_pid "$pid"
 }
 
 # $1=name, $2=PID, $3=logfile
