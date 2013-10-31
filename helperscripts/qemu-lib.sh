@@ -6,6 +6,11 @@ die()
 	exit 1
 }
 
+random_port()
+{
+	expr "$(hexdump -n2 -e'/2 "%u"' /dev/urandom)" '%' 16384 '+' 1024
+}
+
 run_qemu()
 {
 	local bin="qemu-system-i386"
@@ -23,7 +28,7 @@ run_qemu()
 run_spice_client()
 {
 	[ $opt_spice -eq 0 ] && return
-	echo "Running spice client..."
+	echo "Running spice client on ${spice_host}:${spice_port}..."
 	spicy -h "$spice_host" -p "$spice_port"
 	echo "Killing qemu..."
 	kill "$qemu_pid"
@@ -67,7 +72,7 @@ usage()
 run()
 {
 	[ -n "$spice_host" ] || spice_host="127.0.0.1"
-	[ -n "$spice_port" ] || spice_port="12345"
+	[ -n "$spice_port" ] || spice_port="$(random_port)"
 
 	[ -n "$opt_ram" ] || opt_ram="1024m"
 	[ -n "$opt_netrestrict" ] || opt_netrestrict="on"
