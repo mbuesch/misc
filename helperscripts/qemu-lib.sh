@@ -6,9 +6,36 @@ die()
 	exit 1
 }
 
+get_ports_db_file()
+{
+	local dbfile="/tmp/qemu-lib-ports.db"
+
+	touch "$dbfile"
+	chmod 666 "$dbfile"
+	echo "$dbfile"
+}
+
 random_port()
 {
-	expr "$(hexdump -n2 -e'/2 "%u"' /dev/urandom)" '%' 16384 '+' 1024
+	local dbfile="$(get_ports_db_file)"
+	local port=
+
+	while true; do
+		port="$(expr "$(hexdump -n2 -e'/2 "%u"' /dev/urandom)" '%' 16384 '+' 1024)"
+		grep -qEe "^${port}\$" "$dbfile" || break
+	done
+
+	echo "$port" >> "$dbfile"
+	echo "$port"
+}
+
+# $1=portnumber
+release_port()
+{
+	local port="$1"
+	local dbfile="$(get_ports_db_file)"
+
+	sed -ie '/^'"$port"'$/d' "$dbfile"
 }
 
 run_qemu()
@@ -33,6 +60,7 @@ run_spice_client()
 	echo "Killing qemu..."
 	kill "$qemu_pid"
 	wait
+	release_port "$spice_port"
 }
 
 share_init()
