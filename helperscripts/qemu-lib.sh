@@ -56,6 +56,7 @@ run_spice_client()
 {
 	[ $opt_spice -eq 0 ] && return
 	echo "Running spice client on ${spice_host}:${spice_port}..."
+	sleep 1
 	spicy -h "$spice_host" -p "$spice_port"
 	echo "Killing qemu..."
 	kill "$qemu_pid"
@@ -86,6 +87,23 @@ kvm_init()
 	[ -w /dev/kvm ] && kvm_opt="-enable-kvm"
 }
 
+# $1="vendor:device"
+host_usb_id_prepare()
+{
+	local ids="$1"
+
+	local lsusb_string="$(lsusb | grep -e "$ids" | head -n1)"
+	[ -n "$lsusb_string" ] ||\
+		die "USB device $ids not found"
+	local busnr="$(echo "$lsusb_string" | awk '{print $2;}')"
+	local devnr="$(echo "$lsusb_string" | awk '{print $4;}' | cut -d':' -f1)"
+	echo "Found USB device $ids on $busnr:$devnr"
+
+	echo "Changing device permissions..."
+	sudo chmod o+w "/dev/bus/usb/$busnr/$devnr" ||\
+		die "Failed to set usb device permissions"
+}
+
 usage()
 {
 	echo "qemu-script.sh [OPTIONS] [--] [QEMU-OPTIONS]"
@@ -94,6 +112,7 @@ usage()
 	echo " -m RAM                      Amount of RAM. Default: 1024m"
 	echo " -n|--net-restrict on|off    Turn net restrict on/off. Default: on"
 	echo " --spice 1|0                 Use spice client. Default: 1"
+	echo " --usb-id ABCD:1234          Use host USB device with ID ABCD:1234"
 }
 
 # Global variables: basedir, image, qemu_opts
@@ -106,6 +125,8 @@ run()
 	[ -n "$opt_netrestrict" ] || opt_netrestrict="on"
 	[ -n "$opt_dryrun" ] || opt_dryrun=0
 	[ -n "$opt_spice" ] || opt_spice=1
+
+	local usbdevice_opt=
 
 	share_init
 	serial_init
@@ -132,6 +153,12 @@ run()
 		--spice)
 			shift
 			opt_spice="$1"
+			;;
+		--usb-id)
+			local ids="$1"
+
+			host_usb_id_prepare "$ids"
+			usbdevice_opt="$usbdevice_opt -usbdevice host:$ids"
 			;;
 		--)
 			end=1
@@ -162,7 +189,7 @@ run()
 		-net "nic,vlan=1,model=ne2k_pci,macaddr=00:11:22:AA:BB:CC" \
 		-net "user,restrict=${opt_netrestrict},vlan=1,net=192.168.5.1/24,smb=${sharedir},smbserver=192.168.5.4" \
 		-net "nic,vlan=2,model=ne2k_pci,macaddr=00:11:22:AA:BB:CD" \
-		-usb \
+		-usb $usbdevice_opt \
 		-serial "pipe:${serialdir}/0" -serial "pipe:${serialdir}/1" \
 		-vga qxl \
 		$qemu_opts \
