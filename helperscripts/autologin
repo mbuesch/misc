@@ -6,7 +6,7 @@ tty="$1"
 user="$2"
 [ -z "$tty" -o -z "$user" ] && { echo "autologin: Invalid parameters"; exit 1; }
 
-echo "/dev/$tty $user" >/var/run/autologin
+echo "/dev/$tty $user" >/tmp/autologin
 
 /sbin/agetty --noclear -a "$user" "$tty" 38400
 
