@@ -72,7 +72,7 @@ do_scanimage()
 find_device()
 {
 	scanimage -L | while read line; do
-		echo "$line" | grep -qe '/dev/video' || {
+		echo "$line" | grep -qEe '(/dev/video)|(Failed cupsGetDevices)' || {
 			echo -n "$line" | cut -d'`' -f2 | cut -d\' -f1
 			break
 		}
