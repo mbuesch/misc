@@ -112,7 +112,7 @@ usage()
 	echo " -m RAM                      Amount of RAM. Default: 1024m"
 	echo " -n|--net-restrict on|off    Turn net restrict on/off. Default: on"
 	echo " --spice 1|0                 Use spice client. Default: 1"
-	echo " --usb-id ABCD:1234          Use host USB device with ID ABCD:1234"
+	echo " -u|--usb-id ABCD:1234       Use host USB device with ID ABCD:1234"
 }
 
 # Global variables: basedir, image, qemu_opts
@@ -154,7 +154,8 @@ run()
 			shift
 			opt_spice="$1"
 			;;
-		--usb-id)
+		-u|--usb-id)
+			shift
 			local ids="$1"
 
 			host_usb_id_prepare "$ids"
