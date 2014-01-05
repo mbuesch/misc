@@ -1,6 +1,6 @@
 #
 # Release script library
-# Copyright (c) 2012 Michael Buesch <m@bues.ch>
+# Copyright (c) 2012-2014 Michael Buesch <m@bues.ch>
 #
 
 # Default hooks
@@ -235,7 +235,8 @@ make_tarball()
 			die "Failed to create 7-ZIP archive"
 		;;
 	*)
-		tar -c $opts -f "$tarball" "$release_name" || \
+		tar --owner=root --group=root \
+		    -c $opts -f "$tarball" "$release_name" || \
 			die "Failed to create tarball"
 		;;
 	esac
