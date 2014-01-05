@@ -200,7 +200,7 @@ make_tarball()
 	none)
 		tarball="$release_name.tar"
 		;;
-	bzip2)
+	bz2)
 		opts="$opts -j"
 		tarball="$release_name.tar.bz2"
 		;;
@@ -347,7 +347,7 @@ help()
 	echo "  -b|--no-build         Do not run build. (implies no regression tests)"
 	echo "  -T|--no-tests         Do not run regression tests"
 	echo "  -r|--ref REF          Checkout version control reference REF"
-	echo "  -c|--compress TYPE    TYPE can be bzip2 (default), gz, xz, zip, 7z or none"
+	echo "  -c|--compress TYPE    TYPE can be bz2 (default), gz, xz, zip, 7z or none"
 	echo "  -V|--extraversion XX  Append XX to version string"
 	echo "  -h|--help             Show this help text"
 }
@@ -375,7 +375,7 @@ makerelease()
 	opt_notests=0
 	opt_ref=
 	opt_compress="$default_compress"
-	[ -n "$opt_compress" ] || opt_compress=bzip2
+	[ -n "$opt_compress" ] || opt_compress=bz2
 	opt_extraversion=
 
 	while [ $# -ge 1 ]; do
@@ -408,7 +408,7 @@ makerelease()
 			shift
 			opt_compress="$1"
 			case "$opt_compress" in
-				none|bzip2|gzip|xz|zip|7z) ;; # ok
+				none|bz2|gz|xz|zip|7z) ;; # ok
 				*) die "Invalid compression method" ;;
 			esac
 			;;
