@@ -74,7 +74,7 @@ serial_init()
 {
 	serialdir="$basedir/serial"
 	mkdir -p "$serialdir" || die "Failed to create $serialdir"
-	for i in $(seq 0 1); do
+	for i in $(seq 0 0); do
 		[ -p "$serialdir/$i" ] || {
 			mkfifo "$serialdir/$i" || die "Failed to create fifo $i"
 		}
@@ -104,6 +104,38 @@ host_usb_id_prepare()
 		die "Failed to set usb device permissions"
 }
 
+# $1="00:00.0"
+host_pci_prepare()
+{
+	local dev="$1"
+
+	local lspci_string="$(lspci -mmn | grep -e "^$dev" | head -n1)"
+	[ -n "$lspci_string" ] ||\
+		die "PCI device $dev not found"
+	dev="0000:$dev"
+	local vendorid="$(echo "$lspci_string" | cut -d' ' -f 3 | tr -d \")"
+	local deviceid="$(echo "$lspci_string" | cut -d' ' -f 4 | tr -d \")"
+	echo "Found PCI device $dev with IDs $vendorid:$deviceid"
+
+	local drvdir="$(find /sys/bus/pci/drivers -type l -name "$dev")"
+	drvdir="$(dirname "$drvdir")"
+	[ -n "$drvdir" -a "$drvdir" != "." ] || {
+		echo "PCI device $dev: Did not find attached kernel driver."
+		exit 1
+		return
+	}
+
+	modprobe pci-stub || die "Failed to load 'pci-stub' kernel module"
+	echo "$vendorid $deviceid" > /sys/bus/pci/drivers/pci-stub/new_id ||\
+		die "Failed to register PCI-id to pci-stub driver"
+	echo "$dev" > "$drvdir/unbind" ||\
+		die "Failed to unbind PCI kernel driver"
+	echo "$dev" > /sys/bus/pci/drivers/pci-stub/bind ||\
+		die "Failed to bind pci-stub kernel driver"
+	echo "$vendorid $deviceid" > /sys/bus/pci/drivers/pci-stub/remove_id ||\
+		die "Failed to remove PCI-id from pci-stub driver"
+}
+
 usage()
 {
 	echo "qemu-script.sh [OPTIONS] [--] [QEMU-OPTIONS]"
@@ -113,6 +145,7 @@ usage()
 	echo " -n|--net-restrict on|off    Turn net restrict on/off. Default: on"
 	echo " --spice 1|0                 Use spice client. Default: 1"
 	echo " -u|--usb-id ABCD:1234       Use host USB device with ID ABCD:1234"
+	echo " -p|--pci-device 00:00.0     Forward PCI device at 00:00.0"
 }
 
 # Global variables: basedir, image, qemu_opts
@@ -127,6 +160,7 @@ run()
 	[ -n "$opt_spice" ] || opt_spice=1
 
 	local usbdevice_opt=
+	local pcidevice_opt=
 
 	share_init
 	serial_init
@@ -161,6 +195,13 @@ run()
 			host_usb_id_prepare "$ids"
 			usbdevice_opt="$usbdevice_opt -usbdevice host:$ids"
 			;;
+		-p|--pci-device)
+			shift
+			local dev="$1"
+
+			host_pci_prepare "$dev"
+			pcidevice_opt="$pcidevice_opt -device pci-assign,host=$dev"
+			;;
 		--)
 			end=1
 			;;
@@ -191,7 +232,8 @@ run()
 		-net "user,restrict=${opt_netrestrict},vlan=1,net=192.168.5.1/24,smb=${sharedir},smbserver=192.168.5.4" \
 		-net "nic,vlan=2,model=ne2k_pci,macaddr=00:11:22:AA:BB:CD" \
 		-usb $usbdevice_opt \
-		-serial "pipe:${serialdir}/0" -serial "pipe:${serialdir}/1" \
+		-serial "pipe:${serialdir}/0" \
+		$pcidevice_opt \
 		-vga qxl \
 		$qemu_opts \
 		"$@"
