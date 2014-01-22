@@ -198,10 +198,11 @@ make_archives()
 	archive_dir="$tmpdir/$project-archives"
 	mkdir -p "$archive_dir" || die "Failed to create archive directory"
 
-	archive_files=
+	local setup_py_targets=
 
 	info "Creating archives"
 	execute_hook pre_archives "$archive_dir" "$checkout_dir"
+
 	for artype in $opt_archives; do
 		local archive=
 		local opts=
@@ -227,12 +228,15 @@ make_archives()
 		7z)
 			archive="$release_name.7z"
 			;;
+		py-*)
+			local target="$(echo "$artype" | sed -e 's/py-//' | tr '-' '_')"
+			setup_py_targets="$setup_py_targets $target"
+			continue # Python archives are handled later
+			;;
 		*)
 			die "Internal error: archive type"
 			;;
 		esac
-
-		archive_files="$archive_files $archive"
 
 		info "Creating $archive"
 		cd "$tmpdir" || die "Internal error: cd"
@@ -253,6 +257,19 @@ make_archives()
 		esac
 		mv "$archive" "$archive_dir"/ || die "Failed to move archive"
 	done
+
+	# Handle Python build targets
+	if [ -n "$setup_py_targets" ]; then
+		cd "$checkout_dir" || die "Internal error: cd"
+		[ -x "./setup.py" ] ||\
+			die "Used Python archive target, but no executable setup.py found"
+		info "Building Python packages: $setup_py_targets"
+		./setup.py $setup_py_targets || die "Failed to build Python archives"
+		mkdir "$archive_dir/python" || die "Failed to create Python archive subdir"
+		mv ./dist/* "$archive_dir/python/" || die "Failed to move Python archives"
+		rm -r ./build ./dist || die "Failed to remove Python build dirs"
+	fi
+
 	execute_hook post_archives "$archive_dir" "$checkout_dir"
 }
 
@@ -279,6 +296,31 @@ make_checkout_remove()
 	execute_hook post_checkout_remove "$checkout_dir" "$tmpdir"
 }
 
+# $1=directory
+gpg_sign_dir_recursive()
+{
+	local dir="$1"
+
+	local path=
+	for path in "$dir"/*; do
+		[ -d "$path" ] && {
+			gpg_sign_dir_recursive "$path"
+			continue
+		}
+		[ -r "$path" ] || die "Sign: File not readable: $path"
+
+		local filename="$(basename "$path")"
+		local signature="$filename.asc"
+
+		info "Creating signature $signature"
+		cd "$dir" || die "Internal error: cd"
+		local gpg=gpg
+		have_program gpg2 && gpg=gpg2
+		assert_program $gpg "GNU Privacy Guard"
+		$gpg $gpg_opts -ab "./$filename" || die "Failed to sign $filename"
+	done
+}
+
 make_archive_signatures()
 {
 	[ $opt_nosign -ne 0 ] && return
@@ -288,16 +330,8 @@ make_archive_signatures()
 	local gpg_opts=
 	[ -n "$GPG_KEY_RELEASE" ] && gpg_opts="--default-key $GPG_KEY_RELEASE"
 
-	for archive in $archive_files; do
-		local signature="$archive.asc"
+	gpg_sign_dir_recursive "$archive_dir"
 
-		info "Creating signature $signature"
-		cd "$archive_dir" || die "Internal error: cd"
-		local gpg=gpg
-		have_program gpg2 && gpg=gpg2
-		assert_program $gpg "GNU Privacy Guard"
-		$gpg $gpg_opts -ab "$archive_dir/$archive" || die "Failed to sign $archive"
-	done
 	execute_hook post_archive_signatures "$archive_dir"
 }
 
@@ -337,10 +371,17 @@ make_tag()
 
 move_files()
 {
+	local target_dir="$srcdir/$srcsubdir/release-archives"
+
 	info "Moving files"
 	execute_hook pre_move_files "$archive_dir" "$srcdir/$srcsubdir"
-	dry_run mv "$archive_dir"/* "$srcdir/$srcsubdir" || \
+
+	if [ -d "$target_dir" ]; then
+		dry_run rm -r "$target_dir" || die "Failed to delete target directory"
+	fi
+	dry_run mv "$archive_dir" "$target_dir" || \
 		die "Failed to move tarball"
+
 	execute_hook post_move_files "$archive_dir" "$srcdir/$srcsubdir"
 
 	local dry=
@@ -365,6 +406,8 @@ help()
 	echo "  -r|--ref REF          Checkout version control reference REF"
 	echo "  -a|--archives TYPE,TYPE,...   Archive type list. Default: tar.bz2"
 	echo "                        Possible types: tar, tar.bz2, tar.gz, tar.xz, zip, 7z"
+	echo "                        For Python programs: py-sdist, py-bdist, py-bdist-wininst"
+	echo "                                             py-bdist-dumb, py-bdist-rpm"
 	echo "  -V|--extraversion XX  Append XX to version string"
 	echo "  -h|--help             Show this help text"
 }
@@ -429,10 +472,12 @@ makerelease()
 			opt_archives="$(echo "$1" | tr ',' ' ')"
 			for artype in $opt_archives; do
 				case "$artype" in
-					tar|tar.bz2|tar.gz|tar.xz|zip|7z) ;; # ok
+					tar|tar.bz2|tar.gz|tar.xz|zip|7z|py-sdist|py-bdist|py-bdist-wininst|py-bdist-dump|py-bdist-rpm) ;; # ok
 					*) die "Invalid archiving method: $artype" ;;
 				esac
 			done
+			[ -n "$(echo "$opt_archives" | tr -d '[:blank:]')" ] ||\
+				die "No archiving method selected"
 			;;
 		-V|--extraversion)
 			shift
