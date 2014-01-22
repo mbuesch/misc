@@ -206,18 +206,18 @@ make_archives()
 		local archive=
 		local opts=
 		case "$artype" in
-		none)
+		tar)
 			archive="$release_name.tar"
 			;;
-		bz2)
+		tar.bz2)
 			opts="$opts -j"
 			archive="$release_name.tar.bz2"
 			;;
-		gz)
+		tar.gz)
 			opts="$opts -z"
 			archive="$release_name.tar.gz"
 			;;
-		xz)
+		tar.xz)
 			opts="$opts -J"
 			archive="$release_name.tar.xz"
 			;;
@@ -363,7 +363,8 @@ help()
 	echo "  -b|--no-build         Do not run build. (implies no regression tests)"
 	echo "  -T|--no-tests         Do not run regression tests"
 	echo "  -r|--ref REF          Checkout version control reference REF"
-	echo "  -a|--archives TYPE,TYPE,...   TYPE can be bz2 (default), gz, xz, zip, 7z or none"
+	echo "  -a|--archives TYPE,TYPE,...   Archive type list. Default: tar.bz2"
+	echo "                        Possible types: tar, tar.bz2, tar.gz, tar.xz, zip, 7z"
 	echo "  -V|--extraversion XX  Append XX to version string"
 	echo "  -h|--help             Show this help text"
 }
@@ -394,7 +395,7 @@ makerelease()
 	opt_notests=0
 	opt_ref=
 	opt_archives="$default_archives"
-	[ -n "$opt_archives" ] || opt_archives=bz2
+	[ -n "$opt_archives" ] || opt_archives="tar.bz2"
 	opt_extraversion=
 
 	while [ $# -ge 1 ]; do
@@ -428,7 +429,7 @@ makerelease()
 			opt_archives="$(echo "$1" | tr ',' ' ')"
 			for artype in $opt_archives; do
 				case "$artype" in
-					none|bz2|gz|xz|zip|7z) ;; # ok
+					tar|tar.bz2|tar.gz|tar.xz|zip|7z) ;; # ok
 					*) die "Invalid archiving method: $artype" ;;
 				esac
 			done
