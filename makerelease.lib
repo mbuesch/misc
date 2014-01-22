@@ -45,14 +45,14 @@ hook_pre_checkout()		{ default_hook_nothing "$@"; }
 hook_post_checkout()		{ default_hook_post_checkout "$@"; }
 hook_pre_relocate_checkout()	{ default_hook_nothing "$@"; }
 hook_post_relocate_checkout()	{ default_hook_nothing "$@"; }
-hook_pre_tarball()		{ default_hook_nothing "$@"; }
-hook_post_tarball()		{ default_hook_nothing "$@"; }
+hook_pre_archives()		{ default_hook_nothing "$@"; }
+hook_post_archives()		{ default_hook_nothing "$@"; }
 hook_testbuild()		{ default_hook_testbuild "$@"; }
 hook_regression_tests()		{ default_hook_nothing "$@"; }
 hook_pre_checkout_remove()	{ default_hook_nothing "$@"; }
 hook_post_checkout_remove()	{ default_hook_nothing "$@"; }
-hook_pre_tarball_signature()	{ default_hook_nothing "$@"; }
-hook_post_tarball_signature()	{ default_hook_nothing "$@"; }
+hook_pre_archive_signatures()	{ default_hook_nothing "$@"; }
+hook_post_archive_signatures()	{ default_hook_nothing "$@"; }
 hook_pre_tag()			{ default_hook_nothing "$@"; }
 hook_post_tag()			{ default_hook_nothing "$@"; }
 hook_pre_move_files()		{ default_hook_nothing "$@"; }
@@ -193,54 +193,67 @@ relocate_checkout()
 	execute_hook post_relocate_checkout "$tmpdir" "$checkout_dir"
 }
 
-make_tarball()
+make_archives()
 {
-	local opts=
-	case "$opt_compress" in
-	none)
-		tarball="$release_name.tar"
-		;;
-	bz2)
-		opts="$opts -j"
-		tarball="$release_name.tar.bz2"
-		;;
-	gz)
-		opts="$opts -z"
-		tarball="$release_name.tar.gz"
-		;;
-	xz)
-		opts="$opts -J"
-		tarball="$release_name.tar.xz"
-		;;
-	zip)
-		tarball="$release_name.zip"
-		;;
-	7z)
-		tarball="$release_name.7z"
-		;;
-	*)
-		die "Internal error: opt_compress"
-		;;
-	esac
-	info "Creating $tarball"
-	execute_hook pre_tarball "$tmpdir" "$checkout_dir" "$tarball"
-	cd "$tmpdir" || die "Internal error: cd"
-	case "$opt_compress" in
-	zip)
-		zip -9 -r "$tarball" "$release_name" || \
-			die "Failed to create ZIP archive"
-		;;
-	7z)
-		7z -mx=9 a "$tarball" "$release_name" || \
-			die "Failed to create 7-ZIP archive"
-		;;
-	*)
-		tar --owner=root --group=root \
-		    -c $opts -f "$tarball" "$release_name" || \
-			die "Failed to create tarball"
-		;;
-	esac
-	execute_hook post_tarball "$tmpdir" "$checkout_dir" "$tarball"
+	archive_dir="$tmpdir/$project-archives"
+	mkdir -p "$archive_dir" || die "Failed to create archive directory"
+
+	archive_files=
+
+	info "Creating archives"
+	execute_hook pre_archives "$archive_dir" "$checkout_dir"
+	for artype in $opt_archives; do
+		local archive=
+		local opts=
+		case "$artype" in
+		none)
+			archive="$release_name.tar"
+			;;
+		bz2)
+			opts="$opts -j"
+			archive="$release_name.tar.bz2"
+			;;
+		gz)
+			opts="$opts -z"
+			archive="$release_name.tar.gz"
+			;;
+		xz)
+			opts="$opts -J"
+			archive="$release_name.tar.xz"
+			;;
+		zip)
+			archive="$release_name.zip"
+			;;
+		7z)
+			archive="$release_name.7z"
+			;;
+		*)
+			die "Internal error: archive type"
+			;;
+		esac
+
+		archive_files="$archive_files $archive"
+
+		info "Creating $archive"
+		cd "$tmpdir" || die "Internal error: cd"
+		case "$artype" in
+		zip)
+			zip -9 -r "$archive" "$release_name" || \
+				die "Failed to create ZIP archive"
+			;;
+		7z)
+			7z -mx=9 a "$archive" "$release_name" || \
+				die "Failed to create 7-ZIP archive"
+			;;
+		*)
+			tar --owner=root --group=root \
+			    -c $opts -f "$archive" "$release_name" || \
+				die "Failed to create tarball"
+			;;
+		esac
+		mv "$archive" "$archive_dir"/ || die "Failed to move archive"
+	done
+	execute_hook post_archives "$archive_dir" "$checkout_dir"
 }
 
 make_testbuild()
@@ -266,19 +279,26 @@ make_checkout_remove()
 	execute_hook post_checkout_remove "$checkout_dir" "$tmpdir"
 }
 
-make_tarball_signature()
+make_archive_signatures()
 {
-	tarball_signature=
 	[ $opt_nosign -ne 0 ] && return
-	tarball_signature="$tarball.asc"
-	info "Creating signature $tarball_signature"
-	execute_hook pre_tarball_signature "$tmpdir" "$tarball"
-	local opts=
-	[ -n "$GPG_KEY_RELEASE" ] && opts="--default-key $GPG_KEY_RELEASE"
-	cd "$tmpdir" || die "Internal error: cd"
-	assert_program gpg "GNU Privacy Guard"
-	gpg $opts -ab "$tarball" || die "Failed to sign tarball"
-	execute_hook post_tarball_signature "$tmpdir" "$tarball"
+
+	execute_hook pre_archive_signatures "$archive_dir"
+
+	local gpg_opts=
+	[ -n "$GPG_KEY_RELEASE" ] && gpg_opts="--default-key $GPG_KEY_RELEASE"
+
+	for archive in $archive_files; do
+		local signature="$archive.asc"
+
+		info "Creating signature $signature"
+		cd "$archive_dir" || die "Internal error: cd"
+		local gpg=gpg
+		have_program gpg2 && gpg=gpg2
+		assert_program $gpg "GNU Privacy Guard"
+		$gpg $gpg_opts -ab "$archive_dir/$archive" || die "Failed to sign $archive"
+	done
+	execute_hook post_archive_signatures "$archive_dir"
 }
 
 make_tag()
@@ -318,14 +338,10 @@ make_tag()
 move_files()
 {
 	info "Moving files"
-	execute_hook pre_move_files "$tmpdir" "$srcdir/$srcsubdir"
-	dry_run mv "$tmpdir/$tarball" "$srcdir/$srcsubdir" || \
+	execute_hook pre_move_files "$archive_dir" "$srcdir/$srcsubdir"
+	dry_run mv "$archive_dir"/* "$srcdir/$srcsubdir" || \
 		die "Failed to move tarball"
-	[ -n "$tarball_signature" ] && {
-		dry_run mv "$tmpdir/$tarball_signature" "$srcdir/$srcsubdir" || \
-			die "Failed to move signature file"
-	}
-	execute_hook post_move_files "$tmpdir" "$srcdir/$srcsubdir"
+	execute_hook post_move_files "$archive_dir" "$srcdir/$srcsubdir"
 
 	local dry=
 	is_dry_run && dry=" (DRY RUN)"
@@ -347,7 +363,7 @@ help()
 	echo "  -b|--no-build         Do not run build. (implies no regression tests)"
 	echo "  -T|--no-tests         Do not run regression tests"
 	echo "  -r|--ref REF          Checkout version control reference REF"
-	echo "  -c|--compress TYPE    TYPE can be bz2 (default), gz, xz, zip, 7z or none"
+	echo "  -a|--archives TYPE,TYPE,...   TYPE can be bz2 (default), gz, xz, zip, 7z or none"
 	echo "  -V|--extraversion XX  Append XX to version string"
 	echo "  -h|--help             Show this help text"
 }
@@ -368,14 +384,17 @@ makerelease()
 	tmpdir="$(mktemp -d --tmpdir="$tmp_basedir" "$template")"
 	[ -d "$tmpdir" ] || die "Failed to create temporary directory"
 
+	# Backwards compatibility for old default_compress option
+	[ -n "$default_compress" -a -z "$default_archives" ] && default_archives="$default_compress"
+
 	opt_dryrun=0
 	opt_notag=0
 	opt_nosign=0
 	opt_nobuild=0
 	opt_notests=0
 	opt_ref=
-	opt_compress="$default_compress"
-	[ -n "$opt_compress" ] || opt_compress=bz2
+	opt_archives="$default_archives"
+	[ -n "$opt_archives" ] || opt_archives=bz2
 	opt_extraversion=
 
 	while [ $# -ge 1 ]; do
@@ -404,13 +423,15 @@ makerelease()
 			opt_ref=$1
 			[ -n "$opt_ref" ] || die "Invalid --ref"
 			;;
-		-c|--compress)
+		-a|--archives)
 			shift
-			opt_compress="$1"
-			case "$opt_compress" in
-				none|bz2|gz|xz|zip|7z) ;; # ok
-				*) die "Invalid compression method" ;;
-			esac
+			opt_archives="$(echo "$1" | tr ',' ' ')"
+			for artype in $opt_archives; do
+				case "$artype" in
+					none|bz2|gz|xz|zip|7z) ;; # ok
+					*) die "Invalid archiving method: $artype" ;;
+				esac
+			done
 			;;
 		-V|--extraversion)
 			shift
@@ -428,11 +449,11 @@ makerelease()
 	make_checkout
 	detect_versioning
 	relocate_checkout
-	make_tarball
+	make_archives
 	make_testbuild
 	make_regression_tests
 	make_checkout_remove
-	make_tarball_signature
+	make_archive_signatures
 	make_tag
 	move_files
 	cleanup
