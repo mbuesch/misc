@@ -49,8 +49,6 @@ hook_pre_archives()		{ default_hook_nothing "$@"; }
 hook_post_archives()		{ default_hook_nothing "$@"; }
 hook_testbuild()		{ default_hook_testbuild "$@"; }
 hook_regression_tests()		{ default_hook_nothing "$@"; }
-hook_pre_checkout_remove()	{ default_hook_nothing "$@"; }
-hook_post_checkout_remove()	{ default_hook_nothing "$@"; }
 hook_pre_archive_signatures()	{ default_hook_nothing "$@"; }
 hook_post_archive_signatures()	{ default_hook_nothing "$@"; }
 hook_pre_tag()			{ default_hook_nothing "$@"; }
@@ -198,7 +196,7 @@ make_archives()
 	archive_dir="$tmpdir/$project-archives"
 	mkdir -p "$archive_dir" || die "Failed to create archive directory"
 
-	local setup_py_targets=
+	setup_py_targets=
 
 	info "Creating archives"
 	execute_hook pre_archives "$archive_dir" "$checkout_dir"
@@ -234,7 +232,7 @@ make_archives()
 			continue # Python archives are handled later
 			;;
 		*)
-			die "Internal error: archive type"
+			die "Internal error: archive type: $artype"
 			;;
 		esac
 
@@ -263,14 +261,44 @@ make_archives()
 		cd "$checkout_dir" || die "Internal error: cd"
 		[ -x "./setup.py" ] ||\
 			die "Used Python archive target, but no executable setup.py found"
-		info "Building Python packages: $setup_py_targets"
-		./setup.py $setup_py_targets || die "Failed to build Python archives"
 		mkdir "$archive_dir/python" || die "Failed to create Python archive subdir"
-		mv ./dist/* "$archive_dir/python/" || die "Failed to move Python archives"
-		rm -r ./build ./dist || die "Failed to remove Python build dirs"
+		for target in $setup_py_targets; do
+			info "Building Python $target-package"
+			local opts=
+			[ "$target" = "bdist_wininst" ] && {
+				opts="--plat-name win32"
+			}
+			./setup.py "$target" $opts || die "Failed to build Python archive"
+		done
+		cp ./dist/* "$archive_dir/python/" || die "Failed to copy Python archives"
 	fi
 
 	execute_hook post_archives "$archive_dir" "$checkout_dir"
+}
+
+make_pypi_upload()
+{
+	[ $opt_upload -eq 0 ] && return
+
+	[ -n "$setup_py_targets" ] ||\
+		die "PyPi-upload requested, but no Python packages have been built."
+
+	info "Uploading $setup_py_targets archives to PyPi"
+	for target in $setup_py_targets; do
+		cd "$checkout_dir" || die "Internal error: cd"
+		[ -x ./setup.py ] || die "Internal error: setup.py"
+		local upload_opts=
+		[ $opt_nosign -ne 0 ] || {
+			upload_opts="--sign"
+			[ -n "$GPG_KEY_RELEASE" ] && opts="$opts --identity $GPG_KEY_RELEASE"
+		}
+		local target_opts=
+		[ "$target" = "bdist_wininst" ] && {
+			target_opts="--plat-name win32"
+		}
+		dry_run ./setup.py $target $target_opts upload $upload_opts ||\
+			die "Failed to upload PyPi package"
+	done
 }
 
 make_testbuild()
@@ -286,14 +314,6 @@ make_regression_tests()
 	[ $opt_notests -eq 0 ] || return
 	info "Running regression tests"
 	execute_hook regression_tests "$checkout_dir"
-}
-
-make_checkout_remove()
-{
-	info "Removing the checkout"
-	execute_hook pre_checkout_remove "$checkout_dir" "$tmpdir"
-	rm -rf "$checkout_dir" || die "Failed to remove checkout"
-	execute_hook post_checkout_remove "$checkout_dir" "$tmpdir"
 }
 
 # $1=directory
@@ -376,11 +396,9 @@ move_files()
 	info "Moving files"
 	execute_hook pre_move_files "$archive_dir" "$srcdir/$srcsubdir"
 
-	if [ -d "$target_dir" ]; then
-		dry_run rm -r "$target_dir" || die "Failed to delete target directory"
-	fi
-	dry_run mv "$archive_dir" "$target_dir" || \
-		die "Failed to move tarball"
+	dry_run mkdir -p "$target_dir" || die "Failed to create target directory"
+	dry_run cp -r "$archive_dir"/* "$target_dir"/ || \
+		die "Failed to copy tarballs"
 
 	execute_hook post_move_files "$archive_dir" "$srcdir/$srcsubdir"
 
@@ -408,6 +426,7 @@ help()
 	echo "                        Possible types: tar, tar.bz2, tar.gz, tar.xz, zip, 7z"
 	echo "                        For Python programs: py-sdist, py-bdist, py-bdist-wininst"
 	echo "                                             py-bdist-dumb, py-bdist-rpm"
+	echo "  -U|--upload           Upload the archives to PyPi"
 	echo "  -V|--extraversion XX  Append XX to version string"
 	echo "  -h|--help             Show this help text"
 }
@@ -438,6 +457,7 @@ makerelease()
 	opt_notests=0
 	opt_ref=
 	opt_archives="$default_archives"
+	opt_upload=0
 	[ -n "$opt_archives" ] || opt_archives="tar.bz2"
 	opt_extraversion=
 
@@ -469,15 +489,10 @@ makerelease()
 			;;
 		-a|--archives)
 			shift
-			opt_archives="$(echo "$1" | tr ',' ' ')"
-			for artype in $opt_archives; do
-				case "$artype" in
-					tar|tar.bz2|tar.gz|tar.xz|zip|7z|py-sdist|py-bdist|py-bdist-wininst|py-bdist-dump|py-bdist-rpm) ;; # ok
-					*) die "Invalid archiving method: $artype" ;;
-				esac
-			done
-			[ -n "$(echo "$opt_archives" | tr -d '[:blank:]')" ] ||\
-				die "No archiving method selected"
+			opt_archives="$1"
+			;;
+		-U|--upload)
+			opt_upload=1
 			;;
 		-V|--extraversion)
 			shift
@@ -491,6 +506,16 @@ makerelease()
 		shift
 	done
 
+	opt_archives="$(echo "$opt_archives" | tr ',' ' ')"
+	for artype in $opt_archives; do
+		case "$artype" in
+			tar|tar.bz2|tar.gz|tar.xz|zip|7z|py-sdist|py-bdist|py-bdist-wininst|py-bdist-dump|py-bdist-rpm) ;; # ok
+			*) die "Invalid archiving method: $artype" ;;
+		esac
+	done
+	[ -n "$(echo "$opt_archives" | tr -d '[:blank:]')" ] ||\
+		die "No archiving method selected"
+
 	detect_repos_type
 	make_checkout
 	detect_versioning
@@ -498,9 +523,9 @@ makerelease()
 	make_archives
 	make_testbuild
 	make_regression_tests
-	make_checkout_remove
 	make_archive_signatures
 	make_tag
+	make_pypi_upload
 	move_files
 	cleanup
 }
