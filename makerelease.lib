@@ -290,7 +290,7 @@ make_pypi_upload()
 		local upload_opts=
 		[ $opt_nosign -ne 0 ] || {
 			upload_opts="--sign"
-			[ -n "$GPG_KEY_RELEASE" ] && opts="$opts --identity $GPG_KEY_RELEASE"
+			[ -n "$GPG_KEY_RELEASE" ] && upload_opts="$upload_opts --identity $GPG_KEY_RELEASE"
 		}
 		local target_opts=
 		[ "$target" = "bdist_wininst" ] && {
