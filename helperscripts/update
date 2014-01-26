@@ -90,9 +90,14 @@ dl_flags=
 [ $download_only -ne 0 ] && dl_flags="--download-only"
 apt-get $dl_flags $apt_param || die "Upgrade failed"
 
-[ $download_only -eq 0 ] && {
-	info "Cleaning"
-	apt-get clean || die "Clean failed"
+[ $download_only -ne 0 ] && exit 0
+
+[ $full -ne 0 ] && {
+	info "Purging old packages"
+	apt-get autoremove --purge || die "Autoremove failed"
 }
+
+info "Cleaning"
+apt-get clean || die "Clean failed"
 
 exit 0
