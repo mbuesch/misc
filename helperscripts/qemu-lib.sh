@@ -144,6 +144,21 @@ host_pci_prepare()
 		die "Failed to remove PCI-id from pci-stub driver"
 }
 
+# $1=brdev, $2=ethdev
+bridge_setup()
+{
+	local brdev="$1"
+	local ethdev="$2"
+
+	ip link set down dev "$brdev" >/dev/null 2>&1
+	brctl delbr "$brdev" >/dev/null 2>&1
+
+	brctl addbr "$brdev" || die "Failed to add bridge '$brdev'"
+	brctl addif "$brdev" "$ethdev" || die "Failed to add '$ethdev' to bridge '$brdev'"
+	ip link set up dev "$ethdev" || die "Failed to bring up '$ethdev'"
+	ip link set up dev "$brdev" || die "Failed to bring up bridge '$brdev'"
+}
+
 usage()
 {
 	echo "qemu-script.sh [OPTIONS] [--] [QEMU-OPTIONS]"
@@ -155,6 +170,7 @@ usage()
 	echo " -u|--usb-id ABCD:1234       Use host USB device with ID ABCD:1234"
 	echo " -p|--pci-id ABCD:1234       Forward PCI device with ID ABCD:1234"
 	echo " -P|--pci-device 00:00.0     Forward PCI device at 00:00.0"
+	echo " -B|--bridge BRDEV,ETHDEV    Create BRDEV and add ETHDEV"
 }
 
 # Global variables: basedir, image, qemu_opts
@@ -170,6 +186,7 @@ run()
 
 	local usbdevice_opt=
 	local pcidevice_opt=
+	local bridge_opt=
 
 	share_init
 	serial_init
@@ -220,6 +237,15 @@ run()
 			host_pci_prepare "$dev"
 			pcidevice_opt="$pcidevice_opt -device pci-assign,host=$dev"
 			;;
+		-B|--bridge)
+			shift
+			local devs="$1"
+
+			local brdev="$(echo "$devs" | cut -d',' -f1)"
+			local ethdev="$(echo "$devs" | cut -d',' -f2)"
+			bridge_setup "$brdev" "$ethdev"
+			bridge_opt="-net bridge,vlan=2,br=$brdev"
+			;;
 		--)
 			end=1
 			;;
@@ -252,6 +278,7 @@ run()
 		-usb $usbdevice_opt \
 		-serial "pipe:${serialdir}/0" \
 		$pcidevice_opt \
+		$bridge_opt \
 		-vga qxl \
 		$qemu_opts \
 		"$@"
