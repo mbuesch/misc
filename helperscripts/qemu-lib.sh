@@ -104,6 +104,14 @@ host_usb_id_prepare()
 		die "Failed to set usb device permissions"
 }
 
+# $1="vendor:device"
+host_pci_find_by_ids()
+{
+	local ids="$1"
+
+	lspci -vn | grep -e "$ids" | awk '{print $1;}'
+}
+
 # $1="00:00.0"
 host_pci_prepare()
 {
@@ -145,7 +153,8 @@ usage()
 	echo " -n|--net-restrict on|off    Turn net restrict on/off. Default: on"
 	echo " --spice 1|0                 Use spice client. Default: 1"
 	echo " -u|--usb-id ABCD:1234       Use host USB device with ID ABCD:1234"
-	echo " -p|--pci-device 00:00.0     Forward PCI device at 00:00.0"
+	echo " -p|--pci-id ABCD:1234       Forward PCI device with ID ABCD:1234"
+	echo " -P|--pci-device 00:00.0     Forward PCI device at 00:00.0"
 }
 
 # Global variables: basedir, image, qemu_opts
@@ -195,7 +204,16 @@ run()
 			host_usb_id_prepare "$ids"
 			usbdevice_opt="$usbdevice_opt -usbdevice host:$ids"
 			;;
-		-p|--pci-device)
+		-p|--pci-id)
+			shift
+			local ids="$1"
+
+			local dev="$(host_pci_find_by_ids "$ids")"
+			[ -n "$dev" ] || die "Did not find PCI device with IDs '$ids'"
+			host_pci_prepare "$dev"
+			pcidevice_opt="$pcidevice_opt -device pci-assign,host=$dev"
+			;;
+		-P|--pci-device)
 			shift
 			local dev="$1"
 
