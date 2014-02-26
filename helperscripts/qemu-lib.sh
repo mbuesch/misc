@@ -40,7 +40,7 @@ release_port()
 
 run_qemu()
 {
-	local bin="qemu-system-i386"
+	local bin="$qemu_binary"
 	echo "$bin $*"
 	[ $opt_dryrun -eq 0 ] || return
 	if [ $opt_spice -eq 0 ]; then
@@ -173,9 +173,10 @@ usage()
 	echo " -B|--bridge BRDEV,ETHDEV    Create BRDEV and add ETHDEV"
 }
 
-# Global variables: basedir, image, qemu_opts
+# Global variables: basedir, image, qemu_opts, qemu_binary
 run()
 {
+	[ -n "$qemu_binary" ] || qemu_binary="qemu-system-i386"
 	[ -n "$spice_host" ] || spice_host="127.0.0.1"
 	[ -n "$spice_port" ] || spice_port="$(random_port)"
 
