@@ -117,6 +117,8 @@ host_pci_prepare()
 {
 	local dev="$1"
 
+	echo "Assigning PCI device $dev ..."
+
 	local lspci_string="$(lspci -mmn | grep -e "^$dev" | head -n1)"
 	[ -n "$lspci_string" ] ||\
 		die "PCI device $dev not found"
@@ -125,9 +127,9 @@ host_pci_prepare()
 	local deviceid="$(echo "$lspci_string" | cut -d' ' -f 4 | tr -d \")"
 	echo "Found PCI device $dev with IDs $vendorid:$deviceid"
 
-	local drvdir="$(find /sys/bus/pci/drivers -type l -name "$dev")"
-	drvdir="$(dirname "$drvdir")"
-	[ -n "$drvdir" -a "$drvdir" != "." ] || {
+	local orig_drvdir="$(find /sys/bus/pci/drivers -type l -name "$dev")"
+	orig_drvdir="$(dirname "$orig_drvdir")"
+	[ -n "$orig_drvdir" -a "$orig_drvdir" != "." ] || {
 		echo "PCI device $dev: Did not find attached kernel driver."
 		exit 1
 		return
@@ -136,12 +138,26 @@ host_pci_prepare()
 	modprobe pci-stub || die "Failed to load 'pci-stub' kernel module"
 	echo "$vendorid $deviceid" > /sys/bus/pci/drivers/pci-stub/new_id ||\
 		die "Failed to register PCI-id to pci-stub driver"
-	echo "$dev" > "$drvdir/unbind" ||\
+	echo "$dev" > "$orig_drvdir/unbind" ||\
 		die "Failed to unbind PCI kernel driver"
 	echo "$dev" > /sys/bus/pci/drivers/pci-stub/bind ||\
 		die "Failed to bind pci-stub kernel driver"
 	echo "$vendorid $deviceid" > /sys/bus/pci/drivers/pci-stub/remove_id ||\
 		die "Failed to remove PCI-id from pci-stub driver"
+
+	assigned_pci_devs="$assigned_pci_devs $dev/$orig_drvdir"
+}
+
+host_pci_restore_all()
+{
+	for assigned_dev in $assigned_pci_devs; do
+		local dev="$(echo "$assigned_dev" | cut -d'/' -f1)"
+		local orig_drvdir="/$(echo "$assigned_dev" | cut -d '/' -f2-)"
+
+		echo "Restoring PCI device $dev ..."
+		echo "$dev" > /sys/bus/pci/drivers/pci-stub/unbind
+		echo "$dev" > "$orig_drvdir"/bind
+	done
 }
 
 # $1=brdev, $2=ethdev
@@ -284,4 +300,5 @@ run()
 		$qemu_opts \
 		"$@"
 	run_spice_client
+	host_pci_restore_all
 }
