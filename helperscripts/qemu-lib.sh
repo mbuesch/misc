@@ -289,9 +289,9 @@ run()
 		-m "$opt_ram" \
 		-hda "${basedir}/${image}" \
 		-boot c \
-		-net "nic,vlan=1,model=ne2k_pci,macaddr=00:11:22:AA:BB:CC" \
+		-net "nic,vlan=1,model=rtl8139,macaddr=00:11:22:AA:BB:CC" \
 		-net "user,restrict=${opt_netrestrict},vlan=1,net=192.168.5.1/24,smb=${sharedir},smbserver=192.168.5.4" \
-		-net "nic,vlan=2,model=ne2k_pci,macaddr=00:11:22:AA:BB:CD" \
+		-net "nic,vlan=2,model=rtl8139,macaddr=00:11:22:AA:BB:CD" \
 		-usb $usbdevice_opt \
 		-serial "pipe:${serialdir}/0" \
 		$pcidevice_opt \
