@@ -41,6 +41,7 @@ release_port()
 run_qemu()
 {
 	local bin="$qemu_binary"
+	echo "Running QEMU..."
 	echo "$bin $*"
 	[ $opt_dryrun -eq 0 ] || return
 	if [ $opt_spice -eq 0 ]; then
@@ -56,11 +57,13 @@ run_spice_client()
 {
 	[ $opt_spice -eq 0 ] && return
 	echo "Running spice client on ${spice_host}:${spice_port}..."
-	sleep 1
-	spicy -h "$spice_host" -p "$spice_port"
-	echo "Killing qemu..."
-	kill "$qemu_pid"
-	wait
+	[ $opt_dryrun -eq 0 ] && {
+		sleep 1
+		spicy -h "$spice_host" -p "$spice_port"
+		echo "Killing qemu..."
+		kill "$qemu_pid"
+		wait
+	}
 	release_port "$spice_port"
 }
 
@@ -84,7 +87,11 @@ serial_init()
 kvm_init()
 {
 	kvm_opt=
-	[ -w /dev/kvm ] && kvm_opt="-enable-kvm"
+	if [ -w /dev/kvm ]; then
+		kvm_opt="-enable-kvm"
+	else
+		echo "===> WARNING: /dev/kvm not writable"
+	fi
 }
 
 # $1="vendor:device"
@@ -130,22 +137,24 @@ host_pci_prepare()
 	local orig_drvdir="$(find /sys/bus/pci/drivers -type l -name "$dev")"
 	orig_drvdir="$(dirname "$orig_drvdir")"
 	[ -n "$orig_drvdir" -a "$orig_drvdir" != "." ] || {
-		echo "PCI device $dev: Did not find attached kernel driver."
-		exit 1
-		return
+		echo "WARNING: Did not find attached kernel driver for PCI device $dev"
+		orig_drvdir=
 	}
 
 	modprobe pci-stub || die "Failed to load 'pci-stub' kernel module"
 	echo "$vendorid $deviceid" > /sys/bus/pci/drivers/pci-stub/new_id ||\
 		die "Failed to register PCI-id to pci-stub driver"
-	echo "$dev" > "$orig_drvdir/unbind" ||\
-		die "Failed to unbind PCI kernel driver"
+	[ -n "$orig_drvdir" ] && {
+		echo "$dev" > "$orig_drvdir/unbind" ||\
+			die "Failed to unbind PCI kernel driver"
+	}
 	echo "$dev" > /sys/bus/pci/drivers/pci-stub/bind ||\
 		die "Failed to bind pci-stub kernel driver"
 	echo "$vendorid $deviceid" > /sys/bus/pci/drivers/pci-stub/remove_id ||\
 		die "Failed to remove PCI-id from pci-stub driver"
 
-	assigned_pci_devs="$assigned_pci_devs $dev/$orig_drvdir"
+	[ -n "$orig_drvdir" ] &&\
+		assigned_pci_devs="$assigned_pci_devs $dev/$orig_drvdir"
 }
 
 host_pci_restore_all()
@@ -180,6 +189,7 @@ usage()
 	echo "qemu-script.sh [OPTIONS] [--] [QEMU-OPTIONS]"
 	echo
 	echo "Options:"
+	echo " --dry-run                   Do not run qemu/spice. (But do (de)allocate ressources)"
 	echo " -m RAM                      Amount of RAM. Default: 1024m"
 	echo " -n|--net-restrict on|off    Turn net restrict on/off. Default: on"
 	echo " --spice 1|0                 Use spice client. Default: 1"
@@ -189,18 +199,29 @@ usage()
 	echo " -B|--bridge BRDEV,ETHDEV    Create BRDEV and add ETHDEV"
 }
 
-# Global variables: basedir, image, qemu_opts, qemu_binary
+# Global variables:
+#  basedir, image, qemu_opts, rtc, qemu_binary, spice_host, spice_port,
+#  opt_ram, opt_netrestrict
 run()
 {
+	[ -n "$basedir" ] || die "No basedir specified"
+	[ -n "$image" ] || die "No image specified"
+
+	# Canonicalize paths
+	basedir="$(readlink -m "$basedir")"
+	image="$(readlink -m "$image")"
+
+	# Set variable-defaults
 	[ -n "$qemu_binary" ] || qemu_binary="qemu-system-i386"
 	[ -n "$spice_host" ] || spice_host="127.0.0.1"
 	[ -n "$spice_port" ] || spice_port="$(random_port)"
+	[ -n "$rtc" ] || rtc="-rtc base=localtime,clock=host"
 
+	# Set option-defaults
 	[ -n "$opt_ram" ] || opt_ram="1024m"
 	[ -n "$opt_netrestrict" ] || opt_netrestrict="on"
 	[ -n "$opt_dryrun" ] || opt_dryrun=0
 	[ -n "$opt_spice" ] || opt_spice=1
-
 	local usbdevice_opt=
 	local pcidevice_opt=
 	local bridge_opt=
@@ -283,11 +304,11 @@ run()
 	}
 
 	run_qemu \
-		-name "$image" \
+		-name "$(basename "$image")" \
 		$kvm_opt \
 		$spice_opt \
 		-m "$opt_ram" \
-		-hda "${basedir}/${image}" \
+		-hda "$image" \
 		-boot c \
 		-net "nic,vlan=1,model=rtl8139,macaddr=00:11:22:AA:BB:CC" \
 		-net "user,restrict=${opt_netrestrict},vlan=1,net=192.168.5.1/24,smb=${sharedir},smbserver=192.168.5.4" \
@@ -297,6 +318,7 @@ run()
 		$pcidevice_opt \
 		$bridge_opt \
 		-vga qxl \
+		$rtc \
 		$qemu_opts \
 		"$@"
 	run_spice_client
