@@ -6,6 +6,38 @@ die()
 	exit 1
 }
 
+# $1=text
+tolower()
+{
+	local str="$1"
+
+	echo -n "$str" | tr '[:upper:]' '[:lower:]'
+}
+
+# $1=value
+parse_bool()
+{
+	local str="$1"
+
+	str="$(tolower "$str")"
+	! [ "$str" = "0" -o \
+	    "$str" = "off" -o \
+	    "$str" = "false" -o \
+	    "$str" = "no" ]
+}
+
+# $1=value
+bool_to_1_0()
+{
+	parse_bool "$1" && echo -n 1 || echo -n 0
+}
+
+# $1=value
+bool_to_on_off()
+{
+	parse_bool "$1" && echo -n on || echo -n off
+}
+
 get_ports_db_file()
 {
 	local dbfile="/tmp/qemu-lib-ports.db"
@@ -75,18 +107,21 @@ share_init()
 
 serial_init()
 {
-	serialdir="$basedir/serial"
+	local serialdir="$basedir/serial"
+	local from=0
+	local to=0
+
 	mkdir -p "$serialdir" || die "Failed to create $serialdir"
-	for i in $(seq 0 0); do
+	for i in $(seq $from $to); do
 		[ -p "$serialdir/$i" ] || {
 			mkfifo "$serialdir/$i" || die "Failed to create fifo $i"
 		}
+		serial_opt="$serial_opt -serial pipe:$serialdir/0"
 	done
 }
 
 kvm_init()
 {
-	kvm_opt=
 	if [ -w /dev/kvm ]; then
 		kvm_opt="-enable-kvm"
 	else
@@ -190,9 +225,9 @@ usage()
 	echo
 	echo "Options:"
 	echo " --dry-run                   Do not run qemu/spice. (But do (de)allocate ressources)"
-	echo " -m RAM                      Amount of RAM. Default: 1024m"
-	echo " -n|--net-restrict on|off    Turn net restrict on/off. Default: on"
-	echo " --spice 1|0                 Use spice client. Default: 1"
+	echo " -m|--ram RAM                Amount of RAM. Default: 1024m"
+	echo " -n|--net-restrict 1|0       Turn net restrict on/off. Default: 1"
+	echo " -s|--spice 1|0              Use spice client. Default: 1"
 	echo " -u|--usb-id ABCD:1234       Use host USB device with ID ABCD:1234"
 	echo " -p|--pci-id ABCD:1234       Forward PCI device with ID ABCD:1234"
 	echo " -P|--pci-device 00:00.0     Forward PCI device at 00:00.0"
@@ -219,17 +254,24 @@ run()
 
 	# Set option-defaults
 	[ -n "$opt_ram" ] || opt_ram="1024m"
-	[ -n "$opt_netrestrict" ] || opt_netrestrict="on"
+	[ -n "$opt_netrestrict" ] || opt_netrestrict="$(bool_to_on_off 1)"
 	[ -n "$opt_dryrun" ] || opt_dryrun=0
 	[ -n "$opt_spice" ] || opt_spice=1
+
+	# Variable defaults
+	local spice_opt=
 	local usbdevice_opt=
 	local pcidevice_opt=
 	local bridge_opt=
+	kvm_opt=
+	serial_opt=
 
+	# Basic initialization
 	share_init
 	serial_init
 	kvm_init
 
+	# Parse command line options
 	local end=0
 	while [ $# -gt 0 -a $end -eq 0 ]; do
 		case "$1" in
@@ -237,20 +279,20 @@ run()
 			usage
 			exit 0
 			;;
-		-m)
+		-m|--ram)
 			shift
 			opt_ram="$1"
 			;;
 		-n|--net-restrict)
 			shift
-			opt_netrestrict="$1"
+			opt_netrestrict="$(bool_to_on_off "$1")"
 			;;
 		--dry-run)
 			opt_dryrun=1
 			;;
-		--spice)
+		-s|--spice)
 			shift
-			opt_spice="$1"
+			opt_spice="$(bool_to_1_0 "$1")"
 			;;
 		-u|--usb-id)
 			shift
@@ -294,7 +336,6 @@ run()
 		shift
 	done
 
-	local spice_opt=
 	[ $opt_spice -ne 0 ] && {
 		spice_opt="-spice addr=${spice_host},port=${spice_port},"
 		spice_opt="${spice_opt}disable-ticketing,agent-mouse=off,"
@@ -313,8 +354,9 @@ run()
 		-net "nic,vlan=1,model=rtl8139,macaddr=00:11:22:AA:BB:CC" \
 		-net "user,restrict=${opt_netrestrict},vlan=1,net=192.168.5.1/24,smb=${sharedir},smbserver=192.168.5.4" \
 		-net "nic,vlan=2,model=rtl8139,macaddr=00:11:22:AA:BB:CD" \
-		-usb $usbdevice_opt \
-		-serial "pipe:${serialdir}/0" \
+		-usb \
+		$usbdevice_opt \
+		$serial_opt \
 		$pcidevice_opt \
 		$bridge_opt \
 		-vga qxl \
