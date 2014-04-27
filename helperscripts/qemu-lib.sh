@@ -122,6 +122,10 @@ serial_init()
 
 kvm_init()
 {
+	modprobe kvm >/dev/null 2>&1
+	modprobe kvm-amd >/dev/null 2>&1
+	modprobe kvm-intel >/dev/null 2>&1
+
 	if [ -w /dev/kvm ]; then
 		kvm_opt="-enable-kvm"
 	else
