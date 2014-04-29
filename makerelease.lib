@@ -59,7 +59,13 @@ hook_get_version()		{ default_hook_required get_version; }
 
 cleanup()
 {
-	[ -d "$tmpdir" ] && rm -rf "$tmpdir"
+	[ -d "$tmpdir" ] && {
+		if [ $opt_leavetmp -eq 0 ]; then
+			rm -rf "$tmpdir"
+		else
+			info "Leaving temporary directory '$tmpdir' in place."
+		fi
+	}
 }
 
 # $1=code
@@ -191,6 +197,34 @@ relocate_checkout()
 	execute_hook post_relocate_checkout "$tmpdir" "$checkout_dir"
 }
 
+make_debian_packages()
+{
+	[ -d "$checkout_dir/debian" ] || return
+
+	info "Creating Debian packages"
+	have_program debuild || {
+		info "WARNING: No 'debuild' available. Skipping Debian build."
+		return
+	}
+
+	debian_dir="$tmpdir/debian_build"
+	mkdir -p "$debian_dir" || die "Failed to create debian dir"
+
+	cp "$archive_dir/$release_name.tar.gz" "$debian_dir/${project}_${version}.orig.tar.gz" ||\
+		die "Failed to copy debian .orig.tar.gz"
+	tar -x -z -C "$debian_dir" -f "$debian_dir/${project}_${version}.orig.tar.gz" ||\
+		die "Failed to extract debian .orig.tar.gz"
+	cd "$debian_dir/$release_name" ||\
+		die "Failed to change into extracted debian .orig source directory"
+	debuild -uc -us ||\
+		die "Failed to build debian package"
+
+	mkdir -p "$archive_dir/debian" ||\
+		die "Failed to create Debian archive directory"
+	mv "$debian_dir/${project}_"* "$archive_dir/debian/" ||\
+		die "Failed to move Debian archive files to archive directory"
+}
+
 make_archives()
 {
 	archive_dir="$tmpdir/$project-archives"
@@ -199,6 +233,16 @@ make_archives()
 	setup_py_targets=
 
 	info "Creating archives"
+
+	[ -d "$checkout_dir/debian" ] && have_program debuild && {
+		# We will build Debian packages.
+		# Force .tar.gz to be created.
+		echo "$opt_archives" | grep -qe 'tar.gz' || {
+			info "Adding tar.gz to archives for Debian build"
+			opt_archives="$opt_archives tar.gz"
+		}
+	}
+
 	execute_hook pre_archives "$archive_dir" "$checkout_dir"
 
 	for artype in $opt_archives; do
@@ -428,6 +472,7 @@ help()
 	echo "                                             py-bdist-dumb, py-bdist-rpm"
 	echo "  -U|--upload           Upload the archives to PyPi"
 	echo "  -V|--extraversion XX  Append XX to version string"
+	echo "  -L|--leave-tmp        Do not delete temporary files"
 	echo "  -h|--help             Show this help text"
 }
 
@@ -460,6 +505,7 @@ makerelease()
 	opt_upload=0
 	[ -n "$opt_archives" ] || opt_archives="tar.bz2"
 	opt_extraversion=
+	opt_leavetmp=0
 
 	while [ $# -ge 1 ]; do
 		case "$1" in
@@ -499,6 +545,9 @@ makerelease()
 			opt_extraversion="$1"
 			[ -n "$opt_extraversion" ] || die "Invalid --extraversion"
 			;;
+		-L|--leave-tmp)
+			opt_leavetmp=1
+			;;
 		*)
 			die "Invalid option: $1"
 			;;
@@ -523,6 +572,7 @@ makerelease()
 	make_archives
 	make_testbuild
 	make_regression_tests
+	make_debian_packages
 	make_archive_signatures
 	make_tag
 	make_pypi_upload
