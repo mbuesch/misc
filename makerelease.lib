@@ -216,7 +216,18 @@ make_debian_packages()
 		die "Failed to extract debian .orig.tar.gz"
 	cd "$debian_dir/$release_name" ||\
 		die "Failed to change into extracted debian .orig source directory"
-	debuild -uc -us ||\
+	local debuild_opts=
+	if [ $opt_nosign -eq 0 -a -n "$DEB_SIGN_KEYID" ]; then
+		info "(Signing Debian packages with key '$DEB_SIGN_KEYID', from DEB_SIGN_KEYID)"
+		local debuild_opts="-k$DEB_SIGN_KEYID"
+	elif [ $opt_nosign -eq 0 -a -n "$GPG_KEY_RELEASE" ]; then
+		info "(Signing Debian packages with key '$GPG_KEY_RELEASE', from GPG_KEY_RELEASE)"
+		local debuild_opts="-k$GPG_KEY_RELEASE"
+	else
+		info "(Creating unsigned Debian packages)"
+		local debuild_opts="-uc -us"
+	fi
+	debuild $debuild_opts ||\
 		die "Failed to build debian package"
 
 	mkdir -p "$archive_dir/debian" ||\
@@ -365,6 +376,9 @@ gpg_sign_dir_recursive()
 {
 	local dir="$1"
 
+	# Don't sign files in the debian directory
+	[ "$(basename "$dir")" = "debian" ] && return
+
 	local path=
 	for path in "$dir"/*; do
 		[ -d "$path" ] && {
@@ -381,6 +395,8 @@ gpg_sign_dir_recursive()
 		local gpg=gpg
 		have_program gpg2 && gpg=gpg2
 		assert_program $gpg "GNU Privacy Guard"
+		local gpg_opts=
+		[ -n "$GPG_KEY_RELEASE" ] && gpg_opts="--default-key $GPG_KEY_RELEASE"
 		$gpg $gpg_opts -ab "./$filename" || die "Failed to sign $filename"
 	done
 }
@@ -390,12 +406,7 @@ make_archive_signatures()
 	[ $opt_nosign -ne 0 ] && return
 
 	execute_hook pre_archive_signatures "$archive_dir"
-
-	local gpg_opts=
-	[ -n "$GPG_KEY_RELEASE" ] && gpg_opts="--default-key $GPG_KEY_RELEASE"
-
 	gpg_sign_dir_recursive "$archive_dir"
-
 	execute_hook post_archive_signatures "$archive_dir"
 }
 
