@@ -100,4 +100,8 @@ apt-get $dl_flags $apt_param || die "Upgrade failed"
 info "Cleaning"
 apt-get clean || die "Clean failed"
 
+which checkrestart >/dev/null 2>&1 && {
+	checkrestart || die "checkrestart failed"
+}
+
 exit 0
