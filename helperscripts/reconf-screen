@@ -5,15 +5,17 @@ usage()
 	echo "reconf-screen [OPTIONS]"
 	echo
 	echo "Options:"
-	echo " --unified          Show one desktop on all screens"
-	echo " --nodvi            Disable DVI"
-	echo " --nohdmi           Disable HDMI"
-	echo " --novga            Disable VGA"
-	echo " --nolvds           Disable LVDS"
-	echo " -h|--help          Show this help text"
+	echo " -u|--unified               Show one desktop on all screens"
+	echo " -r|--resolution 1024x768   Force a specific resolution"
+	echo " --nodvi                    Disable DVI"
+	echo " --nohdmi                   Disable HDMI"
+	echo " --novga                    Disable VGA"
+	echo " --nolvds                   Disable LVDS"
+	echo " -h|--help                  Show this help text"
 }
 
 unified=0
+res=
 nodvi=0
 nohdmi=0
 novga=0
@@ -25,8 +27,12 @@ while [ $# -ne 0 ]; do
 			usage
 			exit 0
 			;;
-		--unified)
+		--unified|-u)
 			unified=1
+			;;
+		--resolution|-r)
+			shift
+			res="$1"
 			;;
 		--nodvi)
 			nodvi=1
@@ -47,6 +53,8 @@ while [ $# -ne 0 ]; do
 	esac
 	shift
 done
+[ -n "$res" ] && res="--mode $res"
+
 
 getconn()
 {
@@ -89,9 +97,9 @@ done
 last_out=
 for out in $ON_ALL; do
 	if [ -z "$last_out" -o $unified -ne 0 ]; then
-		xrandr --output $out --pos 0x0
+		xrandr --output $out --pos 0x0 $res
 	else
-		xrandr --output $out --right-of $last_out
+		xrandr --output $out --right-of $last_out $res
 	fi
 	last_out=$out
 done
