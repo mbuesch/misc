@@ -478,7 +478,7 @@ help()
 	echo "  -b|--no-build         Do not run build. (implies no regression tests)"
 	echo "  -T|--no-tests         Do not run regression tests"
 	echo "  -r|--ref REF          Checkout version control reference REF"
-	echo "  -a|--archives TYPE,TYPE,...   Archive type list. Default: tar.bz2"
+	echo "  -a|--archives TYPE,TYPE,...   Archive type list. Default: $default_archives"
 	echo "                        Possible types: tar, tar.bz2, tar.gz, tar.xz, zip, 7z"
 	echo "                        For Python programs: py-sdist, py-bdist, py-bdist-wininst"
 	echo "                                             py-bdist-dumb, py-bdist-rpm"
@@ -492,10 +492,14 @@ help()
 # Parameters to this functions must be the main script arguments.
 makerelease()
 {
+	# Backwards compatibility for old default_compress option
+	[ -n "$default_compress" -a -z "$default_archives" ] && default_archives="$default_compress"
+
 	[ -n "$project" ] || die "\$project variable not set"
 	[ -n "$srcdir" ] || die "\$srcdir variable not set"
 	[ -n "$srcsubdir" ] || srcsubdir=""
 	[ -n "$tmp_basedir" ] || tmp_basedir="/tmp"
+	[ -n "$default_archives" ] || default_archives="tar.bz2"
 
 	trap terminating_signal TERM INT
 	trap cleanup EXIT
@@ -503,9 +507,6 @@ makerelease()
 	local template="makerelease-$project.XXXXXXXX"
 	tmpdir="$(mktemp -d --tmpdir="$tmp_basedir" "$template")"
 	[ -d "$tmpdir" ] || die "Failed to create temporary directory"
-
-	# Backwards compatibility for old default_compress option
-	[ -n "$default_compress" -a -z "$default_archives" ] && default_archives="$default_compress"
 
 	opt_dryrun=0
 	opt_notag=0
@@ -515,7 +516,6 @@ makerelease()
 	opt_ref=
 	opt_archives="$default_archives"
 	opt_upload=0
-	[ -n "$opt_archives" ] || opt_archives="tar.bz2"
 	opt_extraversion=
 	opt_leavetmp=0
 
