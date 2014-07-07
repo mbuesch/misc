@@ -12,7 +12,6 @@ checksum()
 	local binary="$1"
 	local sumfile="$2"
 
-	echo "Checking '$sumfile'..."
 	"$binary" --check --quiet --status --warn --strict "$sumfile" ||\
 		die "One checksum in '$sumfile' FAILED."
 }
@@ -29,18 +28,23 @@ check_all_sums()
 			-name SHA256SUM -o -name SHA256SUMS -o \
 			-name SHA512SUM -o -name SHA512SUMS); do
 
+		echo "Checking '$path'..."
+		local dir="$(dirname "$path")"
 		local file="$(basename "$path")"
+		local prev_dir="$(pwd)"
+		cd "$dir" || die "Failed to change directory"
 		if [ "$file" = "MD5SUM" -o "$file" = "MD5SUMS" ]; then
-			checksum md5sum "$path"
+			checksum md5sum "$file"
 		elif [ "$file" = "SHA1SUM" -o "$file" = "SHA1SUMS" ]; then
-			checksum sha1sum "$path"
+			checksum sha1sum "$file"
 		elif [ "$file" = "SHA256SUM" -o "$file" = "SHA256SUMS" ]; then
-			checksum sha256sum "$path"
+			checksum sha256sum "$file"
 		elif [ "$file" = "SHA512SUM" -o "$file" = "SHA512SUMS" ]; then
-			checksum sha512sum "$path"
+			checksum sha512sum "$file"
 		else
 			die "Don't know how to handle '$path'"
 		fi
+		cd "$prev_dir" || die "Failed to change directory"
 	done
 }
 
