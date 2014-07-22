@@ -45,6 +45,12 @@ die()
 	exit 1
 }
 
+# $1=program_name
+have_program()
+{
+	which "$1" >/dev/null 2>&1
+}
+
 # $1=option
 check_bool_opt()
 {
@@ -516,6 +522,13 @@ resolver_adjust()
 	[ -n "$opt_resolver" ] || return
 
 	debug "Setting resolver to '$opt_resolver'..."
+
+	have_program resolvconf && {
+		resolvconf --updates-are-enabled && {
+			info "Disabling resolvconf updates"
+			resolvconf --disable-updates
+		}
+	}
 
 	echo "nameserver $opt_resolver" > /etc/resolv.conf ||\
 		die "Failed to set resolver to '$opt_resolver'"
