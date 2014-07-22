@@ -519,19 +519,29 @@ dhcp_disconnect()
 
 resolver_adjust()
 {
-	[ -n "$opt_resolver" ] || return
+	if [ -n "$opt_resolver" ]; then
+		# Static resolver specified.
 
-	debug "Setting resolver to '$opt_resolver'..."
-
-	have_program resolvconf && {
-		resolvconf --updates-are-enabled && {
-			info "Disabling resolvconf updates"
-			resolvconf --disable-updates
+		have_program resolvconf && {
+			resolvconf --updates-are-enabled && {
+				info "Disabling resolvconf updates"
+				resolvconf --disable-updates
+			}
 		}
-	}
 
-	echo "nameserver $opt_resolver" > /etc/resolv.conf ||\
-		die "Failed to set resolver to '$opt_resolver'"
+		debug "Setting resolver to '$opt_resolver'..."
+		echo "nameserver $opt_resolver" > /etc/resolv.conf ||\
+			die "Failed to set resolver to '$opt_resolver'"
+	else
+		# No static resolver specified.
+
+		have_program resolvconf && {
+			resolvconf --updates-are-enabled || {
+				info "Enabling resolvconf updates"
+				resolvconf --enable-updates
+			}
+		}
+	fi
 }
 
 source_config() # $1=basedir, $2=script_name
@@ -793,8 +803,8 @@ while true; do
 	stop_nm
 	wlan_connect
 	dun_connect
-	dhcp_connect
 	resolver_adjust
+	dhcp_connect
 	vpn_connect
 
 	wait_loop
