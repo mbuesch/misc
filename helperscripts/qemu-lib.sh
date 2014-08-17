@@ -229,7 +229,7 @@ usage()
 	echo
 	echo "Options:"
 	echo " --dry-run                   Do not run qemu/spice. (But do (de)allocate ressources)"
-	echo " -m|--ram RAM                Amount of RAM. Default: 1024m"
+	echo " -m|--ram RAM                Amount of RAM. Default: 1024M"
 	echo " -n|--net-restrict 1|0       Turn net restrict on/off. Default: 1"
 	echo " -s|--spice 1|0              Use spice client. Default: 1"
 	echo " -u|--usb-id ABCD:1234       Use host USB device with ID ABCD:1234"
@@ -257,7 +257,7 @@ run()
 	[ -n "$rtc" ] || rtc="-rtc base=localtime,clock=host"
 
 	# Set option-defaults
-	[ -n "$opt_ram" ] || opt_ram="1024m"
+	[ -n "$opt_ram" ] || opt_ram="1024M"
 	[ -n "$opt_netrestrict" ] || opt_netrestrict="$(bool_to_on_off 1)"
 	[ -n "$opt_dryrun" ] || opt_dryrun=0
 	[ -n "$opt_spice" ] || opt_spice=1
