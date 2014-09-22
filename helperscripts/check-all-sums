@@ -12,7 +12,7 @@ checksum()
 	local binary="$1"
 	local sumfile="$2"
 
-	"$binary" --check --quiet --status --warn --strict "$sumfile" ||\
+	"$binary" --check --quiet --status --warn --strict "$sumfile" >/dev/null ||\
 		die "One checksum in '$sumfile' FAILED."
 }
 
@@ -22,11 +22,12 @@ check_all_sums()
 	local basedirectory="$1"
 
 	[ -d "$basedirectory" ] || die "$basedirectory is not a directory"
-	for path in $(find "$basedirectory" \
-			-name MD5SUM -o -name MD5SUMS -o \
-			-name SHA1SUM -o -name SHA1SUMS -o \
-			-name SHA256SUM -o -name SHA256SUMS -o \
-			-name SHA512SUM -o -name SHA512SUMS); do
+	find "$basedirectory" \
+		-name MD5SUM -o -name MD5SUMS -o \
+		-name SHA1SUM -o -name SHA1SUMS -o \
+		-name SHA256SUM -o -name SHA256SUMS -o \
+		-name SHA512SUM -o -name SHA512SUMS \
+		| while read path; do
 
 		echo "Checking '$path'..."
 		local dir="$(dirname "$path")"
