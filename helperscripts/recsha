@@ -1,0 +1,24 @@
+#!/bin/sh
+
+checksum()
+{
+	local path="$1"
+
+	echo "checksumming files in $path ..."
+
+	local olddir="$(pwd)"
+	cd "$path"
+	rm -f SHA256SUM
+	for file in *; do
+		if [ -d "$file" ]; then
+			checksum "$file"
+			continue
+		fi
+		sha256sum -b "$file" >> SHA256SUM
+	done
+	cd "$olddir"
+}
+
+for path in "$@"; do
+	checksum "$path"
+done
