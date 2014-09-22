@@ -1,5 +1,11 @@
 #!/bin/sh
 
+die()
+{
+	echo "$*" >&2
+	exit 1
+}
+
 checksum()
 {
 	local path="$1"
@@ -7,16 +13,19 @@ checksum()
 	echo "checksumming files in $path ..."
 
 	local olddir="$(pwd)"
-	cd "$path"
-	rm -f SHA256SUM
+	cd "$path" || die "cd '$path' failed"
+	rm -f SHA256SUM || die "rm failed"
 	for file in *; do
 		if [ -d "$file" ]; then
 			checksum "$file"
 			continue
 		fi
-		sha256sum -b "$file" >> SHA256SUM
+		if [ -f "$file" ]; then
+			sha256sum -b "$file" >> SHA256SUM ||\
+				die "checksumming of '$file' failed"
+		fi
 	done
-	cd "$olddir"
+	cd "$olddir" || die "cd '$olddir' failed"
 }
 
 for path in "$@"; do
