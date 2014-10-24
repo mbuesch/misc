@@ -1,33 +1,51 @@
 #!/bin/sh
 
+SUMFILE="SHA256SUM"
+SUMPROG="sha256sum"
+
 die()
 {
 	echo "$*" >&2
 	exit 1
 }
 
-checksum()
+# Checksum directory ($1) contents
+checksum_dir()
 {
 	local path="$1"
 
-	echo "checksumming files in $path ..."
+	[ -d "$path" ] || die "'$path' is not a directory"
 
+	echo "entering directory '$path'"
 	local olddir="$(pwd)"
 	cd "$path" || die "cd '$path' failed"
-	rm -f SHA256SUM || die "rm failed"
+
 	for file in *; do
-		if [ -d "$file" ]; then
-			checksum "$file"
+		[ "$file" = "$SUMFILE" ] && {
+			# Do not checksum the checksum file
 			continue
-		fi
-		if [ -f "$file" ]; then
-			sha256sum -b "$file" >> SHA256SUM ||\
-				die "checksumming of '$file' failed"
-		fi
+		}
+		[ -d "$file" ] && {
+			# Recurse into subdirectory
+			checksum_dir "$file"
+			continue
+		}
+		[ -f "$file" ] || {
+			# This is not a regular file. Don't checksum it.
+			continue
+		}
+		[ -f "$SUMFILE" ] && grep -qEe '^[a-fA-F0-9]+ [ \*]'"$file"'$' "$SUMFILE" && {
+			# This file is already checksummed. Skip it.
+			continue
+		}
+		"$SUMPROG" -b "$file" >> "$SUMFILE" ||\
+			die "checksumming of '$file' failed"
 	done
+
+	echo "leaving directory '$path'"
 	cd "$olddir" || die "cd '$olddir' failed"
 }
 
 for path in "$@"; do
-	checksum "$path"
+	checksum_dir "$path"
 done
