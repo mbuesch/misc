@@ -30,6 +30,7 @@ usage()
 	echo " -p|--parallel          Parallel download"
 	echo " -f|--full              Full upgrade"
 	echo " -d|--download-only     Download only"
+	echo " -c|--no-checkrestart   Do not run checkrestart"
 }
 
 trap cleanup INT EXIT
@@ -37,6 +38,7 @@ trap cleanup INT EXIT
 parallel=0
 full=0
 download_only=0
+no_checkrestart=0
 
 while [ $# -ge 1 ]; do
 	case "$1" in
@@ -48,6 +50,9 @@ while [ $# -ge 1 ]; do
 		;;
 	-d|--download-only)
 		download_only=1
+		;;
+	-c|--no-checkrestart)
+		no_checkrestart=1
 		;;
 	-h|--help)
 		usage
@@ -100,7 +105,8 @@ apt-get $dl_flags $apt_param || die "Upgrade failed"
 info "Cleaning"
 apt-get clean || die "Clean failed"
 
-which checkrestart >/dev/null 2>&1 && {
+[ $no_checkrestart -eq 0 ] && which checkrestart >/dev/null 2>&1 && {
+	info "Running checkrestart"
 	checkrestart || die "checkrestart failed"
 }
 
