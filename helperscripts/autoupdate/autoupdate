@@ -1,0 +1,40 @@
+#!/bin/sh
+
+logfile=/var/log/autoupdate.log
+lockfile=/var/lock/autoupdate.lock
+
+
+msg()
+{
+	echo "Autoupdate [$$] $*"
+}
+
+info()
+{
+	msg "$*"
+}
+
+error()
+{
+	msg "ERROR: $*"
+	exit 1
+}
+
+(
+	exec >> "$logfile" 2>&1
+	flock -x -n 9 || error "Failed to acquire lock"
+
+	info "$(date) starting..."
+
+	export TERM=linux
+	export PATH="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin"
+
+	aptitude update -q -y || error "Update failed"
+	aptitude safe-upgrade -q -y || error "Upgrade failed"
+	aptitude clean -q -y || error "Clean failed"
+
+	info "done."
+
+) 9> "$lockfile"
+
+exit 0
