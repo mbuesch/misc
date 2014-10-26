@@ -29,9 +29,9 @@ error()
 	export TERM=linux
 	export PATH="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin"
 
-	aptitude update -q -y || error "Update failed"
-	aptitude safe-upgrade -q -y || error "Upgrade failed"
-	aptitude clean -q -y || error "Clean failed"
+	apt-get update -q -y || error "Update failed"
+	apt-get upgrade -q -y || error "Upgrade failed"
+	apt-get clean -q -y || error "Clean failed"
 
 	info "done."
 
