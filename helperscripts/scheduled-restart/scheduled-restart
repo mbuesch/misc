@@ -10,6 +10,7 @@ die()
 
 if [ -e "$restartfile" ]; then
 	if [ "$1" = "notify" ]; then
+		export DISPLAY=:0
 		zenity --warning --text "Softwareaktualisierungen wurden installiert.\nBitte starten Sie das System neu."
 	else
 		shutdown -r now || die "Failed to reboot"
