@@ -1,0 +1,16 @@
+#!/bin/sh
+
+restartfile="/var/run/need-system-restart"
+
+die()
+{
+	echo "$*" >&2
+	exit 1
+}
+
+if [ -e "$restartfile" ]; then
+	rm "$restartfile" || die "Failed to remove restart marker"
+	shutdown -r now || die "Failed to reboot"
+fi
+
+exit 0
