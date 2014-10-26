@@ -2,7 +2,7 @@
 
 logfile=/var/log/autoupdate.log
 lockfile=/var/lock/autoupdate.lock
-
+restartfile=/var/run/need-system-restart
 
 msg()
 {
@@ -29,12 +29,22 @@ error()
 	export TERM=linux
 	export PATH="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin"
 
+	need_restart=0
+
 	apt-get update -q -y || error "Update failed"
+	apt-get -qq -y --print-uris upgrade | grep -qe linux-image &&\
+		need_restart=1
 	apt-get upgrade -q -y || error "Upgrade failed"
 	apt-get clean -q -y || error "Clean failed"
+	checkrestart | grep -qe '^Found 0 processes using old versions of upgraded files$' ||\
+		need_restart=1
 
-	info "done."
+	[ $need_restart -ne 0 ] && {
+		info "Need system restart"
+		echo 1 > "$restartfile" || error "Failed to set restart marker"
+	}
 
+	info "Autoupdate done"
 ) 9> "$lockfile"
 
 exit 0
