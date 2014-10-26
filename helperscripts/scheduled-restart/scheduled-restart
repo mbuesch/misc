@@ -9,8 +9,11 @@ die()
 }
 
 if [ -e "$restartfile" ]; then
-	rm "$restartfile" || die "Failed to remove restart marker"
-	shutdown -r now || die "Failed to reboot"
+	if [ "$1" = "notify" ]; then
+		zenity --warning --text "Softwareaktualisierungen wurden installiert.\nBitte starten Sie das System neu."
+	else
+		shutdown -r now || die "Failed to reboot"
+	fi
 fi
 
 exit 0
