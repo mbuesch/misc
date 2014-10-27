@@ -1,1 +1,2 @@
-20 6    * * *   root   /usr/local/bin/scheduled-restart
+@reboot	root	/bin/rm /var/run/need-system-restart
+20 6	* * *	root	/usr/local/bin/scheduled-restart
