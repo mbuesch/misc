@@ -1,1 +1,1 @@
-8 *	* * *	root	/usr/local/bin/autoupdate
+8 *	* * *	root	/bin/sh /usr/local/bin/autoupdate
