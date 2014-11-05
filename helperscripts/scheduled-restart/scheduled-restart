@@ -8,6 +8,9 @@ die()
 	exit 1
 }
 
+export TERM=linux
+export PATH="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin"
+
 if [ -e "$restartfile" ]; then
 	if [ "$1" = "notify" ]; then
 		export DISPLAY=:0
