@@ -1,6 +1,17 @@
 #!/bin/sh
 
 restartfile="/var/run/need-system-restart"
+lockfile="/var/lock/scheduled-restart.lock"
+
+gui_title_de="System neustarten?"
+gui_text_de="Softwareaktualisierungen wurden installiert.\nBitte schließen speichern Sie Ihre Arbeit, schließen alle Programme und starten das System neu."
+gui_label_ok_de="Sofort neustarten"
+gui_label_cancel_de="Nicht neustarten und später erneut erinnern"
+
+gui_title="$gui_title_de"
+gui_text="$gui_text_de"
+gui_label_ok="$gui_label_ok_de"
+gui_label_cancel="$gui_label_cancel_de"
 
 die()
 {
@@ -8,16 +19,33 @@ die()
 	exit 1
 }
 
+do_restart()
+{
+	shutdown -r now || die "Failed to reboot"
+}
+
 export TERM=linux
 export PATH="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin"
+export DISPLAY=:0
 
-if [ -e "$restartfile" ]; then
-	if [ "$1" = "notify" ]; then
-		export DISPLAY=:0
-		zenity --warning --text "Softwareaktualisierungen wurden installiert.\nBitte starten Sie das System neu."
-	else
-		shutdown -r now || die "Failed to reboot"
+( flock -x -n 9 || die "Failed to acquire lock"
+	if [ -e "$restartfile" ]; then
+		if [ "$1" = "gui" ]; then
+			if zenity --question \
+				--window-icon=warning \
+				--title "$gui_title" \
+				--text "$gui_text" \
+				--ok-label "$gui_label_ok" \
+				--cancel-label "$gui_label_cancel"; then
+				echo "restarting now..."
+				do_restart
+			else
+				echo "restarting later."
+			fi
+		else
+			do_restart
+		fi
 	fi
-fi
+) 9> "$lockfile"
 
 exit 0
