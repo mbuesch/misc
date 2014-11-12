@@ -90,6 +90,11 @@ if [ $parallel -ne 0 ]; then
 	done
 fi
 
+# Check whether a kernel image will be installed/updated.
+kernel_updated=0
+apt-get -qq -y --print-uris $apt_param | grep -qe linux-image &&\
+	kernel_updated=1
+
 info "Performing '$apt_param'"
 dl_flags=
 [ $download_only -ne 0 ] && dl_flags="--download-only"
@@ -109,5 +114,7 @@ apt-get clean || die "Clean failed"
 	info "Running checkrestart"
 	checkrestart || die "checkrestart failed"
 }
+
+[ $kernel_updated -ne 0 ] && info "The kernel has been updated!"
 
 exit 0
