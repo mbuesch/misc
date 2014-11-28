@@ -3,6 +3,8 @@
 logfile=/var/log/autoupdate.log
 lockfile=/var/lock/autoupdate.lock
 restartfile=/var/run/need-system-restart
+disablefile=/var/run/autoupdate.disabled
+
 
 msg()
 {
@@ -25,6 +27,8 @@ error()
 	flock -x -n 9 || error "Failed to acquire lock"
 
 	info "$(date) starting..."
+
+	[ -e "$disablefile" ] && error "Disabled due to $disablefile"
 
 	export TERM=linux
 	export PATH="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin"
