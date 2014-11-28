@@ -112,7 +112,9 @@ apt-get clean || die "Clean failed"
 
 [ $no_checkrestart -eq 0 ] && which checkrestart >/dev/null 2>&1 && {
 	info "Running checkrestart"
-	checkrestart || die "checkrestart failed"
+	blacklist=
+	[ -r /etc/checkrestart.blacklist ] && blacklist="-b /etc/checkrestart.blacklist"
+	checkrestart $blacklist || die "checkrestart failed"
 }
 
 [ $kernel_updated -ne 0 ] && info "The kernel has been updated!"

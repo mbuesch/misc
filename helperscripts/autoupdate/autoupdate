@@ -36,7 +36,10 @@ error()
 		need_restart=1
 	apt-get upgrade -q -y || error "Upgrade failed"
 	apt-get clean -q -y || error "Clean failed"
-	checkrestart | grep -qe '^Found 0 processes using old versions of upgraded files$' ||\
+
+	blacklist=
+	[ -r /etc/checkrestart.blacklist ] && blacklist="-b /etc/checkrestart.blacklist"
+	checkrestart $blacklist | grep -qe '^Found 0 processes using old versions of upgraded files$' ||\
 		need_restart=1
 
 	[ $need_restart -ne 0 ] && {
