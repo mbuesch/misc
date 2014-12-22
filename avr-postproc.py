@@ -119,12 +119,17 @@ class Insn:
 		s = ""
 		if self.callers:
 			s += "\n; FUNCTION called by "
+			c = []
+			pfx = ""
 			for i, caller in enumerate(self.callers):
-				s += "0x%04X " % caller.get_offset()
+				c.append(pfx + (LABEL_FMT % caller.get_offset()))
 				if i != 0 and \
 				   (i + 1) % 6 == 0 and \
 				   i != len(self.callers) - 1:
-					s += "\n;\t\t"
+					pfx = "\n;\t\t"
+				else:
+					pfx = ""
+			s += ", ".join(c)
 			s += "\n"
 		s += (LABEL_FMT + ":\t%s\t") % (self.get_offset(),
 						self.get_insn())
@@ -147,8 +152,10 @@ class Insn:
 			s += ";" + comm + "\t"
 		if self.jmpsources:
 			s += ";JUMPTARGET from "
+			lbls = []
 			for jmpsrc in self.jmpsources:
-				s += "0x%04X " % jmpsrc.get_offset()
+				lbls.append(LABEL_FMT % jmpsrc.get_offset())
+			s += ", ".join(lbls)
 		return s
 
 	def get_offset(self):
@@ -321,7 +328,8 @@ def main():
 		for insn in insns:
 			if insn.get_offset() == offset:
 				return insn
-		print("Instruction with offset 0x%04X not found" % offset)
+		print("; Postproc error: Instruction with "
+		      "offset 0x%04X not found" % offset)
 		return None
 
 	for insn in insns:
