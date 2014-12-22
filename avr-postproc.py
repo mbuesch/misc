@@ -30,45 +30,71 @@ def die(msg):
 	sys.stderr.flush()
 	sys.exit(1)
 
-def generate_io_table(inc_file):
-	# Parse the file and get the IO section
-	in_io = False
-	rawtab = []
-	try:
-		lines = open(inc_file, "r").readlines()
-	except IOError as e:
-		die("Failed to read INC-FILE '%s': %s" % (inc_file, str(e)))
-	for line in lines:
-		line = line.strip()
-		if line.startswith("; ***** I/O REGISTER DEFINITIONS"):
-			in_io = True
-			continue
-		if in_io:
-			if line.startswith("; *****"):
-				break # End of I/O section
-			rawtab.append(line)
-	r = re.compile(r"^\s*\.equ\s+(\w+)\s*=\s*(\w+)\s*$")
-	tab = {}
-	for raw in rawtab:
-		m = r.match(raw)
-		if not m:
-			continue
-		name, addr = m.group(1), m.group(2)
-		if addr.startswith("0x"):
-			addr = addr[2:]
-		addr = int(m.group(2), 16)
-		tab[addr] = name
-	if not tab:
-		die("Failed to parse INC-FILE")
-	return tab
-
 def ishex(s):
 	for c in s:
 		if c not in "0123456789abcdefABCDEF":
 			return False
 	return True
 
-class Insn:
+def fix_twos_complement(val, nrBits):
+	sign = 1 << nrBits
+	mask = (sign << 1) - 1
+	val &= mask
+	if val & sign:
+		return -((~val + 1) & mask)
+	return val
+
+class IncFile(object):
+	'''A parsed INC-file.'''
+
+	def __init__(self, inc_file_path):
+		in_io = False
+		rawtab = []
+		self.flash_size = None
+		try:
+			lines = open(inc_file_path, "r").readlines()
+		except IOError as e:
+			die("Failed to read INC-FILE '%s': %s" % (inc_file_path, str(e)))
+		equ_re = re.compile(r"^\s*\.equ\s+(\w+)\s*=\s*(\w+)\s*(?:;.*)?")
+		flash_end_re = re.compile(r"^\s*\.equ\s+FLASHEND\s*=\s*(\w+)\s*(?:;.*)?")
+		for line in lines:
+			line = line.strip()
+			if line.upper().startswith("; ***** I/O REGISTER DEFINITIONS"):
+				in_io = True
+				continue
+			if in_io:
+				if line.startswith("; *****"):
+					in_io = False
+				else:
+					rawtab.append(line)
+			else:
+				m = flash_end_re.match(line)
+				if m:
+					try:
+						end = int(m.group(1), 16)
+						self.flash_size = end + 1
+						self.flash_size *= 2 # To bytes
+					except ValueError:
+						pass
+		if not self.flash_size:
+			die("Failed to get FLASHEND from INC-FILE")
+		self.flash_mask = self.flash_size - 1
+		# Create the IO-map
+		tab = {}
+		for raw in rawtab:
+			m = equ_re.match(raw)
+			if not m:
+				continue
+			name, addr = m.group(1), m.group(2)
+			if addr.startswith("0x"):
+				addr = addr[2:]
+			addr = int(m.group(2), 16)
+			tab[addr] = name
+		if not tab:
+			die("Failed to parse INC-FILE")
+		self.ioaddr_map = tab
+
+class Insn(object):
 	'''An AVR assembly instruction'''
 
 	class StringErr(Exception): pass
@@ -179,7 +205,7 @@ class Insn:
 	def add_jmpsource(self, insn):
 		self.jmpsources.append(insn)
 
-	def __rewrite_jmp_targets(self):
+	def __rewrite_jmp_targets(self, inc_file):
 		if self.get_insn() != "jmp" and self.get_insn() != "call":
 			return
 		operands = self.get_operands()
@@ -188,17 +214,19 @@ class Insn:
 			exit(1)
 		operands[0] = LABEL_FMT % int(operands[0], 0)
 
-	def __rewrite_rjmp_targets(self):
+	def __rewrite_rjmp_targets(self, inc_file):
 		operlist = self.get_operands()
 		r = re.compile(r"^\.([\+-][0-9]+)")
 		for i in range(0, len(operlist)):
 			m = r.match(operlist[i])
 			if not m:
 				continue
-			operlist[i] = LABEL_FMT % (self.get_offset() + int(m.group(1)) + 2)
+			offs = fix_twos_complement(int(m.group(1)), 12) + 2
+			offs = (self.get_offset() + offs) & inc_file.flash_mask
+			operlist[i] = LABEL_FMT % offs
 			break
 
-	def __rewrite_io_addrs(self, ioaddr_map):
+	def __rewrite_io_addrs(self, inc_file):
 		offsets = { "sts"  : (0, "mem"),
 			    "lds"  : (1, "mem"),
 			    "in"   : (1, "io"),
@@ -220,7 +248,7 @@ class Insn:
 			if ioaddr < 0x60:
 				ioaddr -= 0x20
 		try:
-			name = ioaddr_map[ioaddr]
+			name = inc_file.ioaddr_map[ioaddr]
 		except KeyError as e:
 			return
 		if optype == "mem" and ioaddr < 0x60:
@@ -228,7 +256,7 @@ class Insn:
 		# Got a name for it. Reassign it.
 		operands[offset] = name
 
-	def __rewrite_special_registers(self):
+	def __rewrite_special_registers(self, inc_file):
 		special_regs_tab = { 26 : "XL",
 				     27 : "XH",
 				     28 : "YL",
@@ -248,17 +276,17 @@ class Insn:
 				continue
 			operands[i] = name
 
-	def __fix_raw_words(self):
+	def __fix_raw_words(self, inc_file):
 		if self.get_insn() == ".word":
 			self.set_insn(".dw")
 
-	def rewrite(self, ioaddr_map):
+	def rewrite(self, inc_file):
 		'''Rewrite the instruction to be better human readable'''
-		self.__rewrite_jmp_targets()
-		self.__rewrite_rjmp_targets()
-		self.__rewrite_io_addrs(ioaddr_map)
-		self.__rewrite_special_registers()
-		self.__fix_raw_words()
+		self.__rewrite_jmp_targets(inc_file)
+		self.__rewrite_rjmp_targets(inc_file)
+		self.__rewrite_io_addrs(inc_file)
+		self.__rewrite_special_registers(inc_file)
+		self.__fix_raw_words(inc_file)
 
 
 def usage():
@@ -300,8 +328,8 @@ def main():
 	if len(args) != 1:
 		die("INC-FILE not specified")
 
-	inc_file = args[0]
-	ioaddr_map = generate_io_table(inc_file)
+	inc_file_path = args[0]
+	inc_file = IncFile(inc_file_path)
 
 	lines = sys.stdin.readlines()
 	insns = []
@@ -321,7 +349,7 @@ def main():
 			continue
 		if stop_offset != -1 and insn.get_offset() >= stop_offset:
 			break
-		insn.rewrite(ioaddr_map)
+		insn.rewrite(inc_file)
 		insns.append(insn)
 
 	def get_insn_by_offset(offset):
@@ -371,7 +399,7 @@ def main():
 				target.add_caller(insn)
 
 	# Write the output
-	sys.stdout.write('.include "' + inc_file.split("/")[-1] + '"\n')
+	sys.stdout.write('.include "' + inc_file_path.split("/")[-1] + '"\n')
 	sys.stdout.write('\n')
 	sys.stdout.write('.org 0x000\n')
 	sys.stdout.write('\n')
