@@ -68,30 +68,27 @@ def ishex(s):
 			return False
 	return True
 
-'''An AVR assembly instruction'''
 class Insn:
+	'''An AVR assembly instruction'''
+
 	class StringErr(Exception): pass
 	class StringIgnore(Exception): pass
 
 	def __init__(self, insn_string):
-		s = insn_string.split()
-		if len(s) == 0 or s[0] == "...":
+		# Check whether this is an instruction line.
+		m = re.match(r'^\s*[0-9a-fA-F]+:\s+', insn_string)
+		if not m:
 			raise Insn.StringIgnore()
 		# Look for comments
 		self.comment = ""
-		for i in range(0, len(s)):
-			if s[i][0] != ";":
-				continue
-			try:
-				self.comment = " ".join(s[i+1:])
-			except IndexError as e:
-				self.comment = ""
-			if len(s[i]) > 1:
-				self.comment = s[i][1:] + self.comment
-			s = s[:i] # strip it off
+		if ';' in insn_string:
+			i = insn_string.index(';')
+			self.comment = insn_string[i+1:].strip()
+			# Strip it off
+			insn_string = insn_string[:i]
 			# Fix 0x0x breakage
 			self.comment = self.comment.replace("0x0x", "0x")
-			break
+		s = insn_string.split()
 		if len(s) < 2:
 			raise Insn.StringErr()
 		# Remove opcodes
@@ -107,12 +104,13 @@ class Insn:
 		self.operands = []
 		try:
 			self.operands = s[2:]
-		except IndexError as e: pass
-		for i in range(0, len(self.operands)):
+		except IndexError as e:
+			pass
+		for i, op in enumerate(self.operands):
 			# Strip commas from operands
-			self.operands[i] = self.operands[i].replace(",", "")
+			op = self.operands[i] = op.replace(",", "")
 			# Fix 0x0x breakage
-			self.operands[i] = self.operands[i].replace("0x0x", "0x")
+			op = self.operands[i] = op.replace("0x0x", "0x")
 		self.callers = []
 		self.jmpsources = []
 
