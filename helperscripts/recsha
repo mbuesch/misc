@@ -34,9 +34,13 @@ checksum_dir()
 			# This is not a regular file. Don't checksum it.
 			continue
 		}
-		[ -f "$SUMFILE" ] && grep -qEe '^[a-fA-F0-9]+ [ \*]'"$file"'$' "$SUMFILE" && {
-			# This file is already checksummed. Skip it.
-			continue
+		[ -f "$SUMFILE" ] && {
+			cat "$SUMFILE" | while read line; do
+				if [ "x$file" = "x$(echo "$line" | cut -d' ' -f2- | cut -c2-)" ]; then
+					# This file is already checksummed. Skip it.
+					return 1
+				fi
+			done || continue
 		}
 		"$SUMPROG" -b "$file" >> "$SUMFILE" ||\
 			die "checksumming of '$file' failed"
