@@ -2,7 +2,7 @@
 """
 #  Simple AVR disassembly postprocessor
 #
-#  Copyright (C) 2012 Michael Buesch <m@bues.ch>
+#  Copyright (C) 2012-2014 Michael Buesch <m@bues.ch>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License version 3
@@ -36,6 +36,25 @@ def ishex(s):
 			return False
 	return True
 
+def eff_linelen(s):
+	'''Get effective line length (Tabs => 8 characters).'''
+	count = 0
+	for c in s:
+		if c == '\t':
+			count = (count + 8) // 8 * 8
+		if c == '\n':
+			count = 0
+		else:
+			count += 1
+	return count
+
+def pad_to_length(s, target_len):
+	'''Pad a string up to the specified effective length.'''
+	slen = eff_linelen(s)
+	if slen >= target_len:
+		return s
+	return s + ' ' * (target_len - slen)
+
 def fix_twos_complement(val, nrBits):
 	sign = 1 << nrBits
 	mask = (sign << 1) - 1
@@ -47,28 +66,38 @@ def fix_twos_complement(val, nrBits):
 class IncFile(object):
 	'''A parsed INC-file.'''
 
+	equ_re = re.compile(r"^\s*\.equ\s+(\w+)\s*=\s*(\w+)\s*(?:;.*)?")
+	flash_end_re = re.compile(r"^\s*\.equ\s+FLASHEND\s*=\s*(\w+)\s*(?:;.*)?")
+
 	def __init__(self, inc_file_path):
-		in_io = False
-		rawtab = []
+		self.ioaddr_map = {}
+		self.irq_map = {}
+		self.irq_vectors_size = None
 		self.flash_size = None
+		in_io = False
+		in_irq = False
 		try:
 			lines = open(inc_file_path, "r").readlines()
 		except IOError as e:
 			die("Failed to read INC-FILE '%s': %s" % (inc_file_path, str(e)))
-		equ_re = re.compile(r"^\s*\.equ\s+(\w+)\s*=\s*(\w+)\s*(?:;.*)?")
-		flash_end_re = re.compile(r"^\s*\.equ\s+FLASHEND\s*=\s*(\w+)\s*(?:;.*)?")
 		for line in lines:
 			line = line.strip()
-			if line.upper().startswith("; ***** I/O REGISTER DEFINITIONS"):
+			if "I/O REGISTER DEFINITIONS" in line:
 				in_io = True
 				continue
+			if "INTERRUPT VECTORS" in line:
+				in_irq = True
+				continue
+			if line.startswith("; *****"):
+				in_io = False
+				in_irq = False
+				continue
 			if in_io:
-				if line.startswith("; *****"):
-					in_io = False
-				else:
-					rawtab.append(line)
+				self.__parse_iomap_entry(line)
+			elif in_irq:
+				self.__parse_irqmap_entry(line)
 			else:
-				m = flash_end_re.match(line)
+				m = self.flash_end_re.match(line)
 				if m:
 					try:
 						end = int(m.group(1), 16)
@@ -79,20 +108,51 @@ class IncFile(object):
 		if not self.flash_size:
 			die("Failed to get FLASHEND from INC-FILE")
 		self.flash_mask = self.flash_size - 1
-		# Create the IO-map
-		tab = {}
-		for raw in rawtab:
-			m = equ_re.match(raw)
-			if not m:
-				continue
-			name, addr = m.group(1), m.group(2)
-			if addr.startswith("0x"):
-				addr = addr[2:]
-			addr = int(m.group(2), 16)
-			tab[addr] = name
-		if not tab:
-			die("Failed to parse INC-FILE")
-		self.ioaddr_map = tab
+		if not self.ioaddr_map:
+			die("Failed to parse I/O-map from INC-FILE")
+		if not self.irq_map or not self.irq_vectors_size:
+			die("Failed to parse IRQ-map from INC-FILE")
+		if 0 not in self.irq_map:
+			self.irq_map[0] = "RESET"
+
+	# Parse one I/O map entry
+	def __parse_iomap_entry(self, line):
+		m = self.equ_re.match(line)
+		if not m:
+			return
+		name, addr = m.group(1), m.group(2)
+		if addr.startswith("0x"):
+			addr = addr[2:]
+		try:
+			addr = int(addr, 16)
+		except ValueError:
+			die("Failed to convert I/O map address: %s" % line)
+		self.ioaddr_map[addr] = name
+
+	# Parse one IRQ map entry
+	def __parse_irqmap_entry(self, line):
+		m = self.equ_re.match(line)
+		if not m:
+			return
+		name, addr = m.group(1), m.group(2)
+		if name == "INT_VECTORS_SIZE":
+			try:
+				self.irq_vectors_size = int(addr, 10)
+				self.irq_vectors_size *= 2 # To byte size
+			except ValueError:
+				die("Failed to parse IRQ map size: %s" %\
+				    line)
+			return
+		if not name.endswith("addr"):
+			return
+		if addr.startswith("0x"):
+			addr = addr[2:]
+		try:
+			addr = int(addr, 16)
+		except ValueError:
+			die("Failed to convert IRQ map address: %s" % line)
+		addr *= 2 # To byte address
+		self.irq_map[addr] = name
 
 class Insn(object):
 	'''An AVR assembly instruction'''
@@ -121,9 +181,13 @@ class Insn(object):
 		while len(s[1]) == 2 and ishex(s[1]):
 			s.pop(1)
 		# Extract offset (2ab:)
-		off = s[0]
-		off = "0x" + off[:-1]
-		self.offset = int(off, 16)
+		try:
+			off = s[0]
+			off = "0x" + off[:-1]
+			self.offset = int(off, 16)
+			self.offset_label = None
+		except TypeError:
+			die("Failed to extract insn offset")
 		# Extract insn string (jmp...)
 		self.insn = s[1].lower()
 		# Extract operands
@@ -140,15 +204,22 @@ class Insn(object):
 		self.callers = []
 		self.jmpsources = []
 
-	def get_full_string(self):
+	def get_full_string(self, inc_file):
 		'''Returns a full string of the instruction'''
+
+		max_vect = inc_file.irq_vectors_size - 2
+		is_irq_handler = any(s.get_offset() <= max_vect
+				     for s in self.jmpsources)
+
 		s = ""
+
+		# Show CALLers
 		if self.callers:
 			s += "\n; FUNCTION called by "
 			c = []
 			pfx = ""
 			for i, caller in enumerate(self.callers):
-				c.append(pfx + (LABEL_FMT % caller.get_offset()))
+				c.append(pfx + caller.get_offset_string())
 				if i != 0 and \
 				   (i + 1) % 6 == 0 and \
 				   i != len(self.callers) - 1:
@@ -157,35 +228,56 @@ class Insn(object):
 					pfx = ""
 			s += ", ".join(c)
 			s += "\n"
-		s += (LABEL_FMT + ":\t%s\t") % (self.get_offset(),
-						self.get_insn())
-		s += ", ".join(self.get_operands())
+
+		# Show IRQ vector jump sources
+		if is_irq_handler and not self.callers:
+			s += "\n"
+		if is_irq_handler:
+			# This is jumped to from IRQ vectors.
+			s += "; IRQ handler for "
+			s += ", ".join(s.get_offset_string()
+				       for s in self.jmpsources)
+			s += "\n"
+
+		# Dump the instruction string
+		s += self.get_offset_string() + ":"
+		s = pad_to_length(s, 10)
+		s += self.get_insn()
+		if self.get_operands():
+			s = pad_to_length(s, 18)
+			s += ", ".join(self.get_operands())
+
+		# Add the comment string
 		comm = self.get_comment()
-		comm_space = ""
-		while 1:
-			l = 0
-			for c in s + comm_space:
-				if c == '\t':
-					l = (l + 8) // 8 * 8
-				else:
-					l += 1
-			if l >= 40:
-				break
-			comm_space += "\t"
 		if comm or self.jmpsources:
-			s += comm_space
+			s = pad_to_length(s, 35)
+			s += ";"
 		if comm:
-			s += ";" + comm + "\t"
+			s += comm
+			if self.jmpsources:
+				s += " / "
+
+		# Add the (R)JMP sources
 		if self.jmpsources:
-			s += ";JUMPTARGET from "
-			lbls = []
-			for jmpsrc in self.jmpsources:
-				lbls.append(LABEL_FMT % jmpsrc.get_offset())
-			s += ", ".join(lbls)
+			nonirq_jmpsrcs = [ s for s in self.jmpsources
+					   if s.get_offset() > max_vect ]
+			if nonirq_jmpsrcs:
+				s += "JUMPTARGET from "
+				s += ", ".join(s.get_offset_string()
+					       for s in nonirq_jmpsrcs)
 		return s
 
 	def get_offset(self):
 		return self.offset
+
+	def get_offset_label(self):
+		return self.offset_label
+
+	def get_offset_string(self):
+		label = self.get_offset_label()
+		if label:
+			return label
+		return LABEL_FMT % self.get_offset()
 
 	def get_insn(self):
 		return self.insn
@@ -205,13 +297,25 @@ class Insn(object):
 	def add_jmpsource(self, insn):
 		self.jmpsources.append(insn)
 
+	def __rewrite_irq_label(self, inc_file):
+		offset = self.get_offset()
+		if offset >= inc_file.irq_vectors_size:
+			return
+		try:
+			label = inc_file.irq_map[offset]
+		except KeyError:
+			return
+		if label.endswith("addr"):
+			label = label[:-4]
+		label = "L_" + label
+		self.offset_label = label
+
 	def __rewrite_jmp_targets(self, inc_file):
 		if self.get_insn() != "jmp" and self.get_insn() != "call":
 			return
 		operands = self.get_operands()
-		if (len(operands) != 1):
-			print("Error: more than one JMP/CALL operand")
-			exit(1)
+		if len(operands) != 1:
+			die("Error: more than one JMP/CALL operand")
 		operands[0] = LABEL_FMT % int(operands[0], 0)
 
 	def __rewrite_rjmp_targets(self, inc_file):
@@ -282,6 +386,7 @@ class Insn(object):
 
 	def rewrite(self, inc_file):
 		'''Rewrite the instruction to be better human readable'''
+		self.__rewrite_irq_label(inc_file)
 		self.__rewrite_jmp_targets(inc_file)
 		self.__rewrite_rjmp_targets(inc_file)
 		self.__rewrite_io_addrs(inc_file)
@@ -343,11 +448,10 @@ def main():
 		except Insn.StringIgnore as e:
 			continue
 		except Insn.StringErr as e:
-			print("ERROR: Could not parse line \"%s\"" % line)
-			exit(1)
+			die("ERROR: Could not parse line \"%s\"" % line)
 		if insn.get_offset() < start_offset:
 			continue
-		if stop_offset != -1 and insn.get_offset() >= stop_offset:
+		if stop_offset != -1 and insn.get_offset() > stop_offset:
 			break
 		insn.rewrite(inc_file)
 		insns.append(insn)
@@ -360,6 +464,7 @@ def main():
 		      "offset 0x%04X not found" % offset)
 		return None
 
+	# Annotate jump sources
 	for insn in insns:
 		branch_insns = { "jmp"   : ("type_jmp", 0),
 				 "rjmp"  : ("type_jmp", 0),
@@ -404,7 +509,7 @@ def main():
 	sys.stdout.write('.org 0x000\n')
 	sys.stdout.write('\n')
 	for insn in insns:
-		s = insn.get_full_string()
+		s = insn.get_full_string(inc_file)
 		if not s:
 			continue
 		sys.stdout.write(s + "\n")
