@@ -36,7 +36,7 @@ default_hook_testbuild()
 		make
 	fi
 	if [ -x ./setup.py ]; then
-		./setup.py build
+		./setup.py --no-user-cfg build
 	fi
 }
 
@@ -321,10 +321,19 @@ make_archives()
 		for target in $setup_py_targets; do
 			info "Building Python $target-package"
 			local opts=
-			[ "$target" = "bdist_wininst" ] && {
-				opts="--plat-name win32"
-			}
-			./setup.py "$target" $opts || die "Failed to build Python archive"
+			if [ "$target" = "bdist_wininst" ]; then
+				local opts="--plat-name win32"
+			elif [ "$target" = "sdist" -o "$target" = "sdist_gz" ]; then
+				local target="sdist"
+				local opts="--formats=gztar --owner=root --group=root"
+			elif [ "$target" = "sdist_bz2" ]; then
+				local target="sdist"
+				local opts="--formats=bztar --owner=root --group=root"
+			elif [ "$target" = "sdist_zip" ]; then
+				local target="sdist"
+				local opts="--formats=zip"
+			fi
+			./setup.py --no-user-cfg "$target" $opts || die "Failed to build Python archive"
 		done
 		cp ./dist/* "$archive_dir/python/" || die "Failed to copy Python archives"
 	fi
@@ -349,10 +358,19 @@ make_pypi_upload()
 			[ -n "$GPG_KEY_RELEASE" ] && upload_opts="$upload_opts --identity $GPG_KEY_RELEASE"
 		}
 		local target_opts=
-		[ "$target" = "bdist_wininst" ] && {
-			target_opts="--plat-name win32"
-		}
-		dry_run ./setup.py $target $target_opts upload $upload_opts ||\
+		if [ "$target" = "bdist_wininst" ]; then
+			local target_opts="--plat-name win32"
+		elif [ "$target" = "sdist" -o "$target" = "sdist_gz" ]; then
+			local target="sdist"
+			local target_opts="--formats=gztar --owner=root --group=root"
+		elif [ "$target" = "sdist_bz2" ]; then
+			local target="sdist"
+			local target_opts="--formats=bztar --owner=root --group=root"
+		elif [ "$target" = "sdist_zip" ]; then
+			local target="sdist"
+			local target_opts="--formats=zip"
+		fi
+		dry_run ./setup.py --no-user-cfg $target $target_opts upload $upload_opts ||\
 			die "Failed to upload PyPi package"
 	done
 }
@@ -480,7 +498,9 @@ help()
 	echo "  -r|--ref REF          Checkout version control reference REF"
 	echo "  -a|--archives TYPE,TYPE,...   Archive type list. Default: $default_archives"
 	echo "                        Possible types: tar, tar.bz2, tar.gz, tar.xz, zip, 7z"
-	echo "                        For Python programs: py-sdist, py-bdist, py-bdist-wininst"
+	echo "                        For Python programs: py-sdist,"
+	echo "                                             py-sdist-gz, py-sdist-bz2, py-dist-zip,"
+	echo "                                             py-bdist, py-bdist-wininst,"
 	echo "                                             py-bdist-dumb, py-bdist-rpm"
 	echo "  -U|--upload           Upload the archives to PyPi"
 	echo "  -V|--extraversion XX  Append XX to version string"
@@ -570,7 +590,7 @@ makerelease()
 	opt_archives="$(echo "$opt_archives" | tr ',' ' ')"
 	for artype in $opt_archives; do
 		case "$artype" in
-			tar|tar.bz2|tar.gz|tar.xz|zip|7z|py-sdist|py-bdist|py-bdist-wininst|py-bdist-dump|py-bdist-rpm) ;; # ok
+			tar|tar.bz2|tar.gz|tar.xz|zip|7z|py-sdist|py-sdist-gz|py-sdist-bz2|py-sdist-zip|py-bdist|py-bdist-wininst|py-bdist-dump|py-bdist-rpm) ;; # ok
 			*) die "Invalid archiving method: $artype" ;;
 		esac
 	done
