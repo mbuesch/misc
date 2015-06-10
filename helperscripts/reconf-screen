@@ -9,6 +9,7 @@ usage()
 	echo " -r|--resolution 1024x768   Force a specific resolution"
 	echo " --nodvi                    Disable DVI"
 	echo " --nohdmi                   Disable HDMI"
+	echo " --nodp                     Disable DP"
 	echo " --novga                    Disable VGA"
 	echo " --nolvds                   Disable LVDS"
 	echo " -h|--help                  Show this help text"
@@ -18,6 +19,7 @@ unified=0
 res=
 nodvi=0
 nohdmi=0
+nodp=0
 novga=0
 nolvds=0
 
@@ -39,6 +41,9 @@ while [ $# -ne 0 ]; do
 			;;
 		--nohdmi)
 			nohdmi=1
+			;;
+		--nodp)
+			nodp=1
 			;;
 		--novga)
 			novga=1
@@ -72,6 +77,8 @@ DVI="$(getconn DVI)"
 DVI_DISCONN="$(getdisconn DVI)"
 HDMI="$(getconn HDMI)"
 HDMI_DISCONN="$(getdisconn HDMI)"
+DP="$(getconn DP)"
+DP_DISCONN="$(getdisconn DP)"
 VGA="$(getconn VGA)"
 VGA_DISCONN="$(getdisconn VGA)"
 LVDS="$(getconn LVDS)"
@@ -79,13 +86,14 @@ LVDS_DISCONN="$(getdisconn LVDS)"
 
 [ $nodvi -ne 0 ] && { OFF_DVI="$DVI"; ON_DVI=; } || { OFF_DVI=; ON_DVI="$DVI"; }
 [ $nohdmi -ne 0 ] && { OFF_HDMI="$HDMI"; ON_HDMI=; } || { OFF_HDMI=; ON_HDMI="$HDMI"; }
+[ $nodp -ne 0 ] && { OFF_DP="$DP"; ON_DP=; } || { OFF_DP=; ON_DP="$DP"; }
 [ $novga -ne 0 ] && { OFF_VGA="$VGA"; ON_VGA=; } || { OFF_VGA=; ON_VGA="$VGA"; }
 [ $nolvds -ne 0 ] && { OFF_LVDS="$LVDS"; ON_LVDS=; } || { OFF_LVDS=; ON_LVDS="$LVDS"; }
 
-ALL="$LVDS $DVI $HDMI $VGA"
-ON_ALL="$ON_LVDS $ON_DVI $ON_HDMI $ON_VGA"
-OFF_ALL="$OFF_LVDS $OFF_DVI $OFF_HDMI $OFF_VGA"
-ALL_DISCONN="$LVDS_DISCONN $DVI_DISCONN $HDMI_DISCONN $VGA_DISCONN"
+ALL="$LVDS $DVI $HDMI $DP $VGA"
+ON_ALL="$ON_LVDS $ON_DVI $ON_HDMI $ON_DP $ON_VGA"
+OFF_ALL="$OFF_LVDS $OFF_DVI $OFF_HDMI $OFF_DP $OFF_VGA"
+ALL_DISCONN="$LVDS_DISCONN $DVI_DISCONN $HDMI_DISCONN $DP_DISCONN $VGA_DISCONN"
 
 
 for out in $ALL; do
