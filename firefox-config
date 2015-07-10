@@ -2,6 +2,7 @@ Firefox about:config settings:
 
 browser.newtab.url			;about:blank
 browser.newtabpage.enabled		;false
+browser.pocket.enabled			;false
 browser.safebrowsing.enabled		;false
 browser.safebrowsing.malware.enabled	;false
 browser.tabs.animate			;false
@@ -17,4 +18,5 @@ geo.enabled				;false
 network.dns.disablePrefetch		;true
 network.prefetch-next			;false
 places.history.enabled			;false
+reader.parse-on-load.enabled		;false
 webgl.disabled				;true
