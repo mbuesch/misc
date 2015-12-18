@@ -30,7 +30,7 @@ usage()
 	echo " -p|--parallel          Parallel download"
 	echo " -f|--full              Full upgrade"
 	echo " -d|--download-only     Download only"
-	echo " -c|--no-checkrestart   Do not run checkrestart"
+	echo " -c|--checkrestart      Run checkrestart"
 }
 
 trap cleanup INT EXIT
@@ -38,7 +38,7 @@ trap cleanup INT EXIT
 parallel=0
 full=0
 download_only=0
-no_checkrestart=0
+checkrestart=0
 
 while [ $# -ge 1 ]; do
 	case "$1" in
@@ -51,8 +51,8 @@ while [ $# -ge 1 ]; do
 	-d|--download-only)
 		download_only=1
 		;;
-	-c|--no-checkrestart)
-		no_checkrestart=1
+	-c|--checkrestart)
+		checkrestart=1
 		;;
 	-h|--help)
 		usage
@@ -65,20 +65,22 @@ while [ $# -ge 1 ]; do
 	shift
 done
 
+[ $full -eq 0 ] && {
+	upgrade_mode="upgrade"
+} || {
+	upgrade_mode="dist-upgrade"
+}
+
+
 info "Updating package list"
 apt-get update || die "Update failed"
 
-[ $full -eq 0 ] && {
-	apt_param="upgrade"
-} || {
-	apt_param="dist-upgrade"
-}
-
+# Run parallel download, if requested.
 if [ $parallel -ne 0 ]; then
-	info "Generating package list for '$apt_param'"
+	info "Generating package list for '$upgrade_mode'"
 	listfile="$(mktemp --tmpdir=/tmp update-files.list.XXXXXXXX)"
 	[ -w "$listfile" ] || die "Failed to create temporary file"
-	apt-uri-list $apt_param | apturi2metalink > "$listfile" ||\
+	apt-uri-list "$upgrade_mode" | apturi2metalink > "$listfile" ||\
 		die "Failed to generate file list"
 
 	info "Downloading packages"
@@ -92,16 +94,20 @@ fi
 
 # Check whether a kernel image will be installed/updated.
 kernel_updated=0
-apt-get -qq -y --print-uris $apt_param | grep -qe linux-image &&\
+apt-get --show-upgraded --verbose-versions --dry-run "$upgrade_mode" |\
+	grep -qEe '^[[:space:]]*linux-image-[[:digit:]]' &&\
 	kernel_updated=1
 
-info "Performing '$apt_param'"
+# Do the download and upgrade.
+info "Performing '$upgrade_mode'"
 dl_flags=
 [ $download_only -ne 0 ] && dl_flags="--download-only"
-apt-get $dl_flags $apt_param || die "Upgrade failed"
+apt-get $dl_flags --show-upgraded "$upgrade_mode" || die "Upgrade failed"
 
+# Exit here, if download only.
 [ $download_only -ne 0 ] && exit 0
 
+# Purge packages, if full upgrade.
 [ $full -ne 0 ] && {
 	info "Purging old packages"
 	apt-get autoremove --purge || die "Autoremove failed"
@@ -110,7 +116,8 @@ apt-get $dl_flags $apt_param || die "Upgrade failed"
 info "Cleaning"
 apt-get clean || die "Clean failed"
 
-[ $no_checkrestart -eq 0 ] && which checkrestart >/dev/null 2>&1 && {
+# Run checkrestart, if requested.
+[ $checkrestart -ne 0 ] && which checkrestart >/dev/null 2>&1 && {
 	info "Running checkrestart"
 	blacklist=
 	[ -r /etc/checkrestart.blacklist ] && blacklist="-b /etc/checkrestart.blacklist"
