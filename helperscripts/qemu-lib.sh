@@ -353,7 +353,7 @@ run()
 		$kvm_opt \
 		$spice_opt \
 		-m "$opt_ram" \
-		-hda "$image" \
+		-drive file="$image",index=0,format=raw,media=disk \
 		-boot c \
 		-net "nic,vlan=1,model=rtl8139,macaddr=00:11:22:AA:BB:CC" \
 		-net "user,restrict=${opt_netrestrict},vlan=1,net=192.168.5.1/24,smb=${sharedir},smbserver=192.168.5.4" \
