@@ -233,8 +233,14 @@ make_debian_packages()
 
 	mkdir -p "$archive_dir/debian" ||\
 		die "Failed to create Debian archive directory"
-	mv "$debian_dir/${project}_"* "$archive_dir/debian/" ||\
-		die "Failed to move Debian archive files to archive directory"
+	mv "$debian_dir/"*.deb "$archive_dir/debian/" ||\
+		die "Failed to move .deb files to archive directory"
+	mv "$debian_dir/"*.dsc "$archive_dir/debian/" ||\
+		die "Failed to move .dsc files to archive directory"
+	mv "$debian_dir/"*.changes "$archive_dir/debian/" ||\
+		die "Failed to move .changes files to archive directory"
+	mv "$debian_dir/"*.orig.* "$archive_dir/debian/" ||\
+		die "Failed to move .orig.* files to archive directory"
 }
 
 make_archives()
@@ -304,6 +310,8 @@ make_archives()
 				die "Failed to create 7-ZIP archive"
 			;;
 		*)
+			#FIXME we should use stable build:
+			#	find "$release_name" -print0 | LC_ALL=C sort -z | tar --mtime='1970-01-01 00:00Z' --null -T - --no-recursion -c $opts -f "$archive"
 			tar --owner=root --group=root \
 			    -c $opts -f "$archive" "$release_name" || \
 				die "Failed to create tarball"
