@@ -105,7 +105,7 @@ hook_post_archives()		{ default_hook_post_archives "$@"; }
 hook_testbuild()		{ default_hook_testbuild "$@"; }
 hook_regression_tests()		{ default_hook_regression_tests "$@"; }
 hook_pre_archive_signatures()	{ default_hook_pre_archive_signatures "$@"; }
-hook_post_archive_signatures()	{ default_hook_post_archives_signatures "$@"; }
+hook_post_archive_signatures()	{ default_hook_post_archive_signatures "$@"; }
 hook_pre_tag()			{ default_hook_pre_tag "$@"; }
 hook_post_tag()			{ default_hook_post_tag "$@"; }
 hook_pre_move_files()		{ default_hook_pre_move_files "$@"; }
