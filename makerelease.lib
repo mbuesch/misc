@@ -1,17 +1,16 @@
 #
 # Release script library
-# Copyright (c) 2012-2014 Michael Buesch <m@bues.ch>
+# Copyright (c) 2012-2016 Michael Buesch <m@bues.ch>
 #
-
-# Default hooks
-default_hook_nothing()
-{
-	true
-}
 
 default_hook_required()
 {
 	die "ERROR: Must supply hook_$1()"
+}
+
+default_hook_pre_checkout()
+{
+	true
 }
 
 default_hook_post_checkout()
@@ -21,6 +20,27 @@ default_hook_post_checkout()
 		\( -name 'makerelease*' \) -o \
 		\( -name '.git*' \) \
 	\) -print0 | xargs -0 rm -r
+}
+
+
+default_hook_pre_relocate_checkout()
+{
+	true
+}
+
+default_hook_post_relocate_checkout()
+{
+	true
+}
+
+default_hook_pre_archives()
+{
+	true
+}
+
+default_hook_post_archives()
+{
+	true
 }
 
 default_hook_testbuild()
@@ -40,21 +60,56 @@ default_hook_testbuild()
 	fi
 }
 
-# Assign default hooks
-hook_pre_checkout()		{ default_hook_nothing "$@"; }
+default_hook_regression_tests()
+{
+	true
+}
+
+default_hook_pre_archive_signatures()
+{
+	true
+}
+
+default_hook_post_archive_signatures()
+{
+	true
+}
+
+default_hook_pre_tag()
+{
+	true
+}
+
+default_hook_post_tag()
+{
+	true
+}
+
+default_hook_pre_move_files()
+{
+	true
+}
+
+default_hook_post_move_files()
+{
+	true
+}
+
+# Assign default hooks to actual hooks
+hook_pre_checkout()		{ default_hook_pre_checkout "$@"; }
 hook_post_checkout()		{ default_hook_post_checkout "$@"; }
-hook_pre_relocate_checkout()	{ default_hook_nothing "$@"; }
-hook_post_relocate_checkout()	{ default_hook_nothing "$@"; }
-hook_pre_archives()		{ default_hook_nothing "$@"; }
-hook_post_archives()		{ default_hook_nothing "$@"; }
+hook_pre_relocate_checkout()	{ default_hook_pre_relocate_checkout "$@"; }
+hook_post_relocate_checkout()	{ default_hook_post_relocate_checkout "$@"; }
+hook_pre_archives()		{ default_hook_pre_archives "$@"; }
+hook_post_archives()		{ default_hook_post_archives "$@"; }
 hook_testbuild()		{ default_hook_testbuild "$@"; }
-hook_regression_tests()		{ default_hook_nothing "$@"; }
-hook_pre_archive_signatures()	{ default_hook_nothing "$@"; }
-hook_post_archive_signatures()	{ default_hook_nothing "$@"; }
-hook_pre_tag()			{ default_hook_nothing "$@"; }
-hook_post_tag()			{ default_hook_nothing "$@"; }
-hook_pre_move_files()		{ default_hook_nothing "$@"; }
-hook_post_move_files()		{ default_hook_nothing "$@"; }
+hook_regression_tests()		{ default_hook_regression_tests "$@"; }
+hook_pre_archive_signatures()	{ default_hook_pre_archive_signatures "$@"; }
+hook_post_archive_signatures()	{ default_hook_post_archives_signatures "$@"; }
+hook_pre_tag()			{ default_hook_pre_tag "$@"; }
+hook_post_tag()			{ default_hook_post_tag "$@"; }
+hook_pre_move_files()		{ default_hook_pre_move_files "$@"; }
+hook_post_move_files()		{ default_hook_post_move_files "$@"; }
 hook_get_version()		{ default_hook_required get_version; }
 
 cleanup()
@@ -128,10 +183,14 @@ assert_program()
 execute_hook()
 {
 	local hook_name="hook_$1"
+	local oldpwd="$(pwd)"
 	shift
 	set -e
 	eval $hook_name "$@"
 	set +e
+	[ "$(pwd)" != "$oldpwd" ] && {
+		cd "$oldpwd" || die "execute_hook: Failed to switch back to old PWD '$oldpwd'"
+	}
 }
 
 detect_repos_type()
