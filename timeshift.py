@@ -155,7 +155,8 @@ class ICal(QObject):
 				"format error" % self.name)
 
 	def __init__(self):
-		QObject.__init__(self)
+#		QObject.__init__(self)
+		pass
 
 	def getEvents(self):
 		return self.__events
