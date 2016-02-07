@@ -287,7 +287,7 @@ make_debian_packages()
 		info "(Creating unsigned Debian packages)"
 		local debuild_opts="-uc -us"
 	fi
-	CFLAGS= CPPFLAGS= CXXFLAGS= debuild $debuild_opts ||\
+	CFLAGS= CPPFLAGS= CXXFLAGS= LDFLAGS= debuild $debuild_opts ||\
 		die "Failed to build debian package"
 
 	mkdir -p "$archive_dir/debian" ||\
