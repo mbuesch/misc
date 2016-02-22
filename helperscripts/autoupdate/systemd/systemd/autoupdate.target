@@ -1,0 +1,5 @@
+[Unit]
+Description=Autoupdate target
+Wants=autoupdate.service
+
+StopWhenUnneeded=yes

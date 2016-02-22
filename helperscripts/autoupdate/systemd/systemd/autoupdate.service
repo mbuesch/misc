@@ -1,0 +1,10 @@
+[Unit]
+Description=Autoupdate service
+
+RefuseManualStart=true
+RefuseManualStop=true
+
+[Service]
+Type=oneshot
+Nice=5
+ExecStart=/usr/local/bin/autoupdate-handler

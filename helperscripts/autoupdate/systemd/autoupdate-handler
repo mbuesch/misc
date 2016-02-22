@@ -1,0 +1,77 @@
+#!/bin/sh
+
+
+logfile=/var/log/autoupdate.log
+lockfile=/var/lock/autoupdate.lock
+restartfile=/var/run/need-system-restart
+disablefile=/var/run/autoupdate.disabled
+
+
+msg()
+{
+	echo "Autoupdate [$$] $*"
+}
+
+info()
+{
+	msg "$*"
+}
+
+error()
+{
+	msg "ERROR: $*"
+	exit 1
+}
+
+run_update()
+{
+	(
+	exec >> "$logfile" 2>&1
+	flock -x -n 9 || error "Failed to acquire lock"
+
+	info "$(date) starting..."
+
+	[ -e "$disablefile" ] && error "Disabled due to $disablefile"
+
+	export TERM=linux
+	export PATH="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin"
+
+	need_restart=0
+
+	apt-get update -q -y || error "Update failed"
+	apt-get -qq -y --print-uris upgrade | grep -qe linux-image &&\
+		need_restart=1
+	apt-get upgrade -q -y || error "Upgrade failed"
+	apt-get clean -q -y || error "Clean failed"
+
+	blacklist=
+	[ -r /etc/checkrestart.blacklist ] && blacklist="-b /etc/checkrestart.blacklist"
+	checkrestart $blacklist | grep -qe '^Found 0 processes using old versions of upgraded files$' ||\
+		need_restart=1
+
+	[ $need_restart -ne 0 ] && {
+		info "Need system restart"
+		echo 1 > "$restartfile" || error "Failed to set restart marker"
+	}
+
+	info "Autoupdate done"
+	) 9> "$lockfile"
+}
+
+do_shutdown()
+{
+	(
+	exec >> "$logfile" 2>&1
+	flock -x 9 || error "Failed to acquire lock"
+
+	info "Disabling autoupdate due to shutdown."
+	echo 1 > "$disablefile"
+
+	) 9> "$lockfile"
+}
+
+if [ "$1" = "--shutdown" ]; then
+	do_shutdown
+else
+	run_update
+fi

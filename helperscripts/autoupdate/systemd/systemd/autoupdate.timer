@@ -1,0 +1,10 @@
+[Unit]
+Description=Autoupdate timer
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+Unit=autoupdate.target
+
+[Install]
+WantedBy=basic.target
