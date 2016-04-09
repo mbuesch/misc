@@ -259,6 +259,7 @@ relocate_checkout()
 
 make_debian_packages()
 {
+	[ $opt_nobuild -eq 0 ] || return
 	[ -d "$checkout_dir/debian" ] || return
 
 	info "Creating Debian packages"
