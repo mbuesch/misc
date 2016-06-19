@@ -22,6 +22,25 @@ error()
 	exit 1
 }
 
+# Get a configuration option.
+# $1=option_name
+# ($2=default_value)
+get_conf()
+{
+	local option_name="$1"
+	local default_value="$2"
+
+	local conf="/etc/autoupdate.conf"
+	local val="$default_value"
+	if [ -r "$conf" ]; then
+		local regex="^${option_name}="
+		if grep -qEe "$regex" "$conf"; then
+			local val="$(grep -Ee "$regex" "$conf" | cut -d'=' -f2)"
+		fi
+	fi
+	printf '%s' "$val"
+}
+
 (
 	exec >> "$logfile" 2>&1
 	flock -x -n 9 || error "Failed to acquire lock"
@@ -35,11 +54,21 @@ error()
 
 	need_restart=0
 
+	local mode="$(get_conf mode safe)"
+	if [ "$mode" = "safe" ]; then
+		local mode="upgrade"
+	elif [ "$mode" = "full" ]; then
+		local mode="dist-upgrade"
+	else
+		die "Invalid mode: $mode"
+	fi
+	info "Mode: apt-get $mode"
+
 	apt-get -q -y -f install
 	apt-get update -q -y || error "Update failed"
 	apt-get -qq -y --print-uris upgrade | grep -qe linux-image &&\
 		need_restart=1
-	apt-get upgrade -q -y || error "Upgrade failed"
+	apt-get "$mode" -q -y || error "Upgrade failed"
 	apt-get clean -q -y || error "Clean failed"
 
 	blacklist=
