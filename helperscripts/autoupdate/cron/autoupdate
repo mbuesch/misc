@@ -35,6 +35,7 @@ error()
 
 	need_restart=0
 
+	apt-get -q -y -f install
 	apt-get update -q -y || error "Update failed"
 	apt-get -qq -y --print-uris upgrade | grep -qe linux-image &&\
 		need_restart=1
