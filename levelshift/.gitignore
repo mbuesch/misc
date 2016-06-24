@@ -1,0 +1,4 @@
+*.bck
+*-cache.lib
+*.kicad_pcb
+*.dcm
