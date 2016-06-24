@@ -562,8 +562,8 @@ Text Label 1500 4450 0    39   ~ 0
 SIG_IN
 Text Label 1500 4550 0    39   ~ 0
 SIG_GND
-Text Label 10000 4250 0    39   ~ 0
-SIG_OUT
 Text Label 10000 4350 0    39   ~ 0
+SIG_OUT
+Text Label 10000 4250 0    39   ~ 0
 SIG_GND
 $EndSCHEMATC
