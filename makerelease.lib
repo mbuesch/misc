@@ -1,7 +1,23 @@
 #
 # Release script library
+#
 # Copyright (c) 2012-2016 Michael Buesch <m@bues.ch>
 #
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+#
+
 
 default_hook_required()
 {
@@ -115,10 +131,10 @@ hook_get_version()		{ default_hook_required get_version; }
 cleanup()
 {
 	[ -d "$tmpdir" ] && {
-		if [ $opt_leavetmp -eq 0 ]; then
+		if [ $opt_keeptmp -eq 0 ]; then
 			rm -rf "$tmpdir"
 		else
-			info "Leaving temporary directory '$tmpdir' in place."
+			info "Keeping temporary directory '$tmpdir' in place."
 		fi
 	}
 }
@@ -226,7 +242,6 @@ make_checkout()
 		cd "$checkout_dir" || die "Internal error: cd"
 		git checkout -b "__tmp_makerelease-$branch" "$branch" || \
 			die "git checkout failed"
-		rm -r "$GIT_DIR" # Don't need that anymore
 		;;
 	*)
 		die "checkout: Unknown repos_type"
@@ -572,7 +587,7 @@ help()
 	echo "                                             py-bdist-dumb, py-bdist-rpm"
 	echo "  -U|--upload           Upload the archives to PyPi"
 	echo "  -V|--extraversion XX  Append XX to version string"
-	echo "  -L|--leave-tmp        Do not delete temporary files"
+	echo "  -K|--keep-tmp         Do not delete temporary files"
 	echo "  -h|--help             Show this help text"
 }
 
@@ -605,7 +620,7 @@ makerelease()
 	opt_archives="$default_archives"
 	opt_upload=0
 	opt_extraversion=
-	opt_leavetmp=0
+	opt_keeptmp=0
 
 	while [ $# -ge 1 ]; do
 		case "$1" in
@@ -645,8 +660,8 @@ makerelease()
 			opt_extraversion="$1"
 			[ -n "$opt_extraversion" ] || die "Invalid --extraversion"
 			;;
-		-L|--leave-tmp)
-			opt_leavetmp=1
+		-K|--keep-tmp)
+			opt_keeptmp=1
 			;;
 		*)
 			die "Invalid option: $1"
