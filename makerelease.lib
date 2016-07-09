@@ -282,16 +282,11 @@ make_debian_packages()
 		info "WARNING: No 'debuild' available. Skipping Debian build."
 		return
 	}
+	grep -qe quilt "$checkout_dir/debian/source/format" &&\
+		die "Debian package format 'quilt' is not supported."
 
-	debian_dir="$tmpdir/debian_build"
-	mkdir -p "$debian_dir" || die "Failed to create debian dir"
+	cd "$checkout_dir" || die "Failed to cd to checkout_dir"
 
-	cp "$archive_dir/$release_name.tar.gz" "$debian_dir/${project}_${version}.orig.tar.gz" ||\
-		die "Failed to copy debian .orig.tar.gz"
-	tar -x -z -C "$debian_dir" -f "$debian_dir/${project}_${version}.orig.tar.gz" ||\
-		die "Failed to extract debian .orig.tar.gz"
-	cd "$debian_dir/$release_name" ||\
-		die "Failed to change into extracted debian .orig source directory"
 	local debuild_opts=
 	if [ $opt_nosign -eq 0 -a -n "$DEB_SIGN_KEYID" ]; then
 		info "(Signing Debian packages with key '$DEB_SIGN_KEYID', from DEB_SIGN_KEYID)"
@@ -308,14 +303,12 @@ make_debian_packages()
 
 	mkdir -p "$archive_dir/debian" ||\
 		die "Failed to create Debian archive directory"
-	mv "$debian_dir/"*.deb "$archive_dir/debian/" ||\
+	mv "$checkout_dir/../"*.deb "$archive_dir/debian/" ||\
 		die "Failed to move .deb files to archive directory"
-	mv "$debian_dir/"*.dsc "$archive_dir/debian/" ||\
+	mv "$checkout_dir/../"*.dsc "$archive_dir/debian/" ||\
 		die "Failed to move .dsc files to archive directory"
-	mv "$debian_dir/"*.changes "$archive_dir/debian/" ||\
+	mv "$checkout_dir/../"*.changes "$archive_dir/debian/" ||\
 		die "Failed to move .changes files to archive directory"
-	mv "$debian_dir/"*.orig.* "$archive_dir/debian/" ||\
-		die "Failed to move .orig.* files to archive directory"
 }
 
 make_archives()
@@ -326,15 +319,6 @@ make_archives()
 	setup_py_targets=
 
 	info "Creating archives"
-
-	[ -d "$checkout_dir/debian" ] && have_program debuild && {
-		# We will build Debian packages.
-		# Force .tar.gz to be created.
-		echo "$opt_archives" | grep -qe 'tar.gz' || {
-			info "Adding tar.gz to archives for Debian build"
-			opt_archives="$opt_archives tar.gz"
-		}
-	}
 
 	execute_hook pre_archives "$archive_dir" "$checkout_dir"
 
