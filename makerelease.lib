@@ -49,6 +49,16 @@ default_hook_post_relocate_checkout()
 	true
 }
 
+default_hook_pre_documentation()
+{
+	true
+}
+
+default_hook_post_documentation()
+{
+	true
+}
+
 default_hook_pre_archives()
 {
 	true
@@ -116,6 +126,8 @@ hook_pre_checkout()		{ default_hook_pre_checkout "$@"; }
 hook_post_checkout()		{ default_hook_post_checkout "$@"; }
 hook_pre_relocate_checkout()	{ default_hook_pre_relocate_checkout "$@"; }
 hook_post_relocate_checkout()	{ default_hook_post_relocate_checkout "$@"; }
+hook_pre_documentation()	{ default_hook_pre_documentation "$@"; }
+hook_post_documentation()	{ default_hook_post_documentation "$@"; }
 hook_pre_archives()		{ default_hook_pre_archives "$@"; }
 hook_post_archives()		{ default_hook_post_archives "$@"; }
 hook_testbuild()		{ default_hook_testbuild "$@"; }
@@ -309,6 +321,28 @@ make_debian_packages()
 		die "Failed to move .dsc files to archive directory"
 	mv "$checkout_dir/../"*.changes "$archive_dir/debian/" ||\
 		die "Failed to move .changes files to archive directory"
+}
+
+make_documentation()
+{
+	[ $opt_nodoc -eq 0 ] || return
+
+	info "Creating documentation"
+
+	execute_hook pre_documentation "$checkout_dir"
+
+	# Build markdown -> html
+	find "$checkout_dir" -name '*.md' \
+		-exec sh -c 'src="{}" ;
+			    dst="$(dirname "{}")/$(basename "{}" .md).html" ;
+			    echo "$dst" ;
+			    echo "<!DOCTYPE html><html><head><meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\"></head><body>" > "$dst" ;
+			    markdown "$src" >> "$dst" ;
+			    echo "</body></html>" >> "$dst" ;' \
+			    \; ||\
+		die "Failed to create markdown documentation"
+
+	execute_hook post_documentation "$checkout_dir"
 }
 
 make_archives()
@@ -562,6 +596,7 @@ help()
 	echo "  -s|--no-sign          Do not sign"
 	echo "  -b|--no-build         Do not run build. (implies no regression tests)"
 	echo "  -T|--no-tests         Do not run regression tests"
+	echo "  -D|--no-doc           Do not build documentation"
 	echo "  -r|--ref REF          Checkout version control reference REF"
 	echo "  -a|--archives TYPE,TYPE,...   Archive type list. Default: $default_archives"
 	echo "                        Possible types: tar, tar.bz2, tar.gz, tar.xz, zip, 7z"
@@ -600,6 +635,7 @@ makerelease()
 	opt_nosign=0
 	opt_nobuild=0
 	opt_notests=0
+	opt_nodoc=0
 	opt_ref=
 	opt_archives="$default_archives"
 	opt_upload=0
@@ -626,6 +662,9 @@ makerelease()
 			;;
 		-T|--no-tests)
 			opt_notests=1
+			;;
+		-D|--no-doc)
+			opt_nodoc=1
 			;;
 		-r|--ref)
 			shift
@@ -668,6 +707,7 @@ makerelease()
 	make_checkout
 	detect_versioning
 	relocate_checkout
+	make_documentation
 	make_archives
 	make_testbuild
 	make_regression_tests
