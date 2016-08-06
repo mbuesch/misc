@@ -352,7 +352,10 @@ run()
 
 	[ $opt_spice -ne 0 ] && {
 		spice_opt="-spice addr=${spice_host},port=${spice_port},"
-		spice_opt="${spice_opt}disable-ticketing,agent-mouse=off,"
+		spice_opt="${spice_opt}disable-ticketing,"
+		spice_opt="${spice_opt}agent-mouse=off,"
+		spice_opt="${spice_opt}disable-copy-paste,"
+		spice_opt="${spice_opt}seamless-migration,"
 		spice_opt="${spice_opt}plaintext-channel=main,plaintext-channel=display,"
 		spice_opt="${spice_opt}plaintext-channel=cursor,plaintext-channel=inputs,"
 		spice_opt="${spice_opt}plaintext-channel=record,plaintext-channel=playback"
