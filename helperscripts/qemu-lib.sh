@@ -232,6 +232,11 @@ usage()
 	echo " -m|--ram RAM                Amount of RAM. Default: 1024M"
 	echo " -n|--net-restrict 1|0       Turn net restrict on/off. Default: 1"
 	echo " -s|--spice 1|0              Use spice client. Default: 1"
+	echo " -M|--mouse MOUSETYPE        Select the mouse type:"
+	echo "                             -M not specified: usbtablet"
+	echo "                             default: Use qemu default"
+	echo "                             usbmouse: Use USB mouse"
+	echo "                             usbtablet: Use USB tablet"
 	echo " -u|--usb-id ABCD:1234       Use host USB device with ID ABCD:1234"
 	echo " -p|--pci-id ABCD:1234       Forward PCI device with ID ABCD:1234"
 	echo " -P|--pci-device 00:00.0     Forward PCI device at 00:00.0"
@@ -261,6 +266,7 @@ run()
 	[ -n "$opt_netrestrict" ] || opt_netrestrict="$(bool_to_on_off 1)"
 	[ -n "$opt_dryrun" ] || opt_dryrun=0
 	[ -n "$opt_spice" ] || opt_spice=1
+	[ -n "$opt_mouse" ] || opt_mouse=usbtablet
 
 	# Variable defaults
 	local spice_opt=
@@ -297,6 +303,10 @@ run()
 		-s|--spice)
 			shift
 			opt_spice="$(bool_to_1_0 "$1")"
+			;;
+		-M|--mouse)
+			shift
+			opt_mouse="$1"
 			;;
 		-u|--usb-id)
 			shift
@@ -347,6 +357,16 @@ run()
 		spice_opt="${spice_opt}plaintext-channel=cursor,plaintext-channel=inputs,"
 		spice_opt="${spice_opt}plaintext-channel=record,plaintext-channel=playback"
 	}
+
+	if [ "$opt_mouse" = "default" ]; then
+		true # do nothing
+	elif [ "$opt_mouse" = "usbtablet" ]; then
+		usbdevice_opt="$usbdevice_opt -usbdevice tablet"
+	elif [ "$opt_mouse" = "usbmouse" ]; then
+		usbdevice_opt="$usbdevice_opt -usbdevice mouse"
+	else
+		die "Invalid mouse selection"
+	fi
 
 	run_qemu \
 		-name "$(basename "$image")" \
