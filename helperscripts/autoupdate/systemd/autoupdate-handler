@@ -54,6 +54,7 @@ run_update()
 
 	export TERM=linux
 	export PATH="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin"
+	export DEBIAN_FRONTEND=noninteractive
 
 	need_restart=0
 
@@ -67,12 +68,14 @@ run_update()
 	fi
 	info "Mode: apt-get $mode"
 
-	apt-get -q -y -f install
-	apt-get update -q -y || error "Update failed"
-	apt-get -qq -y --print-uris upgrade | grep -qe linux-image &&\
+	local opts="-o Dpkg::Options::=--force-confold -q -y"
+
+	apt-get $opts -f install
+	apt-get $opts update || error "Update failed"
+	apt-get $opts -qq --print-uris upgrade | grep -qe linux-image &&\
 		need_restart=1
-	apt-get "$mode" -q -y || error "Upgrade failed"
-	apt-get clean -q -y || error "Clean failed"
+	apt-get $opts "$mode" || error "Upgrade failed"
+	apt-get $opts clean || error "Clean failed"
 
 	blacklist=
 	[ -r /etc/checkrestart.blacklist ] && blacklist="-b /etc/checkrestart.blacklist"
