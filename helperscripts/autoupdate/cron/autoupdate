@@ -41,10 +41,8 @@ get_conf()
 	printf '%s' "$val"
 }
 
-(
-	exec >> "$logfile" 2>&1
-	flock -x -n 9 || error "Failed to acquire lock"
-
+do_autoupdate()
+{
 	info "$(date) starting..."
 
 	[ -e "$disablefile" ] && error "Disabled due to $disablefile"
@@ -85,6 +83,12 @@ get_conf()
 	}
 
 	info "Autoupdate done"
+}
+
+(
+	exec >> "$logfile" 2>&1
+	flock -x -n 9 || error "Failed to acquire lock"
+	do_autoupdate
 ) 9> "$lockfile"
 
 exit 0
