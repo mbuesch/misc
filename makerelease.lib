@@ -297,6 +297,10 @@ make_debian_packages()
 	grep -qe quilt "$checkout_dir/debian/source/format" &&\
 		die "Debian package format 'quilt' is not supported."
 
+	grep -qEe "${project}"'\s*\(\s*'"${version}" \
+		"$checkout_dir/debian/changelog" ||\
+		die "Debian changelog does not contain the version $version."
+
 	cd "$checkout_dir" || die "Failed to cd to checkout_dir"
 
 	local debuild_opts=
