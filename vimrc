@@ -27,8 +27,8 @@ set ruler		" Enable line/column ruler.
 set cmdheight=1		" Command bar height.
 
 " Searching
-set hlsearch
-set incsearch
+set hlsearch		" Highlighting
+set incsearch		" Incremental search.
 
 " Command completion
 set wildmenu
@@ -53,9 +53,13 @@ map <leader>s :setlocal spell!<cr>
 " Toggle paste mode
 map <leader>p :setlocal paste!<cr>
 
-" Indent
+" Indent and tab
 set autoindent
 set smartindent
+inoremap # X#
+filetype on		" Filetype detection
+filetype plugin off
+filetype indent on
 set tabstop=8
 set shiftwidth=8
 set softtabstop=0
