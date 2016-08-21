@@ -55,11 +55,11 @@ map <leader>p :setlocal paste!<cr>
 
 " Indent and tab
 set autoindent
-set smartindent
-inoremap # X#
-filetype on		" Filetype detection
-filetype plugin off
-filetype indent on
+"set smartindent
+"inoremap # X#
+"filetype on		" Filetype detection
+"filetype plugin off
+"filetype indent on
 set tabstop=8
 set shiftwidth=8
 set softtabstop=0
