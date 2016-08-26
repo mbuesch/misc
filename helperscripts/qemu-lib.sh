@@ -208,21 +208,6 @@ host_pci_restore_all()
 	done
 }
 
-# $1=brdev, $2=ethdev
-bridge_setup()
-{
-	local brdev="$1"
-	local ethdev="$2"
-
-	ip link set down dev "$brdev" >/dev/null 2>&1
-	brctl delbr "$brdev" >/dev/null 2>&1
-
-	brctl addbr "$brdev" || die "Failed to add bridge '$brdev'"
-	brctl addif "$brdev" "$ethdev" || die "Failed to add '$ethdev' to bridge '$brdev'"
-	ip link set up dev "$ethdev" || die "Failed to bring up '$ethdev'"
-	ip link set up dev "$brdev" || die "Failed to bring up bridge '$brdev'"
-}
-
 usage()
 {
 	echo "qemu-script.sh [OPTIONS] [--] [QEMU-OPTIONS]"
@@ -240,7 +225,7 @@ usage()
 	echo " -u|--usb-id ABCD:1234       Use host USB device with ID ABCD:1234"
 	echo " -p|--pci-id ABCD:1234       Forward PCI device with ID ABCD:1234"
 	echo " -P|--pci-device 00:00.0     Forward PCI device at 00:00.0"
-	echo " -B|--bridge BRDEV,ETHDEV    Create BRDEV and add ETHDEV"
+	echo " -T|--tap                    Set up a tap to the default host bridge"
 }
 
 # Global variables:
@@ -267,12 +252,14 @@ run()
 	[ -n "$opt_dryrun" ] || opt_dryrun=0
 	[ -n "$opt_spice" ] || opt_spice=1
 	[ -n "$opt_mouse" ] || opt_mouse=usbtablet
+	[ -n "$opt_usetap" ] || opt_usetap=0
 
 	# Variable defaults
 	local spice_opt=
 	local usbdevice_opt=
 	local pcidevice_opt=
-	local bridge_opt=
+	local net0_conf=
+	local net1_conf=
 	kvm_opt=
 	serial_opt=
 
@@ -331,14 +318,8 @@ run()
 			host_pci_prepare "$dev"
 			pcidevice_opt="$pcidevice_opt -device pci-assign,host=$dev"
 			;;
-		-B|--bridge)
-			shift
-			local devs="$1"
-
-			local brdev="$(echo "$devs" | cut -d',' -f1)"
-			local ethdev="$(echo "$devs" | cut -d',' -f2)"
-			bridge_setup "$brdev" "$ethdev"
-			bridge_opt="-net bridge,vlan=2,br=$brdev"
+		-T|--tap)
+			opt_usetap=1
 			;;
 		--)
 			end=1
@@ -371,6 +352,13 @@ run()
 		die "Invalid mouse selection"
 	fi
 
+	net0_conf="-netdev user,id=net0,restrict=${opt_netrestrict},net=192.168.5.1/24,smb=${sharedir},smbserver=192.168.5.4"
+	net0_conf="$net0_conf -device rtl8139,netdev=net0,mac=00:11:22:AA:BB:CC"
+	if [ "$opt_usetap" -ne 0 ]; then
+		net1_conf="-netdev tap,id=net1"
+		net1_conf="$net1_conf -device rtl8139,netdev=net1,mac=00:11:22:AA:BB:CD"
+	fi
+
 	run_qemu \
 		-name "$(basename "$image")" \
 		$kvm_opt \
@@ -378,14 +366,12 @@ run()
 		-m "$opt_ram" \
 		-drive file="$image",index=0,format=raw,media=disk \
 		-boot c \
-		-net "nic,vlan=1,model=rtl8139,macaddr=00:11:22:AA:BB:CC" \
-		-net "user,restrict=${opt_netrestrict},vlan=1,net=192.168.5.1/24,smb=${sharedir},smbserver=192.168.5.4" \
-		-net "nic,vlan=2,model=rtl8139,macaddr=00:11:22:AA:BB:CD" \
+		$net0_conf \
+		$net1_conf \
 		-usb \
 		$usbdevice_opt \
 		$serial_opt \
 		$pcidevice_opt \
-		$bridge_opt \
 		-vga qxl \
 		$rtc \
 		$qemu_opts \
