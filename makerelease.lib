@@ -600,6 +600,7 @@ help()
 	echo "  -s|--no-sign          Do not sign"
 	echo "  -b|--no-build         Do not run build. (implies no regression tests)"
 	echo "  -T|--no-tests         Do not run regression tests"
+	echo "  -q|--quick            Quick run. Equivalent to -t -s -b -T"
 	echo "  -D|--no-doc           Do not build documentation"
 	echo "  -r|--ref REF          Checkout version control reference REF"
 	echo "  -a|--archives TYPE,TYPE,...   Archive type list. Default: $default_archives"
@@ -665,6 +666,12 @@ makerelease()
 			opt_nobuild=1
 			;;
 		-T|--no-tests)
+			opt_notests=1
+			;;
+		-q|--quick)
+			opt_notag=1
+			opt_nosign=1
+			opt_nobuild=1
 			opt_notests=1
 			;;
 		-D|--no-doc)
