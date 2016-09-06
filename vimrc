@@ -28,6 +28,7 @@ set cmdheight=1		" Command bar height.
 
 " Searching
 set hlsearch		" Highlighting
+nmap <leader>/ :nohlsearch<cr>
 set incsearch		" Incremental search.
 
 " Command completion
