@@ -7,6 +7,8 @@ browser.safebrowsing.downloads.enabled		;false
 browser.safebrowsing.downloads.remote.enabled	;false
 browser.safebrowsing.enabled			;false
 browser.safebrowsing.malware.enabled		;false
+browser.sessionstore.enabled			;false
+browser.sessionstore.interval			;450000
 browser.tabs.animate				;false
 browser.tabs.warnOnClose			;false
 browser.tabs.warnOnOpen				;false
