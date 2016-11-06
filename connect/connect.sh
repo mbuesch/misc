@@ -77,7 +77,14 @@ bluetooth_agent_start()
 
 	[ -n "$passkey" ] || passkey="1234"
 	info "Starting bluetooth agent with passkey '$passkey'"
-	bluetooth-agent "$passkey" &
+	bluetoothctl << EOF
+power on
+discoverable off
+pairable on
+agent on
+default-agent
+EOF
+#	bluetooth-agent "$passkey" &
 	pid=$!
 	sleep 1
 	return $pid
