@@ -30,7 +30,6 @@ usage()
 	echo " -p|--parallel          Parallel download"
 	echo " -f|--full              Full upgrade"
 	echo " -d|--download-only     Download only"
-	echo " -c|--checkrestart      Run checkrestart"
 }
 
 trap cleanup INT EXIT
@@ -38,7 +37,6 @@ trap cleanup INT EXIT
 parallel=0
 full=0
 download_only=0
-checkrestart=0
 
 while [ $# -ge 1 ]; do
 	case "$1" in
@@ -51,9 +49,6 @@ while [ $# -ge 1 ]; do
 	-d|--download-only)
 		download_only=1
 		;;
-	-c|--checkrestart)
-		checkrestart=1
-		;;
 	-h|--help)
 		usage
 		exit 0
@@ -65,15 +60,20 @@ while [ $# -ge 1 ]; do
 	shift
 done
 
+# Be nice
+nice=19
+renice $nice $$ >/dev/null || echo "Failed to renice to $nice" >&2
+
+
 [ $full -eq 0 ] && {
 	upgrade_mode="upgrade"
 } || {
-	upgrade_mode="dist-upgrade"
+	upgrade_mode="full-upgrade"
 }
 
 
 info "Updating package list"
-apt-get update || die "Update failed"
+apt update || die "Update failed"
 
 # Run parallel download, if requested.
 if [ $parallel -ne 0 ]; then
@@ -92,17 +92,11 @@ if [ $parallel -ne 0 ]; then
 	done
 fi
 
-# Check whether a kernel image will be installed/updated.
-kernel_updated=0
-apt-get --show-upgraded --verbose-versions --dry-run "$upgrade_mode" |\
-	grep -qEe '^[[:space:]]*linux-image-[[:digit:]]' &&\
-	kernel_updated=1
-
 # Do the download and upgrade.
 info "Performing '$upgrade_mode'"
 dl_flags=
 [ $download_only -ne 0 ] && dl_flags="--download-only"
-apt-get $dl_flags --show-upgraded --verbose-versions "$upgrade_mode" ||\
+apt $dl_flags --show-upgraded --verbose-versions "$upgrade_mode" ||\
 	die "Upgrade failed"
 
 # Exit here, if download only.
@@ -116,15 +110,5 @@ apt-get $dl_flags --show-upgraded --verbose-versions "$upgrade_mode" ||\
 
 info "Cleaning"
 apt-get clean || die "Clean failed"
-
-# Run checkrestart, if requested.
-[ $checkrestart -ne 0 ] && which checkrestart >/dev/null 2>&1 && {
-	info "Running checkrestart"
-	blacklist=
-	[ -r /etc/checkrestart.blacklist ] && blacklist="-b /etc/checkrestart.blacklist"
-	checkrestart $blacklist || die "checkrestart failed"
-}
-
-[ $kernel_updated -ne 0 ] && info "The kernel has been updated!"
 
 exit 0
