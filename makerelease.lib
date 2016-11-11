@@ -121,6 +121,26 @@ default_hook_post_move_files()
 	true
 }
 
+default_hook_pre_pypi_upload()
+{
+	true
+}
+
+default_hook_post_pypi_upload()
+{
+	true
+}
+
+default_hook_pre_debian_packages()
+{
+	true
+}
+
+default_hook_post_debian_packages()
+{
+	true
+}
+
 # Assign default hooks to actual hooks
 hook_pre_checkout()		{ default_hook_pre_checkout "$@"; }
 hook_post_checkout()		{ default_hook_post_checkout "$@"; }
@@ -139,6 +159,10 @@ hook_post_tag()			{ default_hook_post_tag "$@"; }
 hook_pre_move_files()		{ default_hook_pre_move_files "$@"; }
 hook_post_move_files()		{ default_hook_post_move_files "$@"; }
 hook_get_version()		{ default_hook_required get_version; }
+hook_pre_pypi_upload()		{ default_hook_pre_pypi_upload "$@"; }
+hook_post_pypi_upload()		{ default_hook_post_pypi_upload "$@"; }
+hook_pre_debian_packages()	{ default_hook_pre_debian_packages "$@"; }
+hook_post_debian_packages()	{ default_hook_post_debian_packages "$@"; }
 
 cleanup()
 {
@@ -252,7 +276,7 @@ make_checkout()
 			"$srcdir/.git" "$checkout_dir" || \
 			die "Failed to clone git repository"
 		cd "$checkout_dir" || die "Internal error: cd"
-		git checkout -b "__tmp_makerelease-$branch" "$branch" || \
+		git checkout -b "__tmp_makerelease-$branch" origin/"$branch" || \
 			die "git checkout failed"
 		;;
 	*)
@@ -301,7 +325,13 @@ make_debian_packages()
 		"$checkout_dir/debian/changelog" ||\
 		die "Debian changelog does not contain the version $version."
 
-	cd "$checkout_dir" || die "Failed to cd to checkout_dir"
+	local debuild_dir="${checkout_dir}_debuild"
+	cp -a "$checkout_dir" "$debuild_dir" ||\
+		die "Failed to copy checkout_dir for debuild."
+
+	execute_hook pre_debian_packages "$debuild_dir"
+
+	cd "$debuild_dir" || die "Failed to cd to debuild_dir"
 
 	local debuild_opts=
 	if [ $opt_nosign -eq 0 -a -n "$DEB_SIGN_KEYID" ]; then
@@ -317,14 +347,17 @@ make_debian_packages()
 	CFLAGS= CPPFLAGS= CXXFLAGS= LDFLAGS= debuild $debuild_opts ||\
 		die "Failed to build debian package"
 
-	mkdir -p "$archive_dir/debian" ||\
+	local deb_archive_dir="$archive_dir/debian"
+	mkdir -p "$deb_archive_dir" ||\
 		die "Failed to create Debian archive directory"
-	mv "$checkout_dir/../"*.deb "$archive_dir/debian/" ||\
+	mv "$debuild_dir/../"*.deb "$deb_archive_dir/" ||\
 		die "Failed to move .deb files to archive directory"
-	mv "$checkout_dir/../"*.dsc "$archive_dir/debian/" ||\
+	mv "$debuild_dir/../"*.dsc "$deb_archive_dir/" ||\
 		die "Failed to move .dsc files to archive directory"
-	mv "$checkout_dir/../"*.changes "$archive_dir/debian/" ||\
+	mv "$debuild_dir/../"*.changes "$deb_archive_dir/" ||\
 		die "Failed to move .changes files to archive directory"
+
+	execute_hook post_debian_packages "$debuild_dir" "$deb_archive_dir"
 }
 
 make_documentation()
@@ -455,6 +488,8 @@ make_pypi_upload()
 
 	info "Uploading $setup_py_targets archives to PyPi"
 	for target in $setup_py_targets; do
+		execute_hook pre_pypi_upload "$checkout_dir" "$archive_dir" "$target"
+
 		cd "$checkout_dir" || die "Internal error: cd"
 		[ -x ./setup.py ] || die "Internal error: setup.py"
 		local upload_opts=
@@ -477,6 +512,8 @@ make_pypi_upload()
 		fi
 		dry_run ./setup.py --no-user-cfg $target $target_opts upload $upload_opts ||\
 			die "Failed to upload PyPi package"
+
+		execute_hook post_pypi_upload "$checkout_dir" "$archive_dir" "$target"
 	done
 }
 
