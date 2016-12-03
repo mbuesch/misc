@@ -241,6 +241,7 @@ run()
 	image="$(readlink -m "$image")"
 
 	# Set variable-defaults
+	[ -n "$image_format" ] || image_format="raw"
 	[ -n "$qemu_binary" ] || qemu_binary="qemu-system-i386"
 	[ -n "$spice_host" ] || spice_host="127.0.0.1"
 	[ -n "$spice_port" ] || spice_port="$(random_port)"
@@ -364,7 +365,7 @@ run()
 		$kvm_opt \
 		$spice_opt \
 		-m "$opt_ram" \
-		-drive file="$image",index=0,format=raw,media=disk \
+		-drive file="$image",index=0,format="$image_format",media=disk \
 		-boot c \
 		$net0_conf \
 		$net1_conf \
