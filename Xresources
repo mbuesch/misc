@@ -1,0 +1,13 @@
+xterm*renderFont: true
+xterm*faceName: DejaVu Sans Mono:size=10:style=Book:antialias=true
+xterm*font: 7x13
+xterm*background: white
+xterm*foreground: black
+xterm*pointerColor: red
+xterm*pointerColorBackground: black
+xterm*cursorColor: navy
+xterm*internalBorder: 2
+xterm*loginShell: true
+xterm*scrollBar: false
+xterm*scrollKey: false
+xterm*saveLines: 0
