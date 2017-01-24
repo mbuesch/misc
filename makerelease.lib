@@ -310,6 +310,7 @@ relocate_checkout()
 
 make_debian_packages()
 {
+	[ $opt_nodebian -eq 0 ] || return
 	[ $opt_nobuild -eq 0 ] || return
 	[ -d "$checkout_dir/debian" ] || return
 
@@ -366,17 +367,25 @@ make_documentation()
 
 	info "Creating documentation"
 
+	assert_program markdown "markdown to HTML converter"
+	assert_program wkhtmltopdf "webkit HTML to PDF converter"
+
 	execute_hook pre_documentation "$checkout_dir"
 
 	# Build markdown -> html
 	find "$checkout_dir" -name '*.md' \
-		-exec sh -c 'src="{}" ;
-			    dst="$(dirname "{}")/$(basename "{}" .md).html" ;
-			    echo "$dst" ;
-			    echo "<!DOCTYPE html><html><head><meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\"></head><body>" > "$dst" ;
-			    markdown "$src" >> "$dst" ;
-			    echo "</body></html>" >> "$dst" ;' \
-			    \; ||\
+		-exec sh -c '
+		md="{}" ;
+		docname="$(basename "$md" .md)" ;
+		dir="$(dirname "$md")" ;
+		html="$dir/$docname.html" ;
+		pdf="$dir/$docname.pdf" ;
+		echo "generating $docname ..." ;
+		echo "<!DOCTYPE html><html><head><meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\"></head><body>" > "$html" ;
+		markdown "$md" >> "$html" ;
+		echo "</body></html>" >> "$html" ;
+		wkhtmltopdf "$html" "$pdf" ;
+		' \; ||\
 		die "Failed to create markdown documentation"
 
 	execute_hook post_documentation "$checkout_dir"
@@ -632,12 +641,12 @@ help()
 	echo "  MAKERELEASE_LIB       May be set to makerelease.lib"
 	echo
 	echo "Options:"
-	echo "  --dry-run             Do not make persistent changes"
+	echo "  -y|--dry-run          Do not make persistent changes"
 	echo "  -t|--no-tag           Do not create the repository tag"
 	echo "  -s|--no-sign          Do not sign"
-	echo "  -b|--no-build         Do not run build. (implies no regression tests)"
+	echo "  -b|--no-build         Do not run build. (Implies -T)"
 	echo "  -T|--no-tests         Do not run regression tests"
-	echo "  -q|--quick            Quick run. Equivalent to -t -s -b -T"
+	echo "  -q|--quick            Quick run. Equivalent to -t -s -b -T -d"
 	echo "  -D|--no-doc           Do not build documentation"
 	echo "  -r|--ref REF          Checkout version control reference REF"
 	echo "  -a|--archives TYPE,TYPE,...   Archive type list. Default: $default_archives"
@@ -646,7 +655,10 @@ help()
 	echo "                                             py-sdist-gz, py-sdist-bz2, py-dist-zip,"
 	echo "                                             py-bdist, py-bdist-wininst,"
 	echo "                                             py-bdist-dumb, py-bdist-rpm"
+	echo "  -d|--no-debian        Do not build Debian packages."
 	echo "  -U|--upload           Upload the archives to PyPi"
+	echo "  -O|--upload-only      Run the bare minimum to upload to PyPi only"
+	echo "                        Equivalent to: -U -t -b -T -d"
 	echo "  -V|--extraversion XX  Append XX to version string"
 	echo "  -K|--keep-tmp         Do not delete temporary files"
 	echo "  -h|--help             Show this help text"
@@ -676,6 +688,7 @@ makerelease()
 	opt_notag=0
 	opt_nosign=0
 	opt_nobuild=0
+	opt_nodebian=0
 	opt_notests=0
 	opt_nodoc=0
 	opt_ref=
@@ -690,7 +703,7 @@ makerelease()
 			help "$@"
 			abort 0
 			;;
-		--dry-run)
+		-y|--dry-run)
 			opt_dryrun=1
 			;;
 		-t|--no-tag)
@@ -709,6 +722,7 @@ makerelease()
 			opt_notag=1
 			opt_nosign=1
 			opt_nobuild=1
+			opt_nodebian=1
 			opt_notests=1
 			;;
 		-D|--no-doc)
@@ -723,7 +737,17 @@ makerelease()
 			shift
 			opt_archives="$1"
 			;;
+		-d|--no-debian)
+			opt_nodebian=1
+			;;
 		-U|--upload)
+			opt_upload=1
+			;;
+		-O|--upload-only)
+			opt_notag=1
+			opt_nobuild=1
+			opt_nodebian=1
+			opt_notests=1
 			opt_upload=1
 			;;
 		-V|--extraversion)
