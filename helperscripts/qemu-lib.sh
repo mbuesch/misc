@@ -365,7 +365,7 @@ run()
 		$kvm_opt \
 		$spice_opt \
 		-m "$opt_ram" \
-		-drive file="$image",index=0,format="$image_format",media=disk \
+		-drive file="$image",index=0,format="$image_format",discard=on,media=disk \
 		-boot c \
 		$net0_conf \
 		$net1_conf \
