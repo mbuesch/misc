@@ -226,6 +226,7 @@ usage()
 	echo " -p|--pci-id ABCD:1234       Forward PCI device with ID ABCD:1234"
 	echo " -P|--pci-device 00:00.0     Forward PCI device at 00:00.0"
 	echo " -T|--tap                    Set up a tap to the default host bridge"
+	echo " -S|--screens 1|2            Number of screens. Default: 1"
 }
 
 # Global variables:
@@ -254,6 +255,7 @@ run()
 	[ -n "$opt_spice" ] || opt_spice=1
 	[ -n "$opt_mouse" ] || opt_mouse=usbtablet
 	[ -n "$opt_usetap" ] || opt_usetap=0
+	[ -n "$opt_screens" ] || opt_screens=1
 
 	# Variable defaults
 	local spice_opt=
@@ -261,6 +263,7 @@ run()
 	local pcidevice_opt=
 	local net0_conf=
 	local net1_conf=
+	local screen_opt=
 	kvm_opt=
 	serial_opt=
 
@@ -322,6 +325,10 @@ run()
 		-T|--tap)
 			opt_usetap=1
 			;;
+		-S|--screens)
+			shift
+			opt_screens="$1"
+			;;
 		--)
 			end=1
 			;;
@@ -360,6 +367,14 @@ run()
 		net1_conf="$net1_conf -device rtl8139,netdev=net1,mac=00:11:22:AA:BB:CD"
 	fi
 
+	if [ "$opt_screens" = "1" ]; then
+		local screen_opt=
+	elif [ "$opt_screens" = "2" ]; then
+		local screen_opt="-device qxl"
+	else
+		die "Invalid screen selection"
+	fi
+
 	run_qemu \
 		-name "$(basename "$image")" \
 		$kvm_opt \
@@ -374,6 +389,7 @@ run()
 		$serial_opt \
 		$pcidevice_opt \
 		-vga qxl \
+		$screen_opt \
 		$rtc \
 		$qemu_opts \
 		"$@"
