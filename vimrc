@@ -73,3 +73,8 @@ map <leader>4 :set ts=4 sw=4 noexpandtab<cr>
 map <leader><F8> :set ts=8 sw=8 expandtab<cr>
 map <leader>8 :set ts=8 sw=8 noexpandtab<cr>
 map <leader>r :retab<cr>
+
+" colorscheme
+colorscheme industry
+hi LineNr cterm=NONE ctermfg=DarkGrey gui=NONE guifg=DarkGrey
+
