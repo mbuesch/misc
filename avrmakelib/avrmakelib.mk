@@ -1,7 +1,7 @@
 ######################################################
 # AVR make library                                   #
-# Copyright (c) 2015-2017 Michael Buesch <m@bues.ch> #
-# Version 1.6                                        #
+# Copyright (c) 2015-2018 Michael Buesch <m@bues.ch> #
+# Version 1.9                                        #
 ######################################################
 
 ifeq ($(NAME),)
@@ -118,13 +118,14 @@ DEFINE_CFLAGS		:= -DF_CPU=$(F_CPU) \
 MAIN_CFLAGS		:= -mmcu=$(GCC_ARCH) \
 			   -std=gnu11 \
 			   -g \
-			   $(if $(call _streq,$(DEBUG),1),-ffunction-sections) \
-			   $(if $(call _streq,$(DEBUG),1),-fdata-sections) \
+			   -ffunction-sections \
+			   -fdata-sections \
 			   $(OPTIMIZE_CFLAGS) \
 			   $(WARN_CFLAGS) \
 			   $(DEFINE_CFLAGS)
 
-MAIN_LDFLAGS		:=
+MAIN_LDFLAGS		:= -Wl,-gc-sections \
+			   $(if $(call _streq,$(LTO),1),,-fwhole-program)
 
 INSTRUMENT_CFLAGS	:= -DINSTRUMENT_FUNCTIONS=1 \
 			   -finstrument-functions \
@@ -134,8 +135,8 @@ MAIN_SPARSEFLAGS	:= -gcc-base-dir=/usr/lib/avr \
 			   -I/usr/lib/avr/include \
 			   -D__STDC_HOSTED__=1 \
 			   -D__AVR_ARCH__=5 \
-			   -D__AVR_$(subst MEGA,mega,$(call _uppercase,$(GCC_ARCH)))__=1 \
-			   -Wsparse-all
+			   -D__AVR_$(subst TINY,tiny,$(subst MEGA,mega,$(call _uppercase,$(GCC_ARCH))))__=1 \
+			   -Wsparse-all -Wsparse-error
 
 CFLAGS			:= $(MAIN_CFLAGS) \
 			   $(if $(INSTRUMENT_FUNC),$(INSTRUMENT_CFLAGS)) \
@@ -148,12 +149,10 @@ BOOT_CFLAGS		:= $(MAIN_CFLAGS) -DBOOTLOADER \
 			   -include sparse.h
 
 LDFLAGS			:= $(MAIN_LDFLAGS) \
-			   $(if $(call _streq,$(LTO),1),,-fwhole-program) \
 			   -Wl,-Map,$(MAP) \
 			   $(LDFLAGS)
 
 BOOT_LDFLAGS		:= $(MAIN_LDFLAGS) \
-			   $(if $(call _streq,$(LTO),1),,-fwhole-program) \
 			   -Wl,--section-start=.text=$(BOOT_OFFSET) \
 			   -Wl,-Map,$(BOOT_MAP) \
 			   $(BOOT_LDFLAGS)
