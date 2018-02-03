@@ -368,7 +368,6 @@ make_documentation()
 	info "Creating documentation"
 
 	assert_program markdown "markdown to HTML converter"
-	assert_program wkhtmltopdf "webkit HTML to PDF converter"
 
 	execute_hook pre_documentation "$checkout_dir"
 
@@ -379,12 +378,10 @@ make_documentation()
 		docname="$(basename "$md" .md)" ;
 		dir="$(dirname "$md")" ;
 		html="$dir/$docname.html" ;
-		pdf="$dir/$docname.pdf" ;
 		echo "generating $docname ..." ;
 		echo "<!DOCTYPE html><html><head><meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\"></head><body>" > "$html" ;
 		markdown "$md" >> "$html" ;
 		echo "</body></html>" >> "$html" ;
-		wkhtmltopdf "$html" "$pdf" ;
 		' \; ||\
 		die "Failed to create markdown documentation"
 
