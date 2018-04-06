@@ -457,29 +457,44 @@ make_archives()
 	done
 
 	# Handle Python build targets
+	[ $opt_upload -ne 0 ] && setup_py_targets="$setup_py_targets sdist_gz"
 	if [ -n "$setup_py_targets" ]; then
 		cd "$checkout_dir" || die "Internal error: cd"
 		[ -x "./setup.py" ] ||\
 			die "Used Python archive target, but no executable setup.py found"
+		rm -rf ./dist/ || die "Failed to delete ./dist/"
 		mkdir "$archive_dir/python" || die "Failed to create Python archive subdir"
+		local have_bdist_wininst=0
+		local have_sdist=0
+		local have_sdist_bz2=0
+		local have_sdist_zip=0
 		for target in $setup_py_targets; do
 			info "Building Python $target-package"
 			local opts=
 			if [ "$target" = "bdist_wininst" ]; then
+				[ $have_bdist_wininst -ne 0 ] && continue
+				local have_bdist_wininst=1
 				local opts="--plat-name win32"
 			elif [ "$target" = "sdist" -o "$target" = "sdist_gz" ]; then
+				[ $have_sdist -ne 0 ] && continue
+				local have_sdist=1
 				local target="sdist"
 				local opts="--formats=gztar --owner=root --group=root"
 			elif [ "$target" = "sdist_bz2" ]; then
+				[ $have_sdist_bz2 -ne 0 ] && continue
+				local have_sdist_bz2=1
 				local target="sdist"
 				local opts="--formats=bztar --owner=root --group=root"
 			elif [ "$target" = "sdist_zip" ]; then
+				[ $have_sdist_zip -ne 0 ] && continue
+				local have_sdist_zip=1
 				local target="sdist"
 				local opts="--formats=zip"
 			fi
 			./setup.py --no-user-cfg "$target" $opts || die "Failed to build Python archive"
 		done
-		cp ./dist/* "$archive_dir/python/" || die "Failed to copy Python archives"
+		mv ./dist/* "$archive_dir/python/" || die "Failed to move Python archives"
+		rmdir ./dist/ || die "Failed to delete ./dist/"
 	fi
 
 	execute_hook post_archives "$archive_dir" "$checkout_dir"
@@ -489,38 +504,20 @@ make_pypi_upload()
 {
 	[ $opt_upload -eq 0 ] && return
 
+	assert_program twine
+
 	[ -n "$setup_py_targets" ] ||\
 		die "PyPi-upload requested, but no Python packages have been built."
 
 	info "Uploading $setup_py_targets archives to PyPi"
-	for target in $setup_py_targets; do
-		execute_hook pre_pypi_upload "$checkout_dir" "$archive_dir" "$target"
 
-		cd "$checkout_dir" || die "Internal error: cd"
-		[ -x ./setup.py ] || die "Internal error: setup.py"
-		local upload_opts=
-		[ $opt_nosign -ne 0 ] || {
-			upload_opts="--sign"
-			[ -n "$GPG_KEY_RELEASE" ] && upload_opts="$upload_opts --identity $GPG_KEY_RELEASE"
-		}
-		local target_opts=
-		if [ "$target" = "bdist_wininst" ]; then
-			local target_opts="--plat-name win32"
-		elif [ "$target" = "sdist" -o "$target" = "sdist_gz" ]; then
-			local target="sdist"
-			local target_opts="--formats=gztar --owner=root --group=root"
-		elif [ "$target" = "sdist_bz2" ]; then
-			local target="sdist"
-			local target_opts="--formats=bztar --owner=root --group=root"
-		elif [ "$target" = "sdist_zip" ]; then
-			local target="sdist"
-			local target_opts="--formats=zip"
-		fi
-		dry_run ./setup.py --no-user-cfg $target $target_opts upload $upload_opts ||\
-			die "Failed to upload PyPi package"
+	local py_archive_dir="$archive_dir/python"
+	execute_hook pre_pypi_upload "$checkout_dir" "$py_archive_dir"
 
-		execute_hook post_pypi_upload "$checkout_dir" "$archive_dir" "$target"
-	done
+	dry_run twine upload --repository pypi "$py_archive_dir"/*.tar.gz* ||\
+		die "twine upload failed"
+
+	execute_hook post_pypi_upload "$checkout_dir" "$py_archive_dir"
 }
 
 make_testbuild()
