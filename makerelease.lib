@@ -69,6 +69,22 @@ default_hook_post_archives()
 	true
 }
 
+default_hook_pre_doc_archives()
+{
+	true
+}
+
+default_hook_doc_archives()
+{
+	info "By default no documentation archives are created."
+	info "Please override hook_doc_archives."
+}
+
+default_hook_post_doc_archives()
+{
+	true
+}
+
 default_hook_testbuild()
 {
 	cd "$1"
@@ -150,6 +166,9 @@ hook_pre_documentation()	{ default_hook_pre_documentation "$@"; }
 hook_post_documentation()	{ default_hook_post_documentation "$@"; }
 hook_pre_archives()		{ default_hook_pre_archives "$@"; }
 hook_post_archives()		{ default_hook_post_archives "$@"; }
+hook_pre_doc_archives()		{ default_hook_pre_doc_archives "$@"; }
+hook_doc_archives()		{ default_hook_doc_archives "$@"; }
+hook_post_doc_archives()	{ default_hook_post_doc_archives "$@"; }
 hook_testbuild()		{ default_hook_testbuild "$@"; }
 hook_regression_tests()		{ default_hook_regression_tests "$@"; }
 hook_pre_archive_signatures()	{ default_hook_pre_archive_signatures "$@"; }
@@ -501,6 +520,17 @@ make_archives()
 	execute_hook post_archives "$archive_dir" "$checkout_dir"
 }
 
+make_documentation_archives()
+{
+	[ $opt_nodoc -eq 0 ] || return
+
+	info "Packing documentation archives"
+
+	execute_hook pre_doc_archives "$archive_dir" "$checkout_dir"
+	execute_hook doc_archives "$archive_dir" "$checkout_dir"
+	execute_hook post_doc_archives "$archive_dir" "$checkout_dir"
+}
+
 make_pypi_upload()
 {
 	[ $opt_upload -eq 0 ] && return
@@ -776,6 +806,7 @@ makerelease()
 	relocate_checkout
 	make_documentation
 	make_archives
+	make_documentation_archives
 	make_testbuild
 	make_regression_tests
 	make_debian_packages
