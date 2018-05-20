@@ -362,9 +362,9 @@ run()
 	if [ "$opt_mouse" = "default" ]; then
 		true # do nothing
 	elif [ "$opt_mouse" = "usbtablet" ]; then
-		usbdevice_opt="$usbdevice_opt -usbdevice tablet"
+		usbdevice_opt="$usbdevice_opt -device usb-tablet"
 	elif [ "$opt_mouse" = "usbmouse" ]; then
-		usbdevice_opt="$usbdevice_opt -usbdevice mouse"
+		usbdevice_opt="$usbdevice_opt -device usb-mouse"
 	else
 		die "Invalid mouse selection"
 	fi
