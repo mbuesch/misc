@@ -165,35 +165,41 @@ host_pci_prepare()
 
 	echo "Assigning PCI device $dev ..."
 
+	# Find the vendor and device IDs
 	local lspci_string="$(lspci -mmn | grep -e "^$dev" | head -n1)"
-	[ -n "$lspci_string" ] ||\
-		die "PCI device $dev not found"
+	[ -n "$lspci_string" ] || die "PCI device $dev not found"
 	dev="0000:$dev"
 	local vendorid="$(echo "$lspci_string" | cut -d' ' -f 3 | tr -d \")"
 	local deviceid="$(echo "$lspci_string" | cut -d' ' -f 4 | tr -d \")"
 	echo "Found PCI device $dev with IDs $vendorid:$deviceid"
 
+	# Find out which driver currently runs the device.
 	local orig_drvdir="$(find /sys/bus/pci/drivers -type l -name "$dev")"
 	orig_drvdir="$(dirname "$orig_drvdir")"
-	[ -n "$orig_drvdir" -a "$orig_drvdir" != "." ] || {
+	if [ -n "$orig_drvdir" -a "$orig_drvdir" != "." ]; then
+		echo "Original driver for $dev is '$orig_drvdir'"
+	else
 		echo "WARNING: Did not find attached kernel driver for PCI device $dev"
 		orig_drvdir=
-	}
+	fi
 
-	modprobe pci-stub || die "Failed to load 'pci-stub' kernel module"
-	echo "$vendorid $deviceid" > /sys/bus/pci/drivers/pci-stub/new_id ||\
-		die "Failed to register PCI-id to pci-stub driver"
-	[ -n "$orig_drvdir" ] && {
+	# Register the device to VFIO
+	modprobe vfio-pci || die "Failed to load 'vfio-pci' kernel module"
+	echo "$vendorid $deviceid" > /sys/bus/pci/drivers/vfio-pci/new_id ||\
+		die "Failed to register PCI-id to vfio-pci driver"
+	if [ -n "$orig_drvdir" ]; then
 		echo "$dev" > "$orig_drvdir/unbind" ||\
 			die "Failed to unbind PCI kernel driver"
-	}
-	echo "$dev" > /sys/bus/pci/drivers/pci-stub/bind ||\
-		die "Failed to bind pci-stub kernel driver"
-	echo "$vendorid $deviceid" > /sys/bus/pci/drivers/pci-stub/remove_id ||\
-		die "Failed to remove PCI-id from pci-stub driver"
+	fi
+	echo "$dev" > /sys/bus/pci/drivers/vfio-pci/bind ||\
+		die "Failed to bind vfio-pci kernel driver"
+	echo "$vendorid $deviceid" > /sys/bus/pci/drivers/vfio-pci/remove_id ||\
+		die "Failed to remove PCI-id from vfio-pci driver"
 
-	[ -n "$orig_drvdir" ] &&\
+	# Remember the pci dev for cleanup
+	if [ -n "$orig_drvdir" ]; then
 		assigned_pci_devs="$assigned_pci_devs $dev/$orig_drvdir"
+	fi
 }
 
 host_pci_restore_all()
@@ -202,9 +208,12 @@ host_pci_restore_all()
 		local dev="$(echo "$assigned_dev" | cut -d'/' -f1)"
 		local orig_drvdir="/$(echo "$assigned_dev" | cut -d '/' -f2-)"
 
-		echo "Restoring PCI device $dev ..."
-		echo "$dev" > /sys/bus/pci/drivers/pci-stub/unbind
-		echo "$dev" > "$orig_drvdir"/bind
+		echo "Unbinding PCI device $dev from VFIO..."
+		echo "$dev" > /sys/bus/pci/drivers/vfio-pci/unbind
+		if [ -e "$orig_drvdir"/bind ]; then
+			echo "Rebinding PCI device $dev to original driver '$orig_drvdir'..."
+			echo "$dev" > "$orig_drvdir"/bind
+		fi
 	done
 }
 
@@ -313,14 +322,14 @@ run()
 			local dev="$(host_pci_find_by_ids "$ids")"
 			[ -n "$dev" ] || die "Did not find PCI device with IDs '$ids'"
 			host_pci_prepare "$dev"
-			pcidevice_opt="$pcidevice_opt -device pci-assign,host=$dev"
+			pcidevice_opt="$pcidevice_opt -device vfio-pci,host=$dev"
 			;;
 		-P|--pci-device)
 			shift
 			local dev="$1"
 
 			host_pci_prepare "$dev"
-			pcidevice_opt="$pcidevice_opt -device pci-assign,host=$dev"
+			pcidevice_opt="$pcidevice_opt -device vfio-pci,host=$dev"
 			;;
 		-T|--tap)
 			opt_usetap=1
