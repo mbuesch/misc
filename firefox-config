@@ -21,7 +21,10 @@ browser.urlbar.trimURLs				;false
 geo.enabled					;false
 media.autoplay.enabled				;false
 network.dns.disablePrefetch			;true
+network.http.referer.XOriginPolicy		;2
 network.prefetch-next				;false
+network.trr.mode				;0
 places.history.enabled				;false
 reader.parse-on-load.enabled			;false
+security.dialog_enable_delay			;300
 webgl.disabled					;true
