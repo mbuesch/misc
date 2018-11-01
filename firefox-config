@@ -19,6 +19,7 @@ browser.urlbar.suggest.history			;false
 browser.urlbar.suggest.openpage			;false
 browser.urlbar.trimURLs				;false
 geo.enabled					;false
+media.autoplay.default				;1
 media.autoplay.enabled				;false
 network.dns.disablePrefetch			;true
 network.http.referer.XOriginPolicy		;2
