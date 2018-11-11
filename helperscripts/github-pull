@@ -1,0 +1,21 @@
+#!/bin/sh
+
+die()
+{
+	echo "$*" >&2
+	exit 1
+}
+
+[ $# -eq 2 ] || die "Usage: github-pull PROJECTNAME USER:BRANCH"
+project="$1"
+user_branch="$2"
+
+user="$(printf '%s' "$user_branch" | cut -f1 -d':')"
+branch="$(printf '%s' "$user_branch" | cut -f2 -d':')"
+[ -n "$user" ] || die "Invalid user name"
+[ -n "$branch" ] || die "Invalid branch name"
+
+url="https://github.com/$user/$project.git"
+
+echo git pull "$url" "$branch"
+exec git pull "$url" "$branch"
