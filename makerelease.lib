@@ -296,7 +296,9 @@ make_checkout()
 			die "Failed to clone git repository"
 		cd "$checkout_dir" || die "Internal error: cd"
 		git checkout -b "__tmp_makerelease-$branch" origin/"$branch" || \
-			die "git checkout failed"
+			die "git checkout failed (1)"
+		git checkout -f || \
+			die "git checkout failed (2)"
 		;;
 	*)
 		die "checkout: Unknown repos_type"
