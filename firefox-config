@@ -21,6 +21,8 @@ browser.urlbar.trimURLs				;false
 geo.enabled					;false
 media.autoplay.default				;1
 media.autoplay.enabled				;false
+media.autoplay.enabled.user-gestures-needed	;false
+media.autoplay.allow-muted			;false
 network.dns.disablePrefetch			;true
 network.http.referer.XOriginPolicy		;2
 network.prefetch-next				;false
