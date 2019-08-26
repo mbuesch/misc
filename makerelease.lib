@@ -390,6 +390,8 @@ make_documentation()
 	info "Creating documentation"
 
 	assert_program markdown "markdown to HTML converter"
+	python3 -m readme_renderer -h >/dev/null 2>&1 ||\
+		die "'python3 -m readme_renderer' is not installed."
 
 	execute_hook pre_documentation "$checkout_dir"
 
@@ -406,6 +408,18 @@ make_documentation()
 		echo "</body></html>" >> "$html" ;
 		' \; ||\
 		die "Failed to create markdown documentation"
+
+	# Build reStructuredText -> html
+	find "$checkout_dir" -name '*.rst' \
+		-exec sh -c '
+		rst="{}" ;
+		docname="$(basename "$rst" .rst)" ;
+		dir="$(dirname "$rst")" ;
+		html="$dir/$docname.html" ;
+		echo "generating $docname ..." ;
+		python3 -m readme_renderer -o "$html" "$rst" ;
+		' \; ||\
+		die "Failed to create reStructuredText documentation"
 
 	execute_hook post_documentation "$checkout_dir"
 }
