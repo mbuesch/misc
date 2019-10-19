@@ -259,7 +259,7 @@ run()
 
 	# Set option-defaults
 	[ -n "$opt_ram" ] || opt_ram="1024M"
-	[ -n "$opt_netrestrict" ] || opt_netrestrict="$(bool_to_on_off 1)"
+	[ -n "$opt_netrestrict" ] || opt_netrestrict=1
 	[ -n "$opt_dryrun" ] || opt_dryrun=0
 	[ -n "$opt_spice" ] || opt_spice=1
 	[ -n "$opt_mouse" ] || opt_mouse=usbtablet
@@ -369,7 +369,7 @@ run()
 		die "Invalid mouse selection"
 	fi
 
-	net0_conf="-netdev user,id=net0,restrict=${opt_netrestrict},net=192.168.5.1/24,smb=${sharedir},smbserver=192.168.5.4"
+	net0_conf="-netdev user,id=net0,restrict=$(bool_to_on_off "$opt_netrestrict"),net=192.168.5.1/24,smb=${sharedir},smbserver=192.168.5.4"
 	net0_conf="$net0_conf -device rtl8139,netdev=net0,mac=00:11:22:AA:BB:CC"
 	if [ "$opt_usetap" -ne 0 ]; then
 		net1_conf="-netdev tap,id=net1"
