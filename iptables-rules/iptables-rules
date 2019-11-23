@@ -1,0 +1,204 @@
+#!/bin/sh
+
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+NAME=iptables-rules
+DESC="iptables filter rules"
+
+iptables_bin="/usr/sbin/iptables"
+ip6tables_bin="/usr/sbin/ip6tables"
+
+
+die()
+{
+	echo "$*"
+	exit 1
+}
+
+iptables()
+{
+	$iptables_bin "$@" || die "FAILED: $iptables_bin $@"
+}
+
+ip6tables()
+{
+	$ip6tables_bin "$@" || die "FAILED: $ip6tables_bin $@"
+}
+
+clear_ip4tables()
+{
+	# clear and delete all chains
+	iptables -F
+	iptables -X
+	iptables -Z
+	# delete `nat' and `mangle' chains
+	iptables -t mangle -F
+	iptables -t nat -F
+}
+
+clear_ip6tables()
+{
+	# clear and delete all chains
+	ip6tables -F INPUT
+	ip6tables -F OUTPUT
+	ip6tables -F FORWARD
+	ip6tables -F
+	ip6tables -X
+	ip6tables -Z
+	# delete `mangle' chain
+	ip6tables -t mangle -F
+}
+
+clear_all_ipt_rules()
+{
+	clear_ip4tables
+	clear_ip6tables
+}
+
+setup_ip4tables()
+{
+	# default policy
+	iptables -P INPUT   DROP
+	iptables -P FORWARD DROP
+	iptables -P OUTPUT  DROP
+
+	# loopback
+	iptables -A INPUT  -i lo -j ACCEPT
+	iptables -A OUTPUT -o lo -j ACCEPT
+
+	# UDP
+	iptables -A INPUT -p udp -j ACCEPT		# Accept everything
+
+	# Established connections
+	iptables -A INPUT  -m state --state ESTABLISHED,RELATED -j ACCEPT
+	iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+	if true; then
+		# forwarding and masquerading
+		echo 1 >/proc/sys/net/ipv4/ip_forward
+		for inif in eth+ usb+; do
+			for outif in wlan+ ppp+ tun+; do
+				iptables -t nat -A POSTROUTING -o $outif -j MASQUERADE
+				iptables -A FORWARD -i $inif -o $outif -j ACCEPT
+				iptables -A FORWARD -i $outif -o $inif -j ACCEPT
+			done
+		done
+	fi
+
+	# Output
+	iptables -A OUTPUT -j ACCEPT
+
+	# ICMP
+	iptables -A OUTPUT -p icmp --icmp-type echo-request -j ACCEPT
+	iptables -A OUTPUT -p icmp --icmp-type echo-reply   -j ACCEPT
+	iptables -A INPUT  -p icmp --icmp-type echo-reply   -j ACCEPT
+	iptables -A INPUT  -p icmp --icmp-type echo-request -j ACCEPT
+	iptables -A OUTPUT -p icmp --icmp-type destination-unreachable -j ACCEPT
+	iptables -A INPUT  -p icmp --icmp-type destination-unreachable -j ACCEPT
+	iptables -A INPUT  -p icmp --icmp-type source-quench           -j ACCEPT
+	iptables -A INPUT  -p icmp --icmp-type time-exceeded           -j ACCEPT
+	iptables -A INPUT  -p icmp --icmp-type parameter-problem       -j ACCEPT
+
+	# logging
+#	iptables -A INPUT   -j LOG --log-level info --log-prefix "reject_ipv4_input:"
+#	iptables -A OUTPUT  -j LOG --log-level info --log-prefix "reject_ipv4_output:"
+#	iptables -A FORWARD -j LOG --log-level info --log-prefix "reject_ipv4_forward:"
+
+	# REJECT the rest
+	iptables -A INPUT   -j REJECT
+	iptables -A OUTPUT  -j REJECT
+	iptables -A FORWARD -j REJECT
+}
+
+setup_ip6tables()
+{
+	# default policy
+	ip6tables -P INPUT   DROP
+	ip6tables -P FORWARD DROP
+	ip6tables -P OUTPUT  DROP
+
+	# Disable processing of any RH0 packet
+	# Which could allow a ping-pong of packets
+	ip6tables -A INPUT -m rt --rt-type 0 -j DROP
+	ip6tables -A OUTPUT -m rt --rt-type 0 -j DROP
+	ip6tables -A FORWARD -m rt --rt-type 0 -j DROP
+
+	# loopback
+	ip6tables -A INPUT  -i lo -j ACCEPT
+	ip6tables -A OUTPUT -o lo -j ACCEPT
+
+	# Allow Link-Local addresses
+#	ip6tables -A INPUT -s fe80::/10 -j ACCEPT
+#	ip6tables -A OUTPUT -s fe80::/10 -j ACCEPT
+
+	# Allow multicast
+#	ip6tables -A INPUT -s ff00::/8 -j ACCEPT
+#	ip6tables -A OUTPUT -s ff00::/8 -j ACCEPT
+
+	# Established connections
+	ip6tables -A INPUT  -m state --state ESTABLISHED,RELATED -j ACCEPT
+	ip6tables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+	# Output
+	ip6tables -A OUTPUT -j ACCEPT
+
+	# ICMP
+	ip6tables -A INPUT -p icmpv6 -j ACCEPT
+	ip6tables -A OUTPUT -p icmpv6 -j ACCEPT
+	ip6tables -A FORWARD -p icmpv6 -j ACCEPT
+
+	# logging
+#	ip6tables -A INPUT   -j LOG --log-level info --log-prefix "reject_ipv6_input:"
+#	ip6tables -A OUTPUT  -j LOG --log-level info --log-prefix "reject_ipv6_output:"
+#	ip6tables -A FORWARD -j LOG --log-level info --log-prefix "reject_ipv6_forward:"
+
+	# REJECT the rest
+	ip6tables -A INPUT   -j REJECT
+	ip6tables -A OUTPUT  -j REJECT
+	ip6tables -A FORWARD -j REJECT
+}
+
+setup_iptables()
+{
+	clear_all_ipt_rules
+	setup_ip4tables
+	setup_ip6tables
+}
+
+reset_iptables()
+{
+	clear_all_ipt_rules
+
+	iptables -P INPUT   ACCEPT
+	iptables -P FORWARD ACCEPT
+	iptables -P OUTPUT  ACCEPT
+
+	ip6tables -P INPUT   ACCEPT
+	ip6tables -P FORWARD ACCEPT
+	ip6tables -P OUTPUT  ACCEPT
+}
+
+sanity_checks()
+{
+	[ $(id -u) -eq 0 ] || die "Permission denied"
+	[ -x "$iptables_bin" ] || die "Can not execute iptables binary \"$iptables_bin\""
+	[ -x "$ip6tables_bin" ] || die "Can not execute ip6tables binary \"$ip6tables_bin\""
+}
+
+sanity_checks
+
+case "$1" in
+	start|restart|reload)
+		echo "Starting $DESC: $NAME"
+		setup_iptables
+		;;
+	stop)
+		echo "Stopping $DESC: $NAME"
+		reset_iptables
+		;;
+	*)
+		echo "Usage: $0 {start|stop|restart|reload}"
+		exit 1
+		;;
+esac
+
+exit 0

@@ -1,0 +1,17 @@
+[Unit]
+Description=iptables rules
+After=syslog.target
+Before=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+Group=root
+
+ExecStart=/etc/iptables-rules start
+ExecStop=/etc/iptables-rules stop
+ExecReload=/etc/iptables-rules restart
+
+[Install]
+WantedBy=multi-user.target
