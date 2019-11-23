@@ -1,3 +1,0 @@
-SHELL=/bin/sh
-# m h dom mon dow user	command
-0 0-23/2  * * *	root	test -x /usr/local/bin/apt-cron-download && /usr/local/bin/apt-cron-download

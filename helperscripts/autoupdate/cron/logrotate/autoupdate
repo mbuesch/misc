@@ -1,7 +1,0 @@
-/var/log/autoupdate.log {
-  rotate 12
-  weekly
-  compress
-  missingok
-  notifempty
-}
