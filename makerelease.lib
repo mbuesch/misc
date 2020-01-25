@@ -1,7 +1,7 @@
 #
 # Release script library
 #
-# Copyright (c) 2012-2016 Michael Buesch <m@bues.ch>
+# Copyright (c) 2012-2020 Michael Buesch <m@bues.ch>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -722,7 +722,7 @@ makerelease()
 	[ -n "$srcdir" ] || die "\$srcdir variable not set"
 	[ -n "$srcsubdir" ] || srcsubdir=""
 	[ -n "$tmp_basedir" ] || tmp_basedir="/tmp"
-	[ -n "$default_archives" ] || default_archives="tar.bz2"
+	[ -n "$default_archives" ] || default_archives="tar.xz"
 
 	trap terminating_signal TERM INT
 	trap cleanup EXIT
