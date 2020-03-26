@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 # timeshift - Simple work time scheduler
-# Copyright (c) 2009-2012 Michael Buesch <m@bues.ch>
+# Copyright (c) 2009-2020 Michael Buesch <m@bues.ch>
 # Licensed under the GNU/GPL version 2 or later.
 """
 
@@ -42,40 +42,13 @@ DFLAG_UNCERTAIN		= (1 << 0)
 DFLAG_ATTENDANT		= (1 << 1)
 
 
-# Compat layer
-if usingPySide:
-	constructQVariant = lambda obj: obj
-	dereferenceQVariant = lambda variant: variant
+def toBase64(string):
+	return base64.standard_b64encode(
+		string.encode("UTF-8", "ignore")).decode("UTF-8", "ignore")
 
-	def toBase64(string):
-		try:
-			if isinstance(string, str):
-				string = string.decode("utf-8")
-			string = string.encode("utf-8")
-			return base64.standard_b64encode(string)
-		except (Exception) as e:
-			print("base64 encoding error: %s" % str(e))
-			return ""
-
-	def fromBase64(b64str):
-		try:
-			return base64.standard_b64decode(b64str).decode("utf-8")
-		except (Exception) as e:
-			print("base64 decoding error: %s" % str(e))
-			return ""
-else: # PyQT5
-	constructQVariant = lambda obj: QVariant(obj)
-	dereferenceQVariant = lambda variant: variant.toPyObject()
-
-	def toBase64(string):
-		if not isinstance(string, QString):
-			string = QString(string)
-		unistr = str(string.toUtf8(), "utf-8").encode("utf-8")
-		return base64.standard_b64encode(unistr)
-
-	def fromBase64(b64str):
-		unistr = base64.standard_b64decode(b64str).decode("utf-8")
-		return QString(unistr)
+def fromBase64(b64str):
+	return base64.standard_b64decode(
+		b64str.encode("UTF-8", "ignore")).decode("UTF-8", "ignore")
 
 class QVariantContainer(object): # Must not be QObject derived.
 	def __init__(self, obj):
@@ -83,11 +56,11 @@ class QVariantContainer(object): # Must not be QObject derived.
 
 def makeQVariant(obj):
 	if isinstance(obj, int):
-		return constructQVariant(obj)
-	return constructQVariant(QVariantContainer(obj))
+		return obj
+	return QVariantContainer(obj)
 
 def qvariantToPy(variant):
-	pyObj = dereferenceQVariant(variant)
+	pyObj = variant
 	if isinstance(pyObj, QVariantContainer):
 		return pyObj.obj
 	return pyObj
@@ -389,7 +362,7 @@ class ShiftConfigItem(QObject):
 		self.attendanceTime = attendanceTime
 
 	@staticmethod
-	def toString(item):
+	def toBytes(item):
 		return ";".join(
 			(	toBase64(item.name),
 				str(item.shift),
@@ -397,10 +370,11 @@ class ShiftConfigItem(QObject):
 				str(item.breakTime),
 				str(item.attendanceTime),
 			)
-		)
+		).encode("UTF-8", "ignore")
 
 	@staticmethod
-	def fromString(string):
+	def fromBytes(b):
+		string = b.decode("UTF-8", "ignore")
 		elems = string.split(";")
 		try:
 			return ShiftConfigItem(
@@ -411,8 +385,8 @@ class ShiftConfigItem(QObject):
 				float(elems[4])
 			)
 		except (IndexError, ValueError) as e:
-			raise TsException("ShiftConfigItem.fromString() "
-					  "invalid string: " + str(string))
+			raise TsException("ShiftConfigItem.fromBytes() "
+					  "invalid string: " + string)
 
 class Preset(QObject):
 	def __init__(self, name, dayType, shift, workTime, breakTime, attendanceTime):
@@ -425,7 +399,7 @@ class Preset(QObject):
 		self.attendanceTime = attendanceTime
 
 	@staticmethod
-	def toString(preset):
+	def toBytes(preset):
 		return ";".join(
 			(	toBase64(preset.name),
 				str(preset.dayType),
@@ -434,10 +408,11 @@ class Preset(QObject):
 				str(preset.breakTime),
 				str(preset.attendanceTime),
 			)
-		)
+		).encode("UTF-8", "ignore")
 
 	@staticmethod
-	def fromString(string):
+	def fromBytes(b):
+		string = b.decode("UTF-8", "ignore")
 		elems = string.split(";")
 		try:
 			return Preset(
@@ -449,8 +424,8 @@ class Preset(QObject):
 				float(elems[5])
 			)
 		except (IndexError, ValueError) as e:
-			raise TsException("Preset.fromString() "
-					  "invalid string: " + str(string))
+			raise TsException("Preset.fromBytes() "
+					  "invalid string: " + string)
 
 class Snapshot(QObject):
 	def __init__(self, date, shiftConfigIndex, accountValue,
@@ -462,17 +437,18 @@ class Snapshot(QObject):
 		self.holidaysLeft = holidaysLeft
 
 	@staticmethod
-	def toString(snapshot):
+	def toBytes(snapshot):
 		return ";".join(
 			(	str(QDateToId(snapshot.date)),
 				str(snapshot.shiftConfigIndex),
 				str(snapshot.accountValue),
 				str(snapshot.holidaysLeft),
 			)
-		)
+		).encode("UTF-8", "ignore")
 
 	@staticmethod
-	def fromString(string):
+	def fromBytes(b):
+		string = b.decode("UTF-8", "ignore")
 		elems = string.split(";")
 		if len(elems) == 3:
 			elems.append("0") # Holidays. db-v1 compat
@@ -484,8 +460,8 @@ class Snapshot(QObject):
 				int(elems[3], 10)
 			)
 		except (IndexError, ValueError) as e:
-			raise TsException("Snapshot.fromString() "
-					  "invalid string: " + str(string))
+			raise TsException("Snapshot.fromBytes() "
+					  "invalid string: " + string)
 
 class TsDatabase(QObject):
 	INMEM		= ":memory:"
@@ -495,14 +471,14 @@ class TsDatabase(QObject):
 	sql.register_adapter(QDate, QDateToId)
 	sql.register_converter("QDate", IdToQDate)
 
-	sql.register_adapter(ShiftConfigItem, ShiftConfigItem.toString)
-	sql.register_converter("ShiftConfigItem", ShiftConfigItem.fromString)
+	sql.register_adapter(ShiftConfigItem, ShiftConfigItem.toBytes)
+	sql.register_converter("ShiftConfigItem", ShiftConfigItem.fromBytes)
 
-	sql.register_adapter(Preset, Preset.toString)
-	sql.register_converter("Preset", Preset.fromString)
+	sql.register_adapter(Preset, Preset.toBytes)
+	sql.register_converter("Preset", Preset.fromBytes)
 
-	sql.register_adapter(Snapshot, Snapshot.toString)
-	sql.register_converter("Snapshot", Snapshot.fromString)
+	sql.register_adapter(Snapshot, Snapshot.toBytes)
+	sql.register_converter("Snapshot", Snapshot.fromBytes)
 
 	TAB_params	= "params(name TEXT, data TEXT)"
 	TAB_dayflags	= "dayFlags(date QDate, value INTEGER)"
@@ -545,8 +521,8 @@ class TsDatabase(QObject):
 		try:
 			if not self.isInMemory():
 				print("Closing database...")
-				c = self.conn.cursor()
-				c.execute("VACUUM;")
+				self.commit()
+				self.conn.cursor().execute("VACUUM;")
 				self.commit()
 			self.conn.close()
 			self.__reset()
@@ -648,8 +624,9 @@ class TsDatabase(QObject):
 			DROP TABLE IF EXISTS comments;
 			DROP TABLE IF EXISTS shiftConfig;
 			DROP TABLE IF EXISTS presets;
-			VACUUM;
 		""")
+		self.conn.commit()
+		self.conn.cursor().execute("VACUUM;")
 		self.conn.commit()
 		self.__initTables(self.conn)
 		self.__setDatabaseVersion()
@@ -682,6 +659,7 @@ class TsDatabase(QObject):
 				self.__cloneTab(sourceCursor=self.conn.cursor(),
 						targetCursor=cloneconn.cursor(),
 						tabSignature=tabSignature)
+			cloneconn.commit()
 			cloneconn.cursor().execute("VACUUM;")
 			cloneconn.commit()
 			cloneconn.close()
