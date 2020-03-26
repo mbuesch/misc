@@ -10,14 +10,12 @@ import base64
 import sqlite3 as sql
 
 try:
-	# Try to use PySide
 	raise ImportError #FIXME
 	from PySide2.QtCore import *
 	from PySide2.QtGui import *
 	from PySide2.QtWidgets import *
 	usingPySide = True
-except (ImportError) as e:
-	# PyQt4 fallback
+except ImportError as e:
 	from PyQt5.QtCore import *
 	from PyQt5.QtGui import *
 	from PyQt5.QtWidgets import *
@@ -79,7 +77,7 @@ class ICal_Event(QObject):
 	def getProp(self, name):
 		try:
 			return self.props[name]
-		except (KeyError) as e:
+		except KeyError as e:
 			return None
 
 	def getDateRange(self):
@@ -155,7 +153,7 @@ class ICal(QObject):
 			propName = prop[0].strip().upper()
 			try:
 				propParams = prop[1:]
-			except (IndexError) as e:
+			except IndexError as e:
 				propParams = []
 			propParams = self.__parseParams(propParams)
 			if not inCalendar:
@@ -309,7 +307,7 @@ class ICalImportDialog(QDialog, ICalImport):
 		)
 		try:
 			self.importICal(data, opts)
-		except (TsException) as e:
+		except TsException as e:
 			QMessageBox.critical(self,
 				"iCal Import fehlgeschlagen",
 				"Import fehlgeschagen:\n" + str(e))
@@ -514,7 +512,7 @@ class TsDatabase(QObject):
 				self.commit()
 			self.conn.close()
 			self.__reset()
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def close(self):
@@ -532,13 +530,13 @@ class TsDatabase(QObject):
 			self.__initTables(self.conn)
 			if self.isInMemory():
 				self.__setDatabaseVersion()
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def __setDatabaseVersion(self):
 		try:
 			self.__setParameter("dbVersion", self.VERSION)
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def __checkDatabaseVersion(self):
@@ -558,9 +556,9 @@ class TsDatabase(QObject):
 				self.__setParameter("HolidaysPerYear", None)
 				# Update DB version
 				self.__setDatabaseVersion()
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
-		except (ValueError) as e:
+		except ValueError as e:
 			raise TsException("Invalid database version info")
 
 	def getFilename(self):
@@ -572,7 +570,7 @@ class TsDatabase(QObject):
 	def commit(self):
 		try:
 			self.conn.commit()
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def __commitTimerTimeout(self):
@@ -651,7 +649,7 @@ class TsDatabase(QObject):
 			cloneconn.cursor().execute("VACUUM;")
 			cloneconn.commit()
 			cloneconn.close()
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def __setParameter(self, param, value):
@@ -662,7 +660,7 @@ class TsDatabase(QObject):
 				c.execute("INSERT INTO params(name, data) VALUES(?, ?);",
 					  (str(param), str(value)))
 			self.scheduleCommit()
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def __getParameter(self, param):
@@ -673,7 +671,7 @@ class TsDatabase(QObject):
 			if value:
 				return value[0]
 			return None
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def setDayFlags(self, date, value):
@@ -683,7 +681,7 @@ class TsDatabase(QObject):
 			c.execute("INSERT INTO dayFlags(date, value) VALUES(?, ?);",
 				  (date, int(value) & 0xFFFFFFFF))
 			self.scheduleCommit()
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def getDayFlags(self, date):
@@ -694,7 +692,7 @@ class TsDatabase(QObject):
 			if not value:
 				return 0
 			return int(value[0]) & 0xFFFFFFFF
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def __setOverride(self, table, date, value):
@@ -705,7 +703,7 @@ class TsDatabase(QObject):
 				c.execute("INSERT INTO %s(date, value) VALUES(?, ?);" % table,
 					  (date, str(value)))
 			self.scheduleCommit()
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def __getOverride(self, table, date):
@@ -716,7 +714,7 @@ class TsDatabase(QObject):
 			if value:
 				return value[0]
 			return None
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def __hasOverride(self, table, date):
@@ -727,7 +725,7 @@ class TsDatabase(QObject):
 			if value:
 				return value[0] > 0
 			return False
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def setDayTypeOverride(self, date, daytype):
@@ -815,7 +813,7 @@ class TsDatabase(QObject):
 				c.execute("INSERT INTO shiftConfig(idx, item) VALUES(?, ?);",
 					  (index, item))
 			self.scheduleCommit()
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def getShiftConfigItems(self):
@@ -829,7 +827,7 @@ class TsDatabase(QObject):
 			items = [ i[0] for i in items ]
 			self.cachedShiftConfig = items
 			return items
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def setPresets(self, presets):
@@ -841,7 +839,7 @@ class TsDatabase(QObject):
 				c.execute("INSERT INTO presets(idx, preset) VALUES(?, ?);",
 					  (index, preset))
 			self.scheduleCommit()
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def getPresets(self):
@@ -851,7 +849,7 @@ class TsDatabase(QObject):
 			c.execute('SELECT preset FROM presets ORDER BY "idx";')
 			presets = c.fetchall()
 			return [ p[0] for p in presets ]
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def setSnapshot(self, date, snapshot):
@@ -862,7 +860,7 @@ class TsDatabase(QObject):
 				c.execute("INSERT INTO snapshots(date, snapshot) VALUES(?, ?);",
 					  (date, snapshot))
 			self.scheduleCommit()
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def hasSnapshot(self, date):
@@ -873,7 +871,7 @@ class TsDatabase(QObject):
 			if value:
 				return value[0] > 0
 			return False
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def getSnapshot(self, date):
@@ -884,7 +882,7 @@ class TsDatabase(QObject):
 			if snapshot:
 				snapshot = snapshot[0]
 			return snapshot
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def getAllSnapshots(self):
@@ -893,7 +891,7 @@ class TsDatabase(QObject):
 			c.execute("SELECT snapshot FROM snapshots;")
 			snapshots = c.fetchall()
 			return [ s[0] for s in snapshots ]
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def findSnapshotForDate(self, date):
@@ -906,7 +904,7 @@ class TsDatabase(QObject):
 			if snapshot:
 				return snapshot[0]
 			return None
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def setComment(self, date, comment):
@@ -917,7 +915,7 @@ class TsDatabase(QObject):
 				c.execute("INSERT INTO comments(date, comment) VALUES(?, ?);",
 					  (date, str(comment)))
 			self.scheduleCommit()
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def hasComment(self, date):
@@ -928,7 +926,7 @@ class TsDatabase(QObject):
 			if value:
 				return value[0] > 0
 			return False
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 	def getComment(self, date):
@@ -939,7 +937,7 @@ class TsDatabase(QObject):
 			if comment:
 				comment = comment[0]
 			return comment
-		except (sql.Error) as e:
+		except sql.Error as e:
 			self.__sqlError(e)
 
 class TimeSpinBox(QDoubleSpinBox):
@@ -1734,7 +1732,7 @@ class MainWidget(QWidget):
 				self.db.clone(filename)
 			self.db.open(filename)
 			self.worldUpdate()
-		except (TsException) as e:
+		except TsException as e:
 			QMessageBox.critical(self, "Laden fehlgeschlagen",
 					     "Laden fehlgeschlagen:\n" + str(e))
 			return False
