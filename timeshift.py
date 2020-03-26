@@ -68,57 +68,57 @@ def IdToQDate(id):
 
 class TsException(Exception): pass
 
+class ICal_Event(QObject):
+	def __init__(self):
+		QObject.__init__(self)
+		self.props = { }
+
+	def addProp(self, prop):
+		self.props[prop.name] = prop
+
+	def getProp(self, name):
+		try:
+			return self.props[name]
+		except (KeyError) as e:
+			return None
+
+	def getDateRange(self):
+		# Returns a list of QDate objects
+		start = self.getProp("DTSTART")
+		if not start:
+			raise TsException("No DTSTART property")
+		end = self.getProp("DTEND")
+		if not end:
+			dur = self.getProp("DURATION")
+			if not dur:
+				return [ start.toQDate() ]
+			raise TsException("TODO: DURATION property "
+				"not implemented, yet.")
+		ret, date = [], start.toQDate()
+		while date < end.toQDate():
+			ret.append(date)
+			date = date.addDays(1)
+		return ret
+
+class ICal_Prop(QObject):
+	def __init__(self, name, params, value):
+		QObject.__init__(self)
+		self.name = name
+		self.params = params
+		self.value = value
+
+	def toQDate(self):
+		date = QDate.fromString(self.value, Qt.ISODate)
+		if date.isValid():
+			return date
+		date = QDate.fromString(self.value, "yyyyMMdd")
+		if date.isValid():
+			return date
+		raise TsException("Date property '%s' "
+			"format error" % self.name)
+
 class ICal(QObject):
 	"Simple iCalendar parser"
-
-	class Event(QObject):
-		def __init__(self):
-			QObject.__init__(self)
-			self.props = { }
-
-		def addProp(self, prop):
-			self.props[prop.name] = prop
-
-		def getProp(self, name):
-			try:
-				return self.props[name]
-			except (KeyError) as e:
-				return None
-
-		def getDateRange(self):
-			# Returns a list of QDate objects
-			start = self.getProp("DTSTART")
-			if not start:
-				raise TsException("No DTSTART property")
-			end = self.getProp("DTEND")
-			if not end:
-				dur = self.getProp("DURATION")
-				if not dur:
-					return [ start.toQDate() ]
-				raise TsException("TODO: DURATION property "
-					"not implemented, yet.")
-			ret, date = [], start.toQDate()
-			while date < end.toQDate():
-				ret.append(date)
-				date = date.addDays(1)
-			return ret
-
-	class Prop(QObject):
-		def __init__(self, name, params, value):
-			QObject.__init__(self)
-			self.name = name
-			self.params = params
-			self.value = value
-
-		def toQDate(self):
-			date = QDate.fromString(self.value, Qt.ISODate)
-			if date.isValid():
-				return date
-			date = QDate.fromString(self.value, "yyyyMMdd")
-			if date.isValid():
-				return date
-			raise TsException("Date property '%s' "
-				"format error" % self.name)
 
 	def __init__(self):
 #		QObject.__init__(self)
@@ -170,7 +170,7 @@ class ICal(QObject):
 					continue
 				if propName == "BEGIN" and\
 				   value.strip().upper() == "VEVENT":
-					curEvent = self.Event()
+					curEvent = ICal_Event()
 					continue
 				if propName == "END" and\
 				   value.strip().upper() == "VCALENDAR":
@@ -184,15 +184,15 @@ class ICal(QObject):
 				self.__events.append(curEvent)
 				curEvent = None
 				continue
-			curEvent.addProp(self.Prop(propName, propParams, value))
+			curEvent.addProp(ICal_Prop(propName, propParams, value))
+
+class ICalImport_Opts(QObject):
+	def __init__(self, setShift, setDayType):
+		QObject.__init__(self)
+		self.setShift = setShift
+		self.setDayType = setDayType
 
 class ICalImport(ICal):
-	class Opts(QObject):
-		def __init__(self, setShift, setDayType):
-			QObject.__init__(self)
-			self.setShift = setShift
-			self.setDayType = setDayType
-
 	def __init__(self, widget, db):
 		ICal.__init__(self)
 		self.widget = widget
@@ -303,9 +303,9 @@ class ICalImportDialog(QDialog, ICalImport):
 				"iCal Laden fehlgeschlagen",
 				"Laden fehlgeschlagen:\n" + str(e))
 			return
-		opts = ICalImport.Opts(
-			setShift = self.shiftCombo.selectedShift(),
-			setDayType = self.typeCombo.selectedDayType()
+		opts = ICalImport_Opts(
+			setShift=self.shiftCombo.selectedShift(),
+			setDayType=self.typeCombo.selectedDayType()
 		)
 		try:
 			self.importICal(data, opts)
