@@ -1099,7 +1099,7 @@ class ShiftConfigDialog(QDialog):
 			index = 0
 		else:
 			index += 1
-		item = ShiftConfigItem("Unbenannt", SHIFT_DAY, 7.0, 0.5, 8.5)
+		item = ShiftConfigItem("Unbenannt", SHIFT_DAY, 7.0, 0.75, 8.0)
 		shiftConfig.insert(index, item)
 		self.mainWidget.db.setShiftConfigItems(shiftConfig)
 		self.loadConfig()
@@ -1291,6 +1291,7 @@ class PresetDialog(QDialog):
 		self.presetSelectionChanged()
 
 		self.presetList.currentRowChanged.connect(self.presetSelectionChanged)
+		self.presetList.itemDoubleClicked.connect(self.commitPressed)
 		self.addButton.released.connect(self.addPreset)
 		self.removeButton.released.connect(self.removePreset)
 		self.commitButton.released.connect(self.commitPressed)
