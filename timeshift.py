@@ -283,13 +283,11 @@ class ICalImportDialog(QDialog, ICalImport):
 		self.fileButton.released.connect(self.fileImport)
 
 	def fileImport(self):
-		ret = QFileDialog.getOpenFileName(self, "iCalendar Datei", "",
+		fn, fil = QFileDialog.getOpenFileName(self,
+			"iCalendar Datei",
+			"",
 			"iCalendar Dateien (*.ics);;"
 			"Alle Dateien (*)")
-		if usingPySide:
-			fn, selFilter = ret
-		else:
-			fn = ret
 		if not fn:
 			return
 		self.__fileImport(fn)
@@ -1743,13 +1741,12 @@ class MainWidget(QWidget):
 		return True
 
 	def loadDatabase(self):
-		fn = QFileDialog.getSaveFileName(self, "Datenbank laden", "",
-						 "Timeshift Dateien (*.tmd *.tms *.tmz);;"
-						 "Alle Dateien (*)",
-						 "", QFileDialog.DontConfirmOverwrite |
-						     QFileDialog.DontUseNativeDialog)
-		if usingPySide:
-			fn = fn[0]
+		fn, fil = QFileDialog.getSaveFileName(self,
+			"Datenbank laden", "",
+			"Timeshift Dateien (*.tmd *.tms *.tmz);;"
+			"Alle Dateien (*)",
+			"",
+			QFileDialog.DontConfirmOverwrite)
 		if fn:
 			self.doLoadDatabase(fn)
 
