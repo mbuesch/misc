@@ -296,9 +296,9 @@ class ICalImportDialog(QDialog, ICalImport):
 	def __fileImport(self, filename):
 		try:
 			fd = open(filename, "rb")
-			data = fd.read()
+			data = fd.read().decode("UTF-8")
 			fd.close()
-		except (IOError) as e:
+		except (IOError, UnicodeError) as e:
 			QMessageBox.critical(self,
 				"iCal Laden fehlgeschlagen",
 				"Laden fehlgeschlagen:\n" + str(e))
