@@ -57,12 +57,12 @@ def floatEqual(f0, f1):
 	return abs(f0 - f1) < 0.001
 
 def QDateToId(qdate):
-	"Convert a QDate object to a unique integer ID"
-	return QDateTime(qdate).toTime_t()
+	"""Convert a QDate object to a unique integer ID."""
+	return QDateTime(qdate).toMSecsSinceEpoch()
 
-def IdToQDate(id):
-	"Convert a unique integer ID to a QDate object"
-	return QDateTime.fromTime_t(int(id)).date()
+def IdToQDate(idNum):
+	"""Convert a unique integer ID to a QDate object."""
+	return QDateTime.fromMSecsSinceEpoch(int(idNum)).date()
 
 class TsException(Exception): pass
 
