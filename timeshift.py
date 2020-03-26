@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
 # timeshift - Simple work time scheduler
 # Copyright (c) 2009-2012 Michael Buesch <m@bues.ch>
@@ -11,13 +11,16 @@ import sqlite3 as sql
 
 try:
 	# Try to use PySide
-	from PySide.QtCore import *
-	from PySide.QtGui import *
+	raise ImportError #FIXME
+	from PySide2.QtCore import *
+	from PySide2.QtGui import *
+	from PySide2.QtWidgets import *
 	usingPySide = True
-except (ImportError), e:
+except (ImportError) as e:
 	# PyQt4 fallback
-	from PyQt4.QtCore import *
-	from PyQt4.QtGui import *
+	from PyQt5.QtCore import *
+	from PyQt5.QtGui import *
+	from PyQt5.QtWidgets import *
 	usingPySide = False
 
 # Shift types
@@ -50,24 +53,24 @@ if usingPySide:
 				string = string.decode("utf-8")
 			string = string.encode("utf-8")
 			return base64.standard_b64encode(string)
-		except (Exception), e:
+		except (Exception) as e:
 			print("base64 encoding error: %s" % str(e))
 			return ""
 
 	def fromBase64(b64str):
 		try:
 			return base64.standard_b64decode(b64str).decode("utf-8")
-		except (Exception), e:
+		except (Exception) as e:
 			print("base64 decoding error: %s" % str(e))
 			return ""
-else: # PyQT4
+else: # PyQT5
 	constructQVariant = lambda obj: QVariant(obj)
 	dereferenceQVariant = lambda variant: variant.toPyObject()
 
 	def toBase64(string):
 		if not isinstance(string, QString):
 			string = QString(string)
-		unistr = unicode(string.toUtf8(), "utf-8").encode("utf-8")
+		unistr = str(string.toUtf8(), "utf-8").encode("utf-8")
 		return base64.standard_b64encode(unistr)
 
 	def fromBase64(b64str):
@@ -116,7 +119,7 @@ class ICal(QObject):
 		def getProp(self, name):
 			try:
 				return self.props[name]
-			except (KeyError), e:
+			except (KeyError) as e:
 				return None
 
 		def getDateRange(self):
@@ -189,7 +192,7 @@ class ICal(QObject):
 			propName = prop[0].strip().upper()
 			try:
 				propParams = prop[1:]
-			except (IndexError), e:
+			except (IndexError) as e:
 				propParams = []
 			propParams = self.__parseParams(propParams)
 			if not inCalendar:
@@ -208,7 +211,7 @@ class ICal(QObject):
 					continue
 				if propName == "END" and\
 				   value.strip().upper() == "VCALENDAR":
-				   	curEvent = None
+					curEvent = None
 					inCalendar = False
 					continue
 				self.__unknown(propName, value)
@@ -248,7 +251,7 @@ class ICalImport(ICal):
 			curDType = self.db.getDayTypeOverride(date)
 			if curDType is not None and\
 			   curDType != newDType:
-			   	yes = self.__question(date,
+				yes = self.__question(date,
 					"Has day-type override",
 					date.toString() + ": "
 					"Already has day type. Override?")
@@ -261,7 +264,7 @@ class ICalImport(ICal):
 			curShift = self.db.getShiftOverride(date)
 			if curShift is not None and\
 			   curShift != newShift:
-			   	yes = self.__question(date,
+				yes = self.__question(date,
 					"Has shift override",
 					date.toString() + ": "
 					"Already has shift. Override?")
@@ -314,8 +317,7 @@ class ICalImportDialog(QDialog, ICalImport):
 
 		self.fileButton = QPushButton("iCal Datei Import")
 		self.layout().addWidget(self.fileButton, 1, 0)
-		self.connect(self.fileButton, SIGNAL("released()"),
-			     self.fileImport)
+		self.fileButton.released.connect(self.fileImport)
 
 	def fileImport(self):
 		ret = QFileDialog.getOpenFileName(self, "iCalendar Datei", "",
@@ -335,7 +337,7 @@ class ICalImportDialog(QDialog, ICalImport):
 			fd = open(filename, "rb")
 			data = fd.read()
 			fd.close()
-		except (IOError), e:
+		except (IOError) as e:
 			QMessageBox.critical(self,
 				"iCal Laden fehlgeschlagen",
 				"Laden fehlgeschlagen:\n" + str(e))
@@ -346,7 +348,7 @@ class ICalImportDialog(QDialog, ICalImport):
 		)
 		try:
 			self.importICal(data, opts)
-		except (TsException), e:
+		except (TsException) as e:
 			QMessageBox.critical(self,
 				"iCal Import fehlgeschlagen",
 				"Import fehlgeschagen:\n" + str(e))
@@ -408,7 +410,7 @@ class ShiftConfigItem(QObject):
 				float(elems[3]),
 				float(elems[4])
 			)
-		except (IndexError, ValueError), e:
+		except (IndexError, ValueError) as e:
 			raise TsException("ShiftConfigItem.fromString() "
 					  "invalid string: " + str(string))
 
@@ -446,7 +448,7 @@ class Preset(QObject):
 				float(elems[4]),
 				float(elems[5])
 			)
-		except (IndexError, ValueError), e:
+		except (IndexError, ValueError) as e:
 			raise TsException("Preset.fromString() "
 					  "invalid string: " + str(string))
 
@@ -481,7 +483,7 @@ class Snapshot(QObject):
 				float(elems[2]),
 				int(elems[3], 10)
 			)
-		except (IndexError, ValueError), e:
+		except (IndexError, ValueError) as e:
 			raise TsException("Snapshot.fromString() "
 					  "invalid string: " + str(string))
 
@@ -489,9 +491,6 @@ class TsDatabase(QObject):
 	INMEM		= ":memory:"
 	VERSION		= 2
 	COMPAT_VERSIONS	= ( 1, 2 )
-
-	if not usingPySide:
-		sql.register_adapter(QString, lambda s: str(s))
 
 	sql.register_adapter(QDate, QDateToId)
 	sql.register_converter("QDate", IdToQDate)
@@ -521,8 +520,7 @@ class TsDatabase(QObject):
 		QObject.__init__(self)
 		self.commitTimer = QTimer(self)
 		self.commitTimer.setSingleShot(True)
-		self.connect(self.commitTimer, SIGNAL("timeout()"),
-			     self.__commitTimerTimeout)
+		self.commitTimer.timeout.connect(self.__commitTimerTimeout)
 		self.__reset()
 		self.open(self.INMEM)
 
@@ -552,7 +550,7 @@ class TsDatabase(QObject):
 				self.commit()
 			self.conn.close()
 			self.__reset()
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def close(self):
@@ -562,7 +560,7 @@ class TsDatabase(QObject):
 	def open(self, filename):
 		try:
 			self.__close()
-			self.conn = sql.connect(unicode(filename),
+			self.conn = sql.connect(str(filename),
 				detect_types=sql.PARSE_DECLTYPES)
 			self.filename = filename
 			if not self.isInMemory():
@@ -570,13 +568,13 @@ class TsDatabase(QObject):
 			self.__initTables(self.conn)
 			if self.isInMemory():
 				self.__setDatabaseVersion()
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def __setDatabaseVersion(self):
 		try:
 			self.__setParameter("dbVersion", self.VERSION)
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def __checkDatabaseVersion(self):
@@ -596,9 +594,9 @@ class TsDatabase(QObject):
 				self.__setParameter("HolidaysPerYear", None)
 				# Update DB version
 				self.__setDatabaseVersion()
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
-		except (ValueError), e:
+		except (ValueError) as e:
 			raise TsException("Invalid database version info")
 
 	def getFilename(self):
@@ -610,7 +608,7 @@ class TsDatabase(QObject):
 	def commit(self):
 		try:
 			self.conn.commit()
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def __commitTimerTimeout(self):
@@ -673,7 +671,7 @@ class TsDatabase(QObject):
 
 	def clone(self, target):
 		try:
-			cloneconn = sql.connect(unicode(target),
+			cloneconn = sql.connect(str(target),
 				detect_types=sql.PARSE_DECLTYPES)
 			for tabSignature in (self.TAB_params, self.TAB_dayflags,
 					     self.TAB_ovr_daytype, self.TAB_ovr_shift,
@@ -687,7 +685,7 @@ class TsDatabase(QObject):
 			cloneconn.cursor().execute("VACUUM;")
 			cloneconn.commit()
 			cloneconn.close()
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def __setParameter(self, param, value):
@@ -698,7 +696,7 @@ class TsDatabase(QObject):
 				c.execute("INSERT INTO params(name, data) VALUES(?, ?);",
 					  (str(param), str(value)))
 			self.scheduleCommit()
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def __getParameter(self, param):
@@ -709,7 +707,7 @@ class TsDatabase(QObject):
 			if value:
 				return value[0]
 			return None
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def setDayFlags(self, date, value):
@@ -719,7 +717,7 @@ class TsDatabase(QObject):
 			c.execute("INSERT INTO dayFlags(date, value) VALUES(?, ?);",
 				  (date, int(value) & 0xFFFFFFFF))
 			self.scheduleCommit()
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def getDayFlags(self, date):
@@ -730,7 +728,7 @@ class TsDatabase(QObject):
 			if not value:
 				return 0
 			return int(value[0]) & 0xFFFFFFFF
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def __setOverride(self, table, date, value):
@@ -741,7 +739,7 @@ class TsDatabase(QObject):
 				c.execute("INSERT INTO %s(date, value) VALUES(?, ?);" % table,
 					  (date, str(value)))
 			self.scheduleCommit()
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def __getOverride(self, table, date):
@@ -752,7 +750,7 @@ class TsDatabase(QObject):
 			if value:
 				return value[0]
 			return None
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def __hasOverride(self, table, date):
@@ -763,7 +761,7 @@ class TsDatabase(QObject):
 			if value:
 				return value[0] > 0
 			return False
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def setDayTypeOverride(self, date, daytype):
@@ -775,7 +773,7 @@ class TsDatabase(QObject):
 	def getDayTypeOverride(self, date):
 		try:
 			return int(self.__getOverride("override_dayType", date), 10)
-		except (ValueError, TypeError), e:
+		except (ValueError, TypeError) as e:
 			return None
 
 	def findDayTypeDates(self, daytype, beginDate, endDate):
@@ -790,7 +788,7 @@ class TsDatabase(QObject):
 			""", (daytype, beginDate, endDate))
 			dates = c.fetchall()
 			return [ d[0] for d in dates ]
-		except (ValueError, TypeError), e:
+		except (ValueError, TypeError) as e:
 			return None
 
 	def setShiftOverride(self, date, shift):
@@ -802,7 +800,7 @@ class TsDatabase(QObject):
 	def getShiftOverride(self, date):
 		try:
 			return int(self.__getOverride("override_shift", date), 10)
-		except (ValueError, TypeError), e:
+		except (ValueError, TypeError) as e:
 			return None
 
 	def setWorkTimeOverride(self, date, workTime):
@@ -814,7 +812,7 @@ class TsDatabase(QObject):
 	def getWorkTimeOverride(self, date):
 		try:
 			return float(self.__getOverride("override_workTime", date))
-		except (ValueError, TypeError), e:
+		except (ValueError, TypeError) as e:
 			return None
 
 	def setBreakTimeOverride(self, date, breakTime):
@@ -826,7 +824,7 @@ class TsDatabase(QObject):
 	def getBreakTimeOverride(self, date):
 		try:
 			return float(self.__getOverride("override_breakTime", date))
-		except (ValueError, TypeError), e:
+		except (ValueError, TypeError) as e:
 			return None
 
 	def setAttendanceTimeOverride(self, date, attendanceTime):
@@ -838,7 +836,7 @@ class TsDatabase(QObject):
 	def getAttendanceTimeOverride(self, date):
 		try:
 			return float(self.__getOverride("override_attendanceTime", date))
-		except (ValueError, TypeError), e:
+		except (ValueError, TypeError) as e:
 			return None
 
 	def setShiftConfigItems(self, items):
@@ -851,7 +849,7 @@ class TsDatabase(QObject):
 				c.execute("INSERT INTO shiftConfig(idx, item) VALUES(?, ?);",
 					  (index, item))
 			self.scheduleCommit()
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def getShiftConfigItems(self):
@@ -865,7 +863,7 @@ class TsDatabase(QObject):
 			items = [ i[0] for i in items ]
 			self.cachedShiftConfig = items
 			return items
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def setPresets(self, presets):
@@ -877,7 +875,7 @@ class TsDatabase(QObject):
 				c.execute("INSERT INTO presets(idx, preset) VALUES(?, ?);",
 					  (index, preset))
 			self.scheduleCommit()
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def getPresets(self):
@@ -887,7 +885,7 @@ class TsDatabase(QObject):
 			c.execute('SELECT preset FROM presets ORDER BY "idx";')
 			presets = c.fetchall()
 			return [ p[0] for p in presets ]
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def setSnapshot(self, date, snapshot):
@@ -898,7 +896,7 @@ class TsDatabase(QObject):
 				c.execute("INSERT INTO snapshots(date, snapshot) VALUES(?, ?);",
 					  (date, snapshot))
 			self.scheduleCommit()
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def hasSnapshot(self, date):
@@ -909,7 +907,7 @@ class TsDatabase(QObject):
 			if value:
 				return value[0] > 0
 			return False
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def getSnapshot(self, date):
@@ -920,7 +918,7 @@ class TsDatabase(QObject):
 			if snapshot:
 				snapshot = snapshot[0]
 			return snapshot
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def getAllSnapshots(self):
@@ -929,7 +927,7 @@ class TsDatabase(QObject):
 			c.execute("SELECT snapshot FROM snapshots;")
 			snapshots = c.fetchall()
 			return [ s[0] for s in snapshots ]
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def findSnapshotForDate(self, date):
@@ -942,7 +940,7 @@ class TsDatabase(QObject):
 			if snapshot:
 				return snapshot[0]
 			return None
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def setComment(self, date, comment):
@@ -951,9 +949,9 @@ class TsDatabase(QObject):
 			c.execute("DELETE FROM comments WHERE date=?;", (date,))
 			if comment:
 				c.execute("INSERT INTO comments(date, comment) VALUES(?, ?);",
-					  (date, unicode(comment)))
+					  (date, str(comment)))
 			self.scheduleCommit()
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def hasComment(self, date):
@@ -964,7 +962,7 @@ class TsDatabase(QObject):
 			if value:
 				return value[0] > 0
 			return False
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 	def getComment(self, date):
@@ -975,7 +973,7 @@ class TsDatabase(QObject):
 			if comment:
 				comment = comment[0]
 			return comment
-		except (sql.Error), e:
+		except (sql.Error) as e:
 			self.__sqlError(e)
 
 class TimeSpinBox(QDoubleSpinBox):
@@ -1051,23 +1049,15 @@ class ShiftConfigDialog(QDialog):
 		self.updateBlocked = False
 		self.loadConfig()
 
-		self.connect(self.itemList, SIGNAL("currentRowChanged(int)"),
-			     self.itemChanged)
-		self.connect(self.addButton, SIGNAL("released()"),
-			     self.addItem)
-		self.connect(self.removeButton, SIGNAL("released()"),
-			     self.removeItem)
+		self.itemList.currentRowChanged.connect(self.itemChanged)
+		self.addButton.released.connect(self.addItem)
+		self.removeButton.released.connect(self.removeItem)
 
-		self.connect(self.nameEdit, SIGNAL("textChanged(QString)"),
-			     self.updateCurrentItem)
-		self.connect(self.shiftCombo, SIGNAL("currentIndexChanged(int)"),
-			     self.updateCurrentItem)
-		self.connect(self.workTime, SIGNAL("valueChanged(double)"),
-			     self.updateCurrentItem)
-		self.connect(self.breakTime, SIGNAL("valueChanged(double)"),
-			     self.updateCurrentItem)
-		self.connect(self.attendanceTime, SIGNAL("valueChanged(double)"),
-			     self.updateCurrentItem)
+		self.nameEdit.textChanged.connect(self.updateCurrentItem)
+		self.shiftCombo.currentIndexChanged.connect(self.updateCurrentItem)
+		self.workTime.valueChanged.connect(self.updateCurrentItem)
+		self.breakTime.valueChanged.connect(self.updateCurrentItem)
+		self.attendanceTime.valueChanged.connect(self.updateCurrentItem)
 
 	def setInputEnabled(self, enable):
 		self.removeButton.setEnabled(enable)
@@ -1204,10 +1194,8 @@ class EnhancedDialog(QDialog):
 		cs = Qt.Checked if dayFlags & DFLAG_ATTENDANT else Qt.Unchecked
 		self.attendantCheckBox.setCheckState(cs)
 
-		self.connect(self.uncertainCheckBox, SIGNAL("stateChanged(int)"),
-			     self.__flagCheckBoxChanged)
-		self.connect(self.attendantCheckBox, SIGNAL("stateChanged(int)"),
-			     self.__flagCheckBoxChanged)
+		self.uncertainCheckBox.stateChanged.connect(self.__flagCheckBoxChanged)
+		self.attendantCheckBox.stateChanged.connect(self.__flagCheckBoxChanged)
 
 	def __flagCheckBoxChanged(self, newState):
 		self.commitAndAccept()
@@ -1253,23 +1241,19 @@ class ManageDialog(QDialog):
 
 		self.setDbButton = QPushButton("Datenbank waehlen", self)
 		self.fileGroup.layout().addWidget(self.setDbButton, 0, 0)
-		self.connect(self.setDbButton, SIGNAL("released()"),
-			     self.loadDatabase)
+		self.setDbButton.released.connect(self.loadDatabase)
 
 		self.resetCalButton = QPushButton("Kalender loeschen", self)
 		self.fileGroup.layout().addWidget(self.resetCalButton, 1, 0)
-		self.connect(self.resetCalButton, SIGNAL("released()"),
-			     self.resetCalendar)
+		self.resetCalButton.released.connect(self.resetCalendar)
 
 		self.schedConfButton = QPushButton("Schichtkonfig", self)
 		self.fileGroup.layout().addWidget(self.schedConfButton, 2, 0)
-		self.connect(self.schedConfButton, SIGNAL("released()"),
-			     self.doShiftConfig)
+		self.schedConfButton.released.connect(self.doShiftConfig)
 
 		self.icalButton = QPushButton("iCalendar import", self)
 		self.fileGroup.layout().addWidget(self.icalButton, 3, 0)
-		self.connect(self.icalButton, SIGNAL("released()"),
-			     self.icalImport)
+		self.icalButton.released.connect(self.icalImport)
 
 	def loadDatabase(self):
 		self.mainWidget.loadDatabase()
@@ -1338,27 +1322,17 @@ class PresetDialog(QDialog):
 		self.loadPresets()
 		self.presetSelectionChanged()
 
-		self.connect(self.presetList, SIGNAL("currentRowChanged(int)"),
-			     self.presetSelectionChanged)
-		self.connect(self.addButton, SIGNAL("released()"),
-			     self.addPreset)
-		self.connect(self.removeButton, SIGNAL("released()"),
-			     self.removePreset)
-		self.connect(self.commitButton, SIGNAL("released()"),
-			     self.commitPressed)
+		self.presetList.currentRowChanged.connect(self.presetSelectionChanged)
+		self.addButton.released.connect(self.addPreset)
+		self.removeButton.released.connect(self.removePreset)
+		self.commitButton.released.connect(self.commitPressed)
 
-		self.connect(self.nameEdit, SIGNAL("textChanged(QString)"),
-			     self.presetChanged)
-		self.connect(self.typeCombo, SIGNAL("currentIndexChanged(int)"),
-			     self.presetChanged)
-		self.connect(self.shiftCombo, SIGNAL("currentIndexChanged(int)"),
-			     self.presetChanged)
-		self.connect(self.workTime, SIGNAL("valueChanged(double)"),
-			     self.presetChanged)
-		self.connect(self.breakTime, SIGNAL("valueChanged(double)"),
-			     self.presetChanged)
-		self.connect(self.attendanceTime, SIGNAL("valueChanged(double)"),
-			     self.presetChanged)
+		self.nameEdit.textChanged.connect(self.presetChanged)
+		self.typeCombo.currentIndexChanged.connect(self.presetChanged)
+		self.shiftCombo.currentIndexChanged.connect(self.presetChanged)
+		self.workTime.valueChanged.connect(self.presetChanged)
+		self.breakTime.valueChanged.connect(self.presetChanged)
+		self.attendanceTime.valueChanged.connect(self.presetChanged)
 
 	def __addPreset(self, preset):
 		item = QListWidgetItem(preset.name)
@@ -1530,20 +1504,17 @@ class SnapshotDialog(QDialog):
 
 		self.removeButton = QPushButton("Schnappschuss loeschen", self)
 		self.layout().addWidget(self.removeButton, 4, 0, 1, 2)
-		self.connect(self.removeButton, SIGNAL("released()"),
-			     self.removeSnapshot)
+		self.removeButton.released.connect(self.removeSnapshot)
 		if not mainWidget.dateHasSnapshot(self.date):
 			self.removeButton.hide()
 
 		self.okButton = QPushButton("Setzen", self)
 		self.layout().addWidget(self.okButton, 5, 0)
-		self.connect(self.okButton, SIGNAL("released()"),
-			     self.ok)
+		self.okButton.released.connect(self.ok)
 
 		self.cancelButton = QPushButton("Abbrechen", self)
 		self.layout().addWidget(self.cancelButton, 5, 1)
-		self.connect(self.cancelButton, SIGNAL("released()"),
-			     self.cancel)
+		self.cancelButton.released.connect(self.cancel)
 
 	def ok(self):
 		self.accept()
@@ -1684,8 +1655,8 @@ class Calendar(QCalendarWidget):
 			text = "???"
 			painter.setPen(self.centerPen)
 			metrics = QFontMetrics(painter.font())
-			painter.drawText(rx + rw / 2 - metrics.width(text) / 2,
-					 ry + rh / 2 + metrics.height() / 2,
+			painter.drawText(rx + rw // 2 - metrics.width(text) // 2,
+					 ry + rh // 2 + metrics.height() // 2,
 					 text)
 
 		painter.restore()
@@ -1718,8 +1689,7 @@ class MainWidget(QWidget):
 
 		self.worldUpdateTimer = QTimer(self)
 		self.worldUpdateTimer.setSingleShot(True)
-		self.connect(self.worldUpdateTimer, SIGNAL("timeout()"),
-			     self.__worldUpdateTimerTimeout)
+		self.worldUpdateTimer.timeout.connect(self.__worldUpdateTimerTimeout)
 
 		self.calendar = Calendar(self)
 		self.layout().addWidget(self.calendar, 0, 0, 5, 3)
@@ -1741,37 +1711,27 @@ class MainWidget(QWidget):
 
 		self.presetButton = QPushButton("Vorgaben", self)
 		self.layout().addWidget(self.presetButton, 5, 4)
-		self.connect(self.presetButton, SIGNAL("released()"),
-			     self.doPresets)
+		self.presetButton.released.connect(self.doPresets)
 
-		self.connect(self.calendar, SIGNAL("selectionChanged()"),
-			     self.recalculate)
-		self.connect(self.typeCombo, SIGNAL("currentIndexChanged(int)"),
-			     self.overrideChanged)
-		self.connect(self.shiftCombo, SIGNAL("currentIndexChanged(int)"),
-			     self.overrideChanged)
-		self.connect(self.workTime, SIGNAL("valueChanged(double)"),
-			     self.overrideChanged)
-		self.connect(self.breakTime, SIGNAL("valueChanged(double)"),
-			     self.overrideChanged)
-		self.connect(self.attendanceTime, SIGNAL("valueChanged(double)"),
-			     self.overrideChanged)
+		self.calendar.selectionChanged.connect(self.recalculate)
+		self.typeCombo.currentIndexChanged.connect(self.overrideChanged)
+		self.shiftCombo.currentIndexChanged.connect(self.overrideChanged)
+		self.workTime.valueChanged.connect(self.overrideChanged)
+		self.breakTime.valueChanged.connect(self.overrideChanged)
+		self.attendanceTime.valueChanged.connect(self.overrideChanged)
 		self.overrideChangeBlocked = False
 
 		self.manageButton = QPushButton("Verwalten", self)
 		self.layout().addWidget(self.manageButton, 5, 0)
-		self.connect(self.manageButton, SIGNAL("released()"),
-			     self.doManage)
+		self.manageButton.released.connect(self.doManage)
 
 		self.snapshotButton = QPushButton("Schnappschuss", self)
 		self.layout().addWidget(self.snapshotButton, 5, 1)
-		self.connect(self.snapshotButton, SIGNAL("released()"),
-			     self.doSnapshot)
+		self.snapshotButton.released.connect(self.doSnapshot)
 
 		self.enhancedButton = QPushButton("Erweitert", self)
 		self.layout().addWidget(self.enhancedButton, 5, 2)
-		self.connect(self.enhancedButton, SIGNAL("released()"),
-			     self.doEnhanced)
+		self.enhancedButton.released.connect(self.doEnhanced)
 
 		self.output = QLabel(self)
 		self.output.setAlignment(Qt.AlignHCenter)
@@ -1808,7 +1768,7 @@ class MainWidget(QWidget):
 				self.db.clone(filename)
 			self.db.open(filename)
 			self.worldUpdate()
-		except (TsException), e:
+		except (TsException) as e:
 			QMessageBox.critical(self, "Laden fehlgeschlagen",
 					     "Laden fehlgeschlagen:\n" + str(e))
 			return False
