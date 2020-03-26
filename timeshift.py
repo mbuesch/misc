@@ -436,8 +436,6 @@ class Snapshot(QObject):
 	def fromBytes(b):
 		string = b.decode("UTF-8", "ignore")
 		elems = string.split(";")
-		if len(elems) == 3:
-			elems.append("0") # Holidays. db-v1 compat
 		try:
 			return Snapshot(
 				IdToQDate(int(elems[0], 10)),
@@ -452,7 +450,7 @@ class Snapshot(QObject):
 class TsDatabase(QObject):
 	INMEM		= ":memory:"
 	VERSION		= 2
-	COMPAT_VERSIONS	= ( 1, 2 )
+	COMPAT_VERSIONS	= ( 2, )
 
 	sql.register_adapter(QDate, QDateToId)
 	sql.register_converter("QDate", IdToQDate)
@@ -545,17 +543,6 @@ class TsDatabase(QObject):
 			if dbVer not in self.COMPAT_VERSIONS:
 				raise TsException("Unsupported database "
 					"version v%d" % dbVer)
-			if dbVer < self.VERSION:
-				print("Converting database from "
-				      "v%d to v%d" % (dbVer, self.VERSION))
-				# Convert all snapshots.
-				for snapshot in self.getAllSnapshots():
-					self.setSnapshot(snapshot.date,
-							 snapshot)
-				# Remove "HolidaysPerYear" parameter.
-				self.__setParameter("HolidaysPerYear", None)
-				# Update DB version
-				self.__setDatabaseVersion()
 		except sql.Error as e:
 			self.__sqlError(e)
 		except ValueError as e:
