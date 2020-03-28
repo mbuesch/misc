@@ -1,13 +1,2 @@
-*.tmd
-*.tms
-*.tmz
-*.pyo
-*.pyc
-*.swp
 *~
 *.bak
-*.cache.*
-*.s
-*.o
-*.bin
-*.hex

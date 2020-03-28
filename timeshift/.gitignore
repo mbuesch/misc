@@ -1,1 +1,8 @@
-*.ics
+/*.ics
+/*.tmd
+/*.tms
+/*.tmz
+/*.apk
+/sources/
+/build-android/
+__pycache__/
