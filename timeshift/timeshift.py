@@ -8,6 +8,7 @@
 import sys
 import base64
 import sqlite3 as sql
+import pathlib
 
 try:
 	raise ImportError #FIXME
@@ -2038,6 +2039,11 @@ def main(argv):
 	if len(argv) == 2:
 		if not mainwnd.loadDatabase(argv[1]):
 			return 1
+	else:
+		defaultDb = str(pathlib.Path.home() / ".timeshift.tmd")
+		if not mainwnd.loadDatabase(defaultDb):
+			print("Failed to load default DB: %s" % str(defaultDb),
+			      file=sys.stderr)
 	mainwnd.show()
 	return app.exec_()
 
