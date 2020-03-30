@@ -2003,7 +2003,7 @@ class MainWidget(QWidget):
 		self.overrideChangeBlocked = False
 
 		dateString = selDate.toString("dd.MM.yyyy")
-		self.output.setText("Konto am %s:  Beginn: %.1f  Ende: %.1f  Urlaub: %d" %\
+		self.output.setText("Stand %s:  %.1f h -> %.1f h  U: %d d" %\
 			(dateString, round(accState.accountAtStartOfDay, 1),
 			 round(accState.accountAtEndOfDay, 1),
 			 accState.holidaysAtEndOfDay))
