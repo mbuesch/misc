@@ -23,6 +23,8 @@ except ImportError as e:
 	from PyQt5.QtWidgets import *
 	usingPySide = False
 
+isAndroid = any("ANDROID" in k.upper() for k in os.environ.keys())
+
 # Shift types
 SHIFT_DEFAULT		= -1 # (not DB ABI)
 SHIFT_EARLY		= 0
@@ -267,6 +269,8 @@ class ICalImportDialog(QDialog, ICalImport):
 
 		self.setWindowTitle("iCalendar Import")
 		self.setLayout(QGridLayout())
+		if isAndroid:
+			self.layout().setSpacing(50)
 
 		self.modGroup = QGroupBox("Tagesoptionen pro ical-event setzen")
 		self.modGroup.setLayout(QGridLayout())
@@ -929,10 +933,28 @@ class TsDatabase(QObject):
 		except sql.Error as e:
 			self.__sqlError(e)
 
-class TimeSpinBox(QDoubleSpinBox):
+class TimeSpinBox(QWidget):
 	def __init__(self, parent, val=0.0, minVal=0.0, maxVal=24.0,
 		     step=0.1, decimals=2, prefix=None, suffix="h"):
-		QDoubleSpinBox.__init__(self, parent)
+		QWidget.__init__(self, parent)
+		self.setLayout(QGridLayout())
+		self.layout().setContentsMargins(QMargins())
+
+		self.__spinBox = QDoubleSpinBox(self)
+		if isAndroid:
+			self.__spinBox.setButtonSymbols(QDoubleSpinBox.NoButtons)
+		self.layout().addWidget(self.__spinBox, 0, 0, 2, 1)
+
+		if isAndroid:
+			self.__upButton = QPushButton("+", self)
+			self.layout().addWidget(self.__upButton, 0, 1)
+			self.__upButton.released.connect(self.__spinBox.stepUp)
+
+		if isAndroid:
+			self.__downButton = QPushButton("-", self)
+			self.layout().addWidget(self.__downButton, 1, 1)
+			self.__downButton.released.connect(self.__spinBox.stepDown)
+
 		self.setDecimals(decimals)
 		self.setMinimum(minVal)
 		self.setMaximum(maxVal)
@@ -944,6 +966,9 @@ class TimeSpinBox(QDoubleSpinBox):
 			self.setSuffix(" " + suffix)
 		if prefix:
 			self.setPrefix(prefix + " ")
+
+	def __getattr__(self, name):
+		return getattr(self.__spinBox, name)
 
 class DaySpinBox(QSpinBox):
 	def __init__(self, parent, val=0, minVal=0, maxVal=365,
@@ -964,6 +989,8 @@ class ShiftConfigDialog(QDialog):
 		self.mainWidget = mainWidget
 		self.setWindowTitle("Schichtkonfiguration")
 		self.setLayout(QGridLayout())
+		if isAndroid:
+			self.layout().setSpacing(50)
 
 		self.itemList = QListWidget(self)
 		self.layout().addWidget(self.itemList, 0, 0, 10, 2)
@@ -1124,6 +1151,8 @@ class EnhancedDialog(QDialog):
 
 		self.setWindowTitle("Erweitert")
 		self.setLayout(QGridLayout())
+		if isAndroid:
+			self.layout().setSpacing(50)
 
 		self.commentGroup = QGroupBox("Kommentar", self)
 		self.commentGroup.setLayout(QGridLayout())
@@ -1187,6 +1216,8 @@ class ManageDialog(QDialog):
 		self.mainWidget = mainWidget
 		self.setWindowTitle("Verwalten")
 		self.setLayout(QGridLayout())
+		if isAndroid:
+			self.layout().setSpacing(50)
 
 		self.fileGroup = QGroupBox("Datei", self)
 		self.fileGroup.setLayout(QGridLayout())
@@ -1239,6 +1270,8 @@ class PresetDialog(QDialog):
 		self.setWindowTitle("Vorgaben")
 		self.setLayout(QGridLayout())
 		self.mainWidget = mainWidget
+		if isAndroid:
+			self.layout().setSpacing(50)
 
 		self.presetList = QListWidget(self)
 		self.layout().addWidget(self.presetList, 0, 0, 4, 2)
@@ -1424,6 +1457,8 @@ class SnapshotDialog(QDialog):
 		self.setLayout(QGridLayout())
 		self.mainWidget = mainWidget
 		self.date = accountState.date
+		if isAndroid:
+			self.layout().setSpacing(50)
 
 		self.dateLabel = QLabel(self.date.toString("dddd, dd.MM.yyyy"), self)
 		self.layout().addWidget(self.dateLabel, 0, 0)
@@ -1528,7 +1563,7 @@ class Calendar(QCalendarWidget):
 		self.commentPen.setWidth(2)
 
 		self.overridesPen = QPen(QColor("#9F9F9F"))
-		self.overridesPen.setWidth(5)
+		self.overridesPen.setWidth(20 if isAndroid else 5)
 
 		self.centerPen = QPen(QColor("#007FFF"))
 		self.centerPen.setWidth(1)
@@ -1639,32 +1674,34 @@ class MainWidget(QWidget):
 
 		self.setFocusPolicy(Qt.StrongFocus)
 		self.setLayout(QGridLayout())
+		if isAndroid:
+			self.layout().setSpacing(50)
 
 		self.worldUpdateTimer = QTimer(self)
 		self.worldUpdateTimer.setSingleShot(True)
 		self.worldUpdateTimer.timeout.connect(self.__worldUpdateTimerTimeout)
 
-		self.calendar = Calendar(self)
-		self.layout().addWidget(self.calendar, 0, 0, 5, 3)
-
-		self.typeCombo = DayTypeComboBox(self)
-		self.layout().addWidget(self.typeCombo, 0, 4)
-
-		self.shiftCombo = ShiftComboBox(self)
-		self.layout().addWidget(self.shiftCombo, 1, 4)
-
+		vbox = QVBoxLayout()
 		self.workTime = TimeSpinBox(self, prefix="Arb.zeit")
-		self.layout().addWidget(self.workTime, 2, 4)
-
+		vbox.addWidget(self.workTime)
 		self.breakTime = TimeSpinBox(self, prefix="Pause")
-		self.layout().addWidget(self.breakTime, 3, 4)
-
+		vbox.addWidget(self.breakTime)
 		self.attendanceTime = TimeSpinBox(self, prefix="Anwes.")
-		self.layout().addWidget(self.attendanceTime, 4, 4)
+		vbox.addWidget(self.attendanceTime)
+		self.layout().addLayout(vbox, 0, 0)
 
+		vbox = QVBoxLayout()
+		self.typeCombo = DayTypeComboBox(self)
+		vbox.addWidget(self.typeCombo)
+		self.shiftCombo = ShiftComboBox(self)
+		vbox.addWidget(self.shiftCombo)
 		self.presetButton = QPushButton("Vorgaben", self)
-		self.layout().addWidget(self.presetButton, 5, 4)
+		vbox.addWidget(self.presetButton)
 		self.presetButton.released.connect(self.doPresets)
+		self.layout().addLayout(vbox, 0, 1)
+
+		self.calendar = Calendar(self)
+		self.layout().addWidget(self.calendar, 3, 0, 1, 2)
 
 		self.calendar.selectionChanged.connect(self.recalculate)
 		self.typeCombo.currentIndexChanged.connect(self.overrideChanged)
@@ -1674,23 +1711,23 @@ class MainWidget(QWidget):
 		self.attendanceTime.valueChanged.connect(self.overrideChanged)
 		self.overrideChangeBlocked = False
 
+		hbox = QHBoxLayout()
 		self.manageButton = QPushButton("Verwalten", self)
-		self.layout().addWidget(self.manageButton, 5, 0)
+		hbox.addWidget(self.manageButton)
 		self.manageButton.released.connect(self.doManage)
-
 		self.snapshotButton = QPushButton("Schnappschuss", self)
-		self.layout().addWidget(self.snapshotButton, 5, 1)
+		hbox.addWidget(self.snapshotButton)
 		self.snapshotButton.released.connect(self.doSnapshot)
-
 		self.enhancedButton = QPushButton("Erweitert", self)
-		self.layout().addWidget(self.enhancedButton, 5, 2)
+		hbox.addWidget(self.enhancedButton)
 		self.enhancedButton.released.connect(self.doEnhanced)
+		self.layout().addLayout(hbox, 4, 0, 1, 2)
 
 		self.output = QLabel(self)
 		self.output.setAlignment(Qt.AlignHCenter)
 		self.output.setFrameShape(QFrame.Panel)
 		self.output.setFrameShadow(QFrame.Raised)
-		self.layout().addWidget(self.output, 8, 0, 1, 6)
+		self.layout().addWidget(self.output, 5, 0, 1, 2)
 
 		self.db = TsDatabase()
 		self.resetState()
