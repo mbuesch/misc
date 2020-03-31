@@ -6,6 +6,7 @@
 """
 
 import sys
+import os
 import base64
 import sqlite3 as sql
 import pathlib
@@ -1712,17 +1713,19 @@ class MainWidget(QWidget):
 	def scheduleWorldUpdate(self, msec=1000):
 		self.worldUpdateTimer.start(msec)
 
-	def doLoadDatabase(self, filename):
+	def doLoadDatabase(self, filename, quiet=False):
 		try:
+			print("Loading database: %s" % filename)
 			fi = QFileInfo(filename)
 			if not fi.exists() and self.db.isInMemory():
 				# Clone the in-memory DB to the new file
 				self.db.clone(filename)
 			self.db.open(filename)
 			self.worldUpdate()
-		except TsException as e:
-			QMessageBox.critical(self, "Laden fehlgeschlagen",
-					     "Laden fehlgeschlagen:\n" + str(e))
+		except Exception as e:
+			if not quiet:
+				QMessageBox.critical(self, "Laden fehlgeschlagen",
+						     "Laden fehlgeschlagen:\n" + str(e))
 			return False
 		return True
 
@@ -2016,8 +2019,8 @@ class MainWindow(QMainWindow):
 
 		self.setCentralWidget(MainWidget(self))
 
-	def loadDatabase(self, filename):
-		return self.centralWidget().doLoadDatabase(filename)
+	def loadDatabase(self, filename, quiet=False):
+		return self.centralWidget().doLoadDatabase(filename, quiet)
 
 	def __updateTitle(self):
 		title = "Zeitkonto"
@@ -2032,18 +2035,26 @@ class MainWindow(QMainWindow):
 	def closeEvent(self, e):
 		self.centralWidget().shutdown()
 
+def listdir(p):
+	try:
+		return os.listdir(p)
+	except Exception as e:
+		return []
+
 def main(argv):
 	print("Using PySide: %s" % usingPySide)
 	app = QApplication(argv)
 	mainwnd = MainWindow()
-	if len(argv) == 2:
+	if len(argv) == 2 and argv[1].strip():
 		if not mainwnd.loadDatabase(argv[1]):
 			return 1
 	else:
-		defaultDb = str(pathlib.Path.home() / ".timeshift.tmd")
-		if not mainwnd.loadDatabase(defaultDb):
-			print("Failed to load default DB: %s" % str(defaultDb),
-			      file=sys.stderr)
+		if not (listdir("/mnt/sdcard") and
+			mainwnd.loadDatabase("/mnt/sdcard/timeshift.tmd",
+					     quiet=True)):
+			dbPath = str(pathlib.Path.home() / ".timeshift.tmd")
+			if not mainwnd.loadDatabase(dbPath, quiet=True):
+				print("Failed to load default database.", file=sys.stderr)
 	mainwnd.show()
 	return app.exec_()
 
