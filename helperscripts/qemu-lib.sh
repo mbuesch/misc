@@ -278,7 +278,7 @@ run()
 
 	# Basic initialization
 	share_init
-	serial_init
+#	serial_init
 	kvm_init
 
 	# Parse command line options
