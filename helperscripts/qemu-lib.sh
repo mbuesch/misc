@@ -74,6 +74,8 @@ run_qemu()
 {
 	local bin="$qemu_binary"
 	echo "Running QEMU..."
+	"$bin" --version
+	echo ""
 	echo "$bin $*"
 	[ $opt_dryrun -eq 0 ] || return
 	if [ $opt_spice -eq 0 ]; then
