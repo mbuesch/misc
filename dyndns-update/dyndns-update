@@ -1,0 +1,117 @@
+#!/usr/bin/python3
+
+import cgi
+import configparser
+import secrets
+import sys
+
+CHRSET_NUM	= "0123456789"
+CHRSET_alpha	= "abcdefghijklmnopqrstuvwxyz"
+CHRSET_ALPHA	= CHRSET_alpha.upper()
+CHRSET_ALNUM	= CHRSET_NUM + CHRSET_alpha + CHRSET_ALPHA
+CHRSET_af	= "abcdef"
+CHRSET_AF	= CHRSET_af.upper()
+CHRSET_HEX	= CHRSET_NUM + CHRSET_af + CHRSET_AF
+
+class ConfigReader(object):
+	def __init__(self):
+		try:
+			self.__p = configparser.ConfigParser()
+			self.__p.read("/etc/dyndns-update.conf")
+		except configparser.Error as e:
+			raise Exception("Failed to parse config.")
+
+	def __get(self, section, option):
+		try:
+			return self.__p.get(section, option)
+		except configparser.Error as e:
+			raise Exception("Failed to parse config.")
+
+	def __getlist(self, section, optionbase):
+		try:
+			return [ v[1]
+				 for v in self.__p.items(section)
+				 if v[0].startswith(optionbase) ]
+		except configparser.Error as e:
+			raise Exception("Failed to parse config.")
+
+	@property
+	def targetdir(self):
+		return self.__get("BASE", "targetdir")
+
+	@property
+	def user(self):
+		return self.__get("CREDENTIALS", "user")
+
+	@property
+	def pw(self):
+		return self.__get("CREDENTIALS", "pw")
+
+	@property
+	def domains(self):
+		return self.__getlist("DOMAINS", "domain")
+
+def out(s=""):
+	print(s, "\r\n", file=sys.stdout, sep="", end="")
+
+def error(msg):
+#	out(msg)
+	raise Exception(msg)
+
+def update(conf, domain, ip4, ip6, ip6pfx):
+	if not all(c in CHRSET_ALNUM for c in domain):
+		return error("Invalid domain characters.")
+	with open(f"{conf.targetdir}/{domain}", "w") as f:
+		f.write(f"ip4={ip4}\n"
+		        f"ip6={ip6}\n"
+		        f"ip6pfx={ip6pfx}\n")
+	out("Ok.")
+	return 0
+
+def main():
+	out("Content-type: text/plain")
+	out()
+
+	conf = ConfigReader()
+	form = cgi.FieldStorage()
+
+	user = form.getfirst("user", "")
+	pw = form.getfirst("pw", "")
+
+	ok = bool(secrets.compare_digest(user, conf.user))
+	ok &= bool(secrets.compare_digest(pw, conf.pw))
+	if not ok:
+		return error("Invalid credentials.")
+
+	domain = form.getfirst("domain", "")
+	ip4 = form.getfirst("ip4", "")
+	ip6 = form.getfirst("ip6", "")
+	ip6pfx = form.getfirst("ip6pfx", "")
+
+	if (not domain or
+	    len(domain) > 64 or
+	    not all(c in CHRSET_ALNUM for c in domain)):
+		return error("Invalid domain.")
+
+	if domain not in conf.domains:
+		return error("Unknown domain.")
+
+	if (len(ip4) > (4*3)+3 or
+	    not all(c in (CHRSET_NUM + ".") for c in ip4)):
+		return error("Invalid ip4")
+
+	if (len(ip6) > (8*4)+7 or
+	    not all(c in (CHRSET_HEX + ":") for c in ip6)):
+		return error("Invalid ip6")
+
+	if (len(ip6pfx) > (8*4)+7+1+3 or
+	    not all(c in (CHRSET_HEX + ":/") for c in ip6pfx)):
+		return error("Invalid ip6pfx")
+
+	return update(conf=conf,
+		      domain=domain,
+		      ip4=ip4,
+		      ip6=ip6,
+		      ip6pfx=ip6pfx)
+
+sys.exit(main())
