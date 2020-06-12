@@ -1,8 +1,11 @@
 #!/usr/bin/python3
 
+import argparse
 import cgi
 import configparser
 import datetime
+import hashlib
+import pathlib
 import secrets
 import sys
 
@@ -15,10 +18,10 @@ CHRSET_AF	= CHRSET_af.upper()
 CHRSET_HEX	= CHRSET_NUM + CHRSET_af + CHRSET_AF
 
 class ConfigReader(object):
-	def __init__(self):
+	def __init__(self, path):
 		try:
 			self.__p = configparser.ConfigParser()
-			self.__p.read("/etc/dyndns-update.conf")
+			self.__p.read(path)
 		except configparser.Error as e:
 			raise Exception("Failed to parse config.")
 
@@ -26,7 +29,7 @@ class ConfigReader(object):
 		try:
 			return self.__p.get(section, option)
 		except configparser.Error as e:
-			raise Exception("Failed to parse config.")
+			raise Exception(f"Failed to parse config {section}/{option}.")
 
 	def __getlist(self, section, optionbase):
 		try:
@@ -34,7 +37,7 @@ class ConfigReader(object):
 				 for v in self.__p.items(section)
 				 if v[0].startswith(optionbase) ]
 		except configparser.Error as e:
-			raise Exception("Failed to parse config.")
+			raise Exception("Failed to parse config list {section}/{optionbase}.")
 
 	@property
 	def targetdir(self):
@@ -46,7 +49,17 @@ class ConfigReader(object):
 
 	@property
 	def pw(self):
-		return self.__get("CREDENTIALS", "pw")
+		fields = self.__get("CREDENTIALS", "pw").split(":")
+		try:
+			if fields[2] != "pbkdf2hmac":
+				raise ValueError
+			return (bytes.fromhex(fields[0]),	# password hash
+				bytes.fromhex(fields[1]),	# salt
+				fields[3].strip().lower(),	# kdf hash function
+				int(fields[4])			# kdf iterations
+			)
+		except (IndexError, ValueError) as e:
+			raise Exception(f"Failed to parse config CREDENTIALS/pw.")
 
 	@property
 	def domains(self):
@@ -70,19 +83,63 @@ def update(conf, domain, ip4, ip6, ip6pfx):
 	out("Ok.")
 	return 0
 
+def checkCredentials(conf, user, pw):
+	phashExp, salt, kdfHash, kdfIter = conf.pw
+	phashAct = hashlib.pbkdf2_hmac(hash_name=kdfHash,
+				       password=pw.encode("UTF-8"),
+				       salt=salt,
+				       iterations=kdfIter)
+	ok = bool(secrets.compare_digest(user, conf.user))
+	ok &= bool(secrets.compare_digest(phashAct, phashExp))
+	return ok
+
+def runAdminCmds(conf, args):
+	if args.hash_pw is not None:
+		salt = secrets.token_bytes(args.salt_bytes)
+		phash = hashlib.pbkdf2_hmac(hash_name=args.kdf_hash.lower(),
+					    password=args.hash_pw.encode("UTF-8"),
+					    salt=salt,
+					    iterations=args.kdf_iter)
+		print(f"pw="
+		      f"{phash.hex()}:"
+		      f"{salt.hex()}:"
+		      f"pbkdf2hmac:"
+		      f"{args.kdf_hash.lower()}:"
+		      f"{args.kdf_iter}")
+		return 0
+	return 1
+
 def main():
+	p = argparse.ArgumentParser()
+	p.add_argument("-c", "--config", type=pathlib.Path,
+		       default=pathlib.Path("/etc/dyndns-update.conf"),
+		       help="Path to configuration file.")
+	p.add_argument("-p", "--hash-pw", type=str,
+		       help="Hash a password string, then exit.")
+	p.add_argument("-H", "--kdf-hash", type=str,
+		       default="sha256",
+		       help="Hash function for --hash-pw.")
+	p.add_argument("-I", "--kdf-iter", type=int,
+		       default=1000,
+		       help="Number of KDF iterations for --hash-pw.")
+	p.add_argument("-S", "--salt-bytes", type=int,
+		       default=16,
+		       help="Number of salt bytes for --hash-pw.")
+	args = p.parse_args()
+
+	conf = ConfigReader(args.config)
+
+	if args.hash_pw is not None:
+		return runAdminCmds(conf=conf, args=args)
+
 	out("Content-type: text/plain")
 	out()
 
-	conf = ConfigReader()
 	form = cgi.FieldStorage()
 
 	user = form.getfirst("user", "")
 	pw = form.getfirst("pw", "")
-
-	ok = bool(secrets.compare_digest(user, conf.user))
-	ok &= bool(secrets.compare_digest(pw, conf.pw))
-	if not ok:
+	if not checkCredentials(conf=conf, user=user, pw=pw):
 		return error("Invalid credentials.")
 
 	domain = form.getfirst("domain", "")
