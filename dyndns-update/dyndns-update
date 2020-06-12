@@ -69,6 +69,9 @@ def out(s=""):
 	print(s, "\r\n", file=sys.stdout, sep="", end="")
 
 def error(msg):
+	out("Status: 500 Internal Server Error")
+	out() # End of headers.
+	out("Error.")
 #	out(msg)
 	raise Exception(msg)
 
@@ -80,6 +83,8 @@ def update(conf, domain, ip4, ip6, ip6pfx):
 		        f"ip6={ip6}\n"
 		        f"ip6pfx={ip6pfx}\n"
 			f"updated={datetime.datetime.now().isoformat()}\n")
+	out("Status: 200 Ok")
+	out() # End of headers.
 	out("Ok.")
 	return 0
 
@@ -133,7 +138,6 @@ def main():
 		return runAdminCmds(conf=conf, args=args)
 
 	out("Content-type: text/plain")
-	out()
 
 	form = cgi.FieldStorage()
 
