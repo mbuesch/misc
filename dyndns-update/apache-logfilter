@@ -1,0 +1,30 @@
+#!/usr/bin/python3
+
+import argparse
+import pathlib
+import re
+import sys
+
+re_pw = re.compile(r'(password|pw|pass|passw|passwd)=[^& \t\n]*')
+
+def filterLine(line):
+	line, n = re_pw.subn(r'\1=***', line, 0)
+	return line
+
+def main():
+	p = argparse.ArgumentParser()
+	p.add_argument("output", type=pathlib.Path,
+		       help="Output log file.")
+	args = p.parse_args()
+
+	with open(args.output, "ab") as outf:
+		while True:
+			line = sys.stdin.readline()
+			if not line:
+				break
+			line = filterLine(line)
+			outf.write(line.encode("UTF-8", "ignore"))
+			outf.flush()
+	return 0
+
+sys.exit(main())
