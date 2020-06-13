@@ -33,23 +33,17 @@ class ConfigReader(object):
 
 	def __getlist(self, section, optionbase):
 		try:
-			return [ v[1]
+			return [ (int(v[0].split("_")[-1]), v[1])
 				 for v in self.__p.items(section)
-				 if v[0].startswith(optionbase) ]
-		except configparser.Error as e:
-			raise Exception("Failed to parse config list {section}/{optionbase}.")
+				 if v[0].startswith(optionbase + "_") ]
+		except (configparser.Error, ValueError, IndexError) as e:
+			raise Exception(f"Failed to parse config list {section}/{optionbase}_.")
 
-	@property
-	def targetdir(self):
-		return self.__get("BASE", "targetdir")
+	def getUsers(self):
+		return self.__getlist("CREDENTIALS", "user")
 
-	@property
-	def user(self):
-		return self.__get("CREDENTIALS", "user")
-
-	@property
-	def pw(self):
-		fields = self.__get("CREDENTIALS", "pw").split(":")
+	def getPw(self, userIndex):
+		fields = self.__get("CREDENTIALS", f"pw_{userIndex}").split(":")
 		try:
 			if fields[2] != "pbkdf2hmac":
 				raise ValueError
@@ -59,11 +53,20 @@ class ConfigReader(object):
 				int(fields[4])			# kdf iterations
 			)
 		except (IndexError, ValueError) as e:
-			raise Exception(f"Failed to parse config CREDENTIALS/pw.")
+			raise Exception(f"Failed to parse config CREDENTIALS/pw_{index}.")
 
-	@property
-	def domains(self):
-		return self.__getlist("DOMAINS", "domain")
+	def getDomains(self, userIndex):
+		return self.__getlist(f"DOMAINS_user_{userIndex}", "domain")
+
+	def getDomainByName(self, userIndex, domain):
+		for confDomainIndex, confDomain in self.getDomains(userIndex=userIndex):
+			if confDomain == domain:
+				return confDomainIndex
+		return None
+
+	def getInfofile(self, userIndex, domainIndex):
+		return self.__get(f"DOMAINS_user_{userIndex}",
+				  f"infofile_domain_{domainIndex}")
 
 def out(s=""):
 	print(s, "\r\n", file=sys.stdout, sep="", end="")
@@ -75,11 +78,12 @@ def error(msg):
 #	out(msg)
 	raise Exception(msg)
 
-def update(conf, domain, ip4, ip6, ip6pfx):
-	if not all(c in CHRSET_ALNUM for c in domain):
-		return error("Invalid domain characters.")
-	with open(f"{conf.targetdir}/{domain}", "w") as f:
-		f.write(f"ip4={ip4}\n"
+def update(conf, userIndex, domainIndex, domain, ip4, ip6, ip6pfx):
+	infofile = conf.getInfofile(userIndex=userIndex,
+				    domainIndex=domainIndex)
+	with open(infofile, "w") as f:
+		f.write(f"domain={domain}\n"
+			f"ip4={ip4}\n"
 		        f"ip6={ip6}\n"
 		        f"ip6pfx={ip6pfx}\n"
 			f"updated={datetime.datetime.now().isoformat()}\n")
@@ -89,14 +93,21 @@ def update(conf, domain, ip4, ip6, ip6pfx):
 	return 0
 
 def checkCredentials(conf, user, pw):
-	phashExp, salt, kdfHash, kdfIter = conf.pw
-	phashAct = hashlib.pbkdf2_hmac(hash_name=kdfHash,
-				       password=pw.encode("UTF-8"),
-				       salt=salt,
-				       iterations=kdfIter)
-	ok = bool(secrets.compare_digest(user, conf.user))
-	ok &= bool(secrets.compare_digest(phashAct, phashExp))
-	return ok
+	ok = False
+
+	foundUserIndex = None
+	for confUserIndex, confUserName in conf.getUsers():
+		if secrets.compare_digest(confUserName, user):
+			foundUserIndex = confUserIndex
+
+	if foundUserIndex is not None:
+		phashExp, salt, kdfHash, kdfIter = conf.getPw(userIndex=foundUserIndex)
+		phashAct = hashlib.pbkdf2_hmac(hash_name=kdfHash,
+					       password=pw.encode("UTF-8"),
+					       salt=salt,
+					       iterations=kdfIter)
+		ok = secrets.compare_digest(phashAct, phashExp)
+	return ok, foundUserIndex
 
 def runAdminCmds(conf, args):
 	if args.hash_pw is not None:
@@ -105,8 +116,7 @@ def runAdminCmds(conf, args):
 					    password=args.hash_pw.encode("UTF-8"),
 					    salt=salt,
 					    iterations=args.kdf_iter)
-		print(f"pw="
-		      f"{phash.hex()}:"
+		print(f"{phash.hex()}:"
 		      f"{salt.hex()}:"
 		      f"pbkdf2hmac:"
 		      f"{args.kdf_hash.lower()}:"
@@ -141,9 +151,10 @@ def main():
 
 	form = cgi.FieldStorage()
 
-	user = form.getfirst("user", "")
-	pw = form.getfirst("pw", "")
-	if not checkCredentials(conf=conf, user=user, pw=pw):
+	ok, userIndex = checkCredentials(conf=conf,
+					 user=form.getfirst("user", ""),
+					 pw=form.getfirst("pw", ""))
+	if not ok:
 		return error("Invalid credentials.")
 
 	domain = form.getfirst("domain", "")
@@ -152,12 +163,9 @@ def main():
 	ip6pfx = form.getfirst("ip6pfx", "")
 
 	if (not domain or
-	    len(domain) > 64 or
-	    not all(c in CHRSET_ALNUM for c in domain)):
+	    len(domain) > 128 or
+	    not all(c in (CHRSET_ALNUM + ".-") for c in domain)):
 		return error("Invalid domain.")
-
-	if domain not in conf.domains:
-		return error("Unknown domain.")
 
 	if (len(ip4) > (4*3)+3 or
 	    not all(c in (CHRSET_NUM + ".") for c in ip4)):
@@ -171,7 +179,14 @@ def main():
 	    not all(c in (CHRSET_HEX + ":/") for c in ip6pfx)):
 		return error("Invalid ip6pfx")
 
+	domainIndex = conf.getDomainByName(userIndex=userIndex,
+					   domain=domain)
+	if domainIndex is None:
+		return error("Unknown domain.")
+
 	return update(conf=conf,
+		      userIndex=userIndex,
+		      domainIndex=domainIndex,
 		      domain=domain,
 		      ip4=ip4,
 		      ip6=ip6,
