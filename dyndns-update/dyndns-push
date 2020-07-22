@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+
+myip_url	= "https://YOUR_IP_FETCH_URL"
+dyndns_url	= "https://YOUR_DYNDNS_UPDATE_URL"
+dyndns_domain	= "EXAMPLE.COM"
+dyndns_user	= "USER"
+dyndns_pw	= "PASSWORD"
+v6netlen	= 64
+
+import subprocess
+import ipaddress
+
+def wget(url, v4=None):
+	args = ["wget", ]
+	if v4 is not None:
+		args.append("-4" if v4 else "-6")
+	args.extend(["--quiet", "-O", "-", url])
+	print(" ".join(args))
+	p = subprocess.Popen(args, stdout=subprocess.PIPE)
+	out, err = p.communicate()
+	if p.returncode != 0 or not out:
+		raise Exception("wget failed.")
+	return out.decode("UTF-8")
+
+def getfield(raw, name):
+	for line in raw.splitlines():
+		if line.startswith(name + "="):
+			return line[len(name) + 1 : ]
+	return ""
+
+raw_v4 = wget(myip_url, v4=True)
+raw_v6 = wget(myip_url, v4=False)
+
+ipv4 = getfield(raw_v4, "REMOTE_ADDR")
+ipv6 = getfield(raw_v6, "REMOTE_ADDR")
+if not ipv4 and not ipv6:
+	raise Exception("Got neither v4 nor v6 address.")
+
+dualstack = "1" if ipv4 and ipv6 else "0"
+if ipv6:
+	adr = int(ipaddress.ip_address(ipv6))
+	msk = ((1 << v6netlen) - 1) << (128 - v6netlen)
+	ipv6pfx = f"{ipaddress.ip_address(adr & msk)}/{v6netlen}"
+else:
+	ipv6pfx = ""
+
+r = wget(f"{dyndns_url}?"
+	 f"domain={dyndns_domain}&"
+	 f"user={dyndns_user}&"
+	 f"pw={dyndns_pw}&"
+	 f"ip4={ipv4}&"
+	 f"ip6={ipv6}&"
+	 f"ip6pfx={ipv6pfx}&"
+	 f"dualstack={dualstack}")
+print(f"result: {r.strip()}")
