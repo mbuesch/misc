@@ -1,0 +1,25 @@
+#!/bin/sh
+set -e
+apt install \
+	build-essential \
+	bwidget \
+	intltool \
+	libboost-python-dev \
+	libgl-dev \
+	libglib2.0-dev \
+	libglu-dev \
+	libgtk2.0-dev \
+	libmodbus-dev \
+	libreadline-dev \
+	libtk-img \
+	libudev-dev \
+	libusb-1.0-0-dev \
+	libxmu-dev \
+	pkg-config \
+	python-gtk2 \
+	python-tk \
+	python-yapps \
+	tcl-dev \
+	tclx \
+	tk-dev \
+	yapps2
