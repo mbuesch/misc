@@ -19,11 +19,6 @@
 #
 
 
-default_hook_required()
-{
-	die "ERROR: Must supply hook_$1()"
-}
-
 default_hook_pre_checkout()
 {
 	true
@@ -100,11 +95,17 @@ default_hook_testbuild()
 	if [ -x ./setup.py ]; then
 		./setup.py --no-user-cfg build
 	fi
+	if [ -r ./Cargo.toml ]; then
+		cargo build && cargo build --release
+	fi
 }
 
 default_hook_regression_tests()
 {
-	true
+	cd "$1"
+	if [ -r ./Cargo.toml ]; then
+		cargo test
+	fi
 }
 
 default_hook_pre_archive_signatures()
@@ -135,6 +136,16 @@ default_hook_pre_move_files()
 default_hook_post_move_files()
 {
 	true
+}
+
+default_hook_version()
+{
+	cd "$1"
+	if [ -r ./Cargo.toml ]; then
+		version="$(grep -Ee '^version\s+=\s+' ./Cargo.toml | head -n1 | cut -d'"' -f2)"
+	else
+		die "ERROR: Must supply hook_version()"
+	fi
 }
 
 default_hook_pre_pypi_upload()
@@ -177,7 +188,7 @@ hook_pre_tag()			{ default_hook_pre_tag "$@"; }
 hook_post_tag()			{ default_hook_post_tag "$@"; }
 hook_pre_move_files()		{ default_hook_pre_move_files "$@"; }
 hook_post_move_files()		{ default_hook_post_move_files "$@"; }
-hook_get_version()		{ default_hook_required get_version; }
+hook_get_version()		{ default_hook_version "$@"; }
 hook_pre_pypi_upload()		{ default_hook_pre_pypi_upload "$@"; }
 hook_post_pypi_upload()		{ default_hook_post_pypi_upload "$@"; }
 hook_pre_debian_packages()	{ default_hook_pre_debian_packages "$@"; }
