@@ -148,12 +148,12 @@ default_hook_version()
 	fi
 }
 
-default_hook_pre_pypi_upload()
+default_hook_pre_upload()
 {
 	true
 }
 
-default_hook_post_pypi_upload()
+default_hook_post_upload()
 {
 	true
 }
@@ -189,8 +189,8 @@ hook_post_tag()			{ default_hook_post_tag "$@"; }
 hook_pre_move_files()		{ default_hook_pre_move_files "$@"; }
 hook_post_move_files()		{ default_hook_post_move_files "$@"; }
 hook_get_version()		{ default_hook_version "$@"; }
-hook_pre_pypi_upload()		{ default_hook_pre_pypi_upload "$@"; }
-hook_post_pypi_upload()		{ default_hook_post_pypi_upload "$@"; }
+hook_pre_upload()		{ default_hook_pre_upload "$@"; }
+hook_post_upload()		{ default_hook_post_upload "$@"; }
 hook_pre_debian_packages()	{ default_hook_pre_debian_packages "$@"; }
 hook_post_debian_packages()	{ default_hook_post_debian_packages "$@"; }
 
@@ -504,7 +504,7 @@ make_archives()
 	done
 
 	# Handle Python build targets
-	[ $opt_upload -ne 0 ] && setup_py_targets="$setup_py_targets sdist_gz"
+	[ -f "./setup.py" ] && [ $opt_upload -ne 0 ] && setup_py_targets="$setup_py_targets sdist_gz"
 	if [ -n "$setup_py_targets" ]; then
 		cd "$checkout_dir" || die "Internal error: cd"
 		[ -x "./setup.py" ] ||\
@@ -564,24 +564,41 @@ make_documentation_archives()
 	execute_hook post_doc_archives "$archive_dir" "$checkout_dir"
 }
 
-make_pypi_upload()
+make_upload()
 {
 	[ $opt_upload -eq 0 ] && return
 
-	assert_program twine
+	if [ -f "$checkout_dir/setup.py" ]; then
+		# This is is a Python package.
+		assert_program twine
 
-	[ -n "$setup_py_targets" ] ||\
-		die "PyPi-upload requested, but no Python packages have been built."
+		[ -n "$setup_py_targets" ] ||\
+			die "PyPi-upload requested, but no Python packages have been built."
 
-	info "Uploading $setup_py_targets archives to PyPi"
+		info "Uploading $setup_py_targets archives to PyPi"
 
-	local py_archive_dir="$archive_dir/python"
-	execute_hook pre_pypi_upload "$checkout_dir" "$py_archive_dir"
+		local py_archive_dir="$archive_dir/python"
+		execute_hook pre_upload "$checkout_dir" "$py_archive_dir"
 
-	dry_run twine upload --repository pypi "$py_archive_dir"/*.tar.gz* ||\
-		die "twine upload failed"
+		dry_run twine upload --repository pypi "$py_archive_dir"/*.tar.gz* ||\
+			die "twine upload failed"
 
-	execute_hook post_pypi_upload "$checkout_dir" "$py_archive_dir"
+		execute_hook post_upload "$checkout_dir" "$py_archive_dir"
+	elif [ -f "$checkout_dir/Cargo.toml" ]; then
+		# This is a rust/cargo package.
+		assert_program cargo
+
+		cd "$checkout_dir" || die "Internal error: cd"
+		execute_hook pre_upload "$checkout_dir"
+
+		local dry=
+		is_dry_run && dry="--dry-run"
+		cargo publish $dry || die "cargo publish failed."
+
+		execute_hook post_upload "$checkout_dir"
+	else
+		die "upload: Unknown package format."
+	fi
 }
 
 make_testbuild()
@@ -714,8 +731,8 @@ help()
 	echo "                                             py-bdist, py-bdist-wininst,"
 	echo "                                             py-bdist-dumb, py-bdist-rpm"
 	echo "  -d|--no-debian        Do not build Debian packages."
-	echo "  -U|--upload           Upload the archives to PyPi"
-	echo "  -O|--upload-only      Run the bare minimum to upload to PyPi only"
+	echo "  -U|--upload           Upload the archives to PyPi or crates.io"
+	echo "  -O|--upload-only      Run the bare minimum to upload only."
 	echo "                        Equivalent to: -U -t -b -T -d"
 	echo "  -V|--extraversion XX  Append XX to version string"
 	echo "  -K|--keep-tmp         Do not delete temporary files"
@@ -845,7 +862,7 @@ makerelease()
 	make_debian_packages
 	make_archive_signatures
 	make_tag
-	make_pypi_upload
+	make_upload
 	move_files
 	cleanup
 }
