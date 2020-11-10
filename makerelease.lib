@@ -401,6 +401,7 @@ make_documentation()
 	info "Creating documentation"
 
 	assert_program markdown "markdown to HTML converter"
+	assert_program pandoc "pandoc converter"
 	python3 -m readme_renderer -h >/dev/null 2>&1 ||\
 		die "'python3 -m readme_renderer' is not installed."
 
@@ -413,12 +414,24 @@ make_documentation()
 		docname="$(basename "$md" .md)" ;
 		dir="$(dirname "$md")" ;
 		html="$dir/$docname.html" ;
-		echo "generating $docname ..." ;
+		echo "generating $docname.html ..." ;
 		echo "<!DOCTYPE html><html><head><meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\"></head><body>" > "$html" ;
 		markdown "$md" >> "$html" ;
 		echo "</body></html>" >> "$html" ;
 		' \; ||\
-		die "Failed to create markdown documentation"
+		die "Failed to convert markdown -> html"
+
+	# Build reStructuredText -> markdown
+	find "$checkout_dir" -name '*.rst' \
+		-exec sh -c '
+		rst="{}" ;
+		docname="$(basename "$rst" .rst)" ;
+		dir="$(dirname "$rst")" ;
+		md="$dir/$docname.md" ;
+		echo "generating $docname.md ..." ;
+		pandoc -s -o "$md" "$rst" ;
+		' \; ||\
+		die "Failed to convert reStructuredText -> markdown"
 
 	# Build reStructuredText -> html
 	find "$checkout_dir" -name '*.rst' \
@@ -427,10 +440,10 @@ make_documentation()
 		docname="$(basename "$rst" .rst)" ;
 		dir="$(dirname "$rst")" ;
 		html="$dir/$docname.html" ;
-		echo "generating $docname ..." ;
+		echo "generating $docname.html ..." ;
 		python3 -m readme_renderer -o "$html" "$rst" ;
 		' \; ||\
-		die "Failed to create reStructuredText documentation"
+		die "Failed to convert reStructuredText -> html"
 
 	execute_hook post_documentation "$checkout_dir"
 }
