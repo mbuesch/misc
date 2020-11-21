@@ -1,13 +1,13 @@
 #!/bin/sh
 #
 # Workaround for certain power management misfeatures of some harddisks
-# Copyright (c) 2012-2015 Michael Buesch <m@bues.ch>
+# Copyright (c) 2012-2020 Michael Buesch <m@bues.ch>
 # Licensed for any use.
 #
 
 # Regular expression of affected harddisk models
 # This regex matches on /sys/block/DISK/device/model
-models='(^EZRX)|(^HDS5C)|(^DT01ACA)'
+models='(^EZRX)|(^HDS5C)|(^DT01ACA)|(2CX188)'
 
 
 block="$(hexdump -n 2 -e '/2 "%u"' /dev/urandom)"
