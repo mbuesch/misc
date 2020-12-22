@@ -238,11 +238,12 @@ usage()
 	echo " -P|--pci-device 00:00.0     Forward PCI device at 00:00.0"
 	echo " -T|--tap                    Set up a tap to the default host bridge"
 	echo " -S|--screens 1|2            Number of screens. Default: 1"
+	echo " -j|--cores 1                Number of CPU cores. Default: 1"
 }
 
 # Global variables:
 #  basedir, image, qemu_opts, rtc, qemu_binary, spice_host, spice_port,
-#  opt_ram, opt_netrestrict
+#  opt_ram, opt_netrestrict, opt_...
 run()
 {
 	[ -n "$basedir" ] || die "No basedir specified"
@@ -267,6 +268,7 @@ run()
 	[ -n "$opt_mouse" ] || opt_mouse=usbtablet
 	[ -n "$opt_usetap" ] || opt_usetap=0
 	[ -n "$opt_screens" ] || opt_screens=1
+	[ -n "$opt_cores" ] || opt_cores=1
 
 	# Variable defaults
 	local spice_opt=
@@ -340,6 +342,10 @@ run()
 			shift
 			opt_screens="$1"
 			;;
+		-j|--cores)
+			shift
+			opt_cores="$1"
+			;;
 		--)
 			end=1
 			;;
@@ -402,6 +408,7 @@ run()
 		-vga qxl \
 		$screen_opt \
 		$rtc \
+		-smp cores="$opt_cores" \
 		$qemu_opts \
 		"$@"
 	run_spice_client
