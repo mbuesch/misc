@@ -31,9 +31,9 @@ def clearscreen():
 
 def filterPlayers(options, players):
 	if options.filterLeft:
-		players = filter(lambda p: not p.disconnectedInGame, players)
+		players = [p for p in players if not p.disconnectedInGame]
 	if options.filterJoinIG:
-		players = filter(lambda p: not p.connectedInGame, players)
+		players = [p for p in players if not p.connectedInGame]
 	return players
 
 class Options(object):
@@ -77,13 +77,13 @@ class PlayerEvents(object):
 		self.players.setdefault(player, []).append(event)
 
 	def countAll(self):
-		return sum([ len(evs) for evs in self.players.values() ])
+		return sum(len(evs) for evs in self.players.values())
 
 	def countFor(self, player):
 		return len(self.players[player])
 
 	def getPlayersUnfiltered(self):
-		return self.players.keys()
+		return list(self.players.keys())
 
 	def getPlayers(self):
 		return filterPlayers(self.options, self.getPlayersUnfiltered())
@@ -270,7 +270,7 @@ class Game(object):
 		return self.player(name)
 
 	def getPlayersUnfiltered(self):
-		return self.players.values()
+		return list(self.players.values())
 
 	def getPlayers(self):
 		return filterPlayers(self.options, self.getPlayersUnfiltered())
@@ -336,7 +336,7 @@ class Parser(object):
 				if self.options.liveUpdate:
 					sys.stdout.write(self.generateStats())
 					sys.stdout.flush()
-			except (Warn), e:
+			except Warn as e:
 				print("Warning: " + str(e))
 		stats = self.generateStats()
 		if stats:
@@ -390,7 +390,7 @@ class Parser(object):
 				year=int(m.group(1)), month=int(m.group(2)), day=int(m.group(3)),
 				hour=int(m.group(4)), minute=int(m.group(5)), second=int(m.group(6)),
 				microsecond=int(m.group(7)))
-		except (IndexError, ValueError), e:
+		except (IndexError, ValueError) as e:
 			raise Error("Parser: Invalid timestamp")
 		return line, stamp
 
@@ -400,7 +400,7 @@ class Parser(object):
 			m = re_iso_timestamp.match(line[0:ISO_TIMESTAMP_LEN])
 			if m:
 				return True
-		except (IndexError), e:
+		except IndexError as e:
 			pass
 		return False
 
@@ -422,9 +422,12 @@ class FragGraph(object):
 	def __genEdge(self, player, fraggedPlayer, nrFrags, maxPerTargetKillCnt,
 		      color="#000000"):
 		assert(nrFrags <= maxPerTargetKillCnt)
-		arrowSize = ((float(nrFrags) / maxPerTargetKillCnt) * self.ARROW_SCALE) +\
-			self.ARROW_BASE
-		penWidth = max(1, ((float(nrFrags) / maxPerTargetKillCnt) * self.PEN_SCALE))
+		if maxPerTargetKillCnt != 0:
+			arrowSize = ((nrFrags / maxPerTargetKillCnt) * self.ARROW_SCALE) + self.ARROW_BASE
+			penWidth = max(1, ((nrFrags / maxPerTargetKillCnt) * self.PEN_SCALE))
+		else:
+			arrowSize = self.ARROW_BASE
+			penWidth = 1
 		edgeWeight = float(nrFrags) * self.WEIGHT_SCALE
 		self.g.add_edge(self.__p2n(player),
 				self.__p2n(fraggedPlayer),
@@ -460,8 +463,10 @@ class FragGraph(object):
 		# Create all nodes
 		for player in self.game.getPlayers():
 			nrFrags = player.getNrFrags()
-			fontsize = ((float(nrFrags) / maxNrFrags) * self.NAME_SCALE) +\
-				self.NAME_BASE
+			if maxNrFrags != 0:
+				fontsize = ((nrFrags / maxNrFrags) * self.NAME_SCALE) + self.NAME_BASE
+			else:
+				fontsize = self.NAME_BASE
 			self.g.add_node(self.__p2n(player),
 					margin="0.2, 0.1",
 					fontsize=int(round(fontsize)))
@@ -500,7 +505,7 @@ def writeRawLog(directory, line):
 				name = "%s/%s-%03d.log" % (directory, datestr, count)
 				try:
 					open(name, "r").close()
-				except IOError, e:
+				except IOError as e:
 					if e.errno == errno.ENOENT:
 						break
 				if count >= 999:
@@ -509,7 +514,7 @@ def writeRawLog(directory, line):
 			rawlogfile = open(name, "w")
 		rawlogfile.write(line)
 		rawlogfile.flush()
-	except IOError, e:
+	except IOError as e:
 		raise Warn("Failed to write logfile: %s" % str(e))
 
 def closeRawLog():
@@ -578,7 +583,7 @@ def genericMain(scriptname, usageinfo, parserClass):
 		else:
 			options.liveUpdate = True
 			parserClass(options).parseFile(sys.stdin)
-	except (Warn, Error), e:
+	except (Warn, Error) as e:
 		print("Exception: " + str(e))
 		return 1
 	return 0
