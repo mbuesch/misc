@@ -1,0 +1,2 @@
+# m h dom mon dow user  command
+26 * * * * root /usr/local/bin/my-unattended-upgrade

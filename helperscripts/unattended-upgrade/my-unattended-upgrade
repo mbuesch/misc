@@ -1,0 +1,3 @@
+#!/bin/sh
+/usr/bin/apt update
+/usr/bin/unattended-upgrade
