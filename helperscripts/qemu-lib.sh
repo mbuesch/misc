@@ -239,6 +239,7 @@ usage()
 	echo " -T|--tap                    Set up a tap to the default host bridge"
 	echo " -S|--screens 1|2            Number of screens. Default: 1"
 	echo " -j|--cores 1                Number of CPU cores. Default: 1"
+	echo " -H|--host-cpu               Host CPU feature passthrough (for nested virt)."
 }
 
 # Global variables:
@@ -269,6 +270,7 @@ run()
 	[ -n "$opt_usetap" ] || opt_usetap=0
 	[ -n "$opt_screens" ] || opt_screens=1
 	[ -n "$opt_cores" ] || opt_cores=1
+	[ -n "$opt_hostcpu" ] || opt_hostcpu=0
 
 	# Variable defaults
 	local spice_opt=
@@ -346,6 +348,10 @@ run()
 			shift
 			opt_cores="$1"
 			;;
+		-H|--host-cpu)
+			shift
+			opt_hostcpu=1
+			;;
 		--)
 			end=1
 			;;
@@ -392,9 +398,16 @@ run()
 		die "Invalid screen selection"
 	fi
 
+	if [ "$opt_hostcpu" = "1" ]; then
+		local cpu_opt="-cpu host"
+	else
+		local cpu_opt=
+	fi
+
 	run_qemu \
 		-name "$(basename "$image")" \
 		$kvm_opt \
+		$cpu_opt \
 		$spice_opt \
 		-m "$opt_ram" \
 		-drive file="$image",index=0,format="$image_format",discard=on,media=disk \
