@@ -1,4 +1,0 @@
-#!/bin/sh
-
-cmd="$(zenity --title="Run command" --text="Run command:" --entry)"
-exec $cmd

@@ -1,3 +1,0 @@
-#!/bin/sh
-
-exec xlock -mode blank +echokeys -grabmouse -grabserver -mousemotion -dpmsstandby 0 -dpmssuspend 0 -dpmsoff 0
