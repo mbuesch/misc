@@ -596,6 +596,8 @@ make_upload()
 
 		local py_archive_dir="$archive_dir/python"
 		execute_hook pre_upload "$checkout_dir" "$py_archive_dir"
+		twine check "$py_archive_dir"/*.tar.gz* ||\
+			die "twine check failed"
 		dry_run twine upload --repository pypi "$py_archive_dir"/*.tar.gz* ||\
 			die "twine upload failed"
 		execute_hook post_upload "$checkout_dir" "$py_archive_dir"
