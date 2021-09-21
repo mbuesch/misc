@@ -230,6 +230,12 @@ info()
 	echo "--- $*"
 }
 
+# $*=message
+warn()
+{
+	echo "--- WARNING: $*" >&2
+}
+
 is_dry_run()
 {
 	[ $opt_dryrun -ne 0 ]
@@ -348,7 +354,7 @@ make_debian_packages()
 
 	info "Creating Debian packages"
 	have_program debuild || {
-		info "WARNING: No 'debuild' available. Skipping Debian build."
+		warn "No 'debuild' available. Skipping Debian build."
 		return
 	}
 	grep -qe quilt "$checkout_dir/debian/source/format" &&\
