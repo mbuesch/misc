@@ -3,6 +3,7 @@
 which cargo >/dev/null 2>&1 || { echo "Error: cargo not found." >&2; exit 1; }
 
 for pkg in $(cargo install --list | grep '^[^[:space:]]' | awk '{print $1}'); do
+	printf '\nUpdating %s\n' "$pkg"
 	cargo install "$pkg" || exit 1
 done
 
