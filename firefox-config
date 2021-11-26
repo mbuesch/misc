@@ -3,6 +3,7 @@ Firefox about:config settings:
 browser.newtab.url				;about:blank
 browser.newtabpage.enabled			;false
 browser.pocket.enabled				;false
+browser.privatebrowsing.autostart		;false
 browser.safebrowsing.downloads.enabled		;false
 browser.safebrowsing.downloads.remote.enabled	;false
 browser.safebrowsing.enabled			;false
@@ -19,10 +20,10 @@ browser.urlbar.suggest.history			;false
 browser.urlbar.suggest.openpage			;false
 browser.urlbar.trimURLs				;false
 geo.enabled					;false
+media.autoplay.allow-muted			;false
 media.autoplay.default				;1
 media.autoplay.enabled				;false
 media.autoplay.enabled.user-gestures-needed	;false
-media.autoplay.allow-muted			;false
 network.dns.disablePrefetch			;true
 network.http.referer.XOriginPolicy		;2
 network.prefetch-next				;false
@@ -30,4 +31,3 @@ network.trr.mode				;0
 places.history.enabled				;false
 reader.parse-on-load.enabled			;false
 security.dialog_enable_delay			;300
-webgl.disabled					;true
