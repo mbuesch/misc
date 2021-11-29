@@ -113,7 +113,7 @@ apt-get clean || die "Clean failed"
 
 if command -v flatpak >/dev/null 2>&1; then
 	info "Updating flatpaks"
-	flatpak update --noninteractive || die "my-flatpak-update failed"
+	flatpak update || die "flatpak update failed"
 fi
 
 exit 0
