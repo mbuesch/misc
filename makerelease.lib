@@ -562,32 +562,42 @@ make_archives()
 		for target in $setup_py_targets; do
 			info "Building Python $target-package"
 			local opts=
+			local setup_target="$target"
+			local doit=0
 			if [ "$target" = "bdist_wininst" ]; then
 				[ $have_bdist_wininst -ne 0 ] && continue
 				local have_bdist_wininst=1
 				local opts="--plat-name win32"
+				local doit=1
 			elif [ "$target" = "sdist" -o "$target" = "sdist_gz" ]; then
 				[ $have_sdist -ne 0 ] && continue
 				local have_sdist=1
-				local target="sdist"
+				local setup_target="sdist"
 				local opts="--formats=gztar --owner=root --group=root"
+				local doit=1
 			elif [ "$target" = "sdist_bz2" ]; then
 				[ $have_sdist_bz2 -ne 0 ] && continue
 				local have_sdist_bz2=1
-				local target="sdist"
+				local setup_target="sdist"
 				local opts="--formats=bztar --owner=root --group=root"
+				local doit=1
 			elif [ "$target" = "sdist_xz" ]; then
 				[ $have_sdist_xz -ne 0 ] && continue
 				local have_sdist_xz=1
-				local target="sdist"
+				local setup_target="sdist"
 				local opts="--formats=xztar --owner=root --group=root"
+				local doit=1
 			elif [ "$target" = "sdist_zip" ]; then
 				[ $have_sdist_zip -ne 0 ] && continue
 				local have_sdist_zip=1
-				local target="sdist"
+				local setup_target="sdist"
 				local opts="--formats=zip"
+				local doit=1
 			fi
-			./setup.py --no-user-cfg "$target" $opts || die "Failed to build Python archive"
+			if [ $doit -ne 0 ]; then
+				./setup.py --no-user-cfg "$setup_target" $opts ||\
+					die "Failed to build Python archive"
+			fi
 		done
 		mv ./dist/* "$archive_dir/python/" || die "Failed to move Python archives"
 		rmdir ./dist/ || die "Failed to delete ./dist/"
