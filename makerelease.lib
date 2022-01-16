@@ -436,7 +436,7 @@ _gendoc_rst_html()
 	local dir="$(dirname "$rst")"
 	local html="$dir/$docname.html"
 
-	echo "Generating $docname,rst -> $docname.html ..."
+	echo "Generating $docname.rst -> $docname.html ..."
 	python3 -m readme_renderer -o "$html" "$rst" ||\
 		die "Failed to convert reStructuredText -> html"
 }
@@ -454,26 +454,26 @@ make_documentation()
 
 	execute_hook pre_documentation "$checkout_dir"
 
-	# Build markdown -> html
+	local old_IFS="$IFS"
 	IFS='
 '
+
+	# Build markdown -> html
 	for file in $(find "$checkout_dir" -name '*.md'); do
 		_gendoc_md_html "$file"
 	done
 
 	# Build reStructuredText -> markdown
-	IFS='
-'
 	for file in $(find "$checkout_dir" -name '*.rst'); do
 		_gendoc_rst_md "$file"
 	done
 
 	# Build reStructuredText -> html
-	IFS='
-'
 	for file in $(find "$checkout_dir" -name '*.rst'); do
 		_gendoc_rst_html "$file"
 	done
+
+	IFS="$old_IFS"
 
 	execute_hook post_documentation "$checkout_dir"
 }
