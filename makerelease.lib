@@ -400,6 +400,47 @@ make_debian_packages()
 	execute_hook post_debian_packages "$debuild_dir" "$deb_archive_dir"
 }
 
+_gendoc_md_html()
+{
+	local md="$1"
+
+	local docname="$(basename "$md" .md)"
+	local dir="$(dirname "$md")"
+	local html="$dir/$docname.html"
+
+	echo "Generating $docname.md -> $docname.html ..."
+	echo "<!DOCTYPE html><html><head><meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\"></head><body>" > "$html"
+	markdown "$md" >> "$html" ||\
+		die "Failed to convert markdown -> html"
+	echo "</body></html>" >> "$html"
+}
+
+_gendoc_rst_md()
+{
+	local rst="$1"
+
+	local docname="$(basename "$rst" .rst)"
+	local dir="$(dirname "$rst")"
+	local md="$dir/$docname.md"
+
+	echo "Generating $docname.rst -> $docname.md ..."
+	pandoc -s -o "$md" "$rst" ||\
+		die "Failed to convert reStructuredText -> markdown"
+}
+
+_gendoc_rst_html()
+{
+	local rst="$1"
+
+	local docname="$(basename "$rst" .rst)"
+	local dir="$(dirname "$rst")"
+	local html="$dir/$docname.html"
+
+	echo "Generating $docname,rst -> $docname.html ..."
+	python3 -m readme_renderer -o "$html" "$rst" ||\
+		die "Failed to convert reStructuredText -> html"
+}
+
 make_documentation()
 {
 	[ $opt_nodoc -eq 0 ] || return
@@ -414,42 +455,25 @@ make_documentation()
 	execute_hook pre_documentation "$checkout_dir"
 
 	# Build markdown -> html
-	find "$checkout_dir" -name '*.md' \
-		-exec sh -c '
-		md="{}" ;
-		docname="$(basename "$md" .md)" ;
-		dir="$(dirname "$md")" ;
-		html="$dir/$docname.html" ;
-		echo "generating $docname.html ..." ;
-		echo "<!DOCTYPE html><html><head><meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\"></head><body>" > "$html" ;
-		markdown "$md" >> "$html" ;
-		echo "</body></html>" >> "$html" ;
-		' \; ||\
-		die "Failed to convert markdown -> html"
+	IFS='
+'
+	for file in $(find "$checkout_dir" -name '*.md'); do
+		_gendoc_md_html "$file"
+	done
 
 	# Build reStructuredText -> markdown
-	find "$checkout_dir" -name '*.rst' \
-		-exec sh -c '
-		rst="{}" ;
-		docname="$(basename "$rst" .rst)" ;
-		dir="$(dirname "$rst")" ;
-		md="$dir/$docname.md" ;
-		echo "generating $docname.md ..." ;
-		pandoc -s -o "$md" "$rst" ;
-		' \; ||\
-		die "Failed to convert reStructuredText -> markdown"
+	IFS='
+'
+	for file in $(find "$checkout_dir" -name '*.rst'); do
+		_gendoc_rst_md "$file"
+	done
 
 	# Build reStructuredText -> html
-	find "$checkout_dir" -name '*.rst' \
-		-exec sh -c '
-		rst="{}" ;
-		docname="$(basename "$rst" .rst)" ;
-		dir="$(dirname "$rst")" ;
-		html="$dir/$docname.html" ;
-		echo "generating $docname.html ..." ;
-		python3 -m readme_renderer -o "$html" "$rst" ;
-		' \; ||\
-		die "Failed to convert reStructuredText -> html"
+	IFS='
+'
+	for file in $(find "$checkout_dir" -name '*.rst'); do
+		_gendoc_rst_html "$file"
+	done
 
 	execute_hook post_documentation "$checkout_dir"
 }
