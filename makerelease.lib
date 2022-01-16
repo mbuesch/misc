@@ -1,7 +1,7 @@
 #
 # Release script library
 #
-# Copyright (c) 2012-2020 Michael Buesch <m@bues.ch>
+# Copyright (c) 2012-2022 Michael Buesch <m@bues.ch>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -281,6 +281,11 @@ execute_hook()
 	}
 }
 
+maketemp()
+{
+	mktemp --tmpdir="$tmpdir" "makerelease-tmpfile.XXXXXXXX"
+}
+
 detect_repos_type()
 {
 	[ -z "$repos_type" -a -d "$srcdir/.git" ] && repos_type=git
@@ -407,12 +412,17 @@ _gendoc_md_html()
 	local docname="$(basename "$md" .md)"
 	local dir="$(dirname "$md")"
 	local html="$dir/$docname.html"
+	local tmpfile="$(maketemp)"
 
 	echo "Generating $docname.md -> $docname.html ..."
-	echo "<!DOCTYPE html><html><head><meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\"></head><body>" > "$html"
-	markdown "$md" >> "$html" ||\
+	sed -e 's|\.md)|.html)|g' "$md" > "$tmpfile" ||\
+		die "Failed to update links during markdown -> html"
+	echo "<!DOCTYPE html><html><head><meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\"></head><body>" > "$html" ||\
 		die "Failed to convert markdown -> html"
-	echo "</body></html>" >> "$html"
+	markdown "$tmpfile" >> "$html" ||\
+		die "Failed to convert markdown -> html"
+	echo "</body></html>" >> "$html" ||\
+		die "Failed to convert markdown -> html"
 }
 
 _gendoc_rst_md()
@@ -422,9 +432,12 @@ _gendoc_rst_md()
 	local docname="$(basename "$rst" .rst)"
 	local dir="$(dirname "$rst")"
 	local md="$dir/$docname.md"
+	local tmpfile="$(maketemp)"
 
 	echo "Generating $docname.rst -> $docname.md ..."
-	pandoc -s -o "$md" "$rst" ||\
+	sed -e 's|\.rst>`_|.md>`_|g' "$rst" > "$tmpfile" ||\
+		die "Failed to update links during reStructuredText -> markdown"
+	pandoc -s -o "$md" "$tmpfile" ||\
 		die "Failed to convert reStructuredText -> markdown"
 }
 
@@ -435,9 +448,12 @@ _gendoc_rst_html()
 	local docname="$(basename "$rst" .rst)"
 	local dir="$(dirname "$rst")"
 	local html="$dir/$docname.html"
+	local tmpfile="$(maketemp)"
 
 	echo "Generating $docname.rst -> $docname.html ..."
-	python3 -m readme_renderer -o "$html" "$rst" ||\
+	sed -e 's|\.rst>`_|.html>`_|g' "$rst" > "$tmpfile" ||\
+		die "Failed to update links during reStructuredText -> html"
+	python3 -m readme_renderer -o "$html" "$tmpfile" ||\
 		die "Failed to convert reStructuredText -> html"
 }
 
