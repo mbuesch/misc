@@ -283,7 +283,9 @@ execute_hook()
 
 maketemp()
 {
-	mktemp --tmpdir="$tmpdir" "makerelease-tmpfile.XXXXXXXX"
+	local suffix="$1"
+
+	mktemp --suffix="$suffix" --tmpdir="$tmpdir" "makerelease-tmpfile.XXXXXXXX"
 }
 
 detect_repos_type()
@@ -412,7 +414,7 @@ _gendoc_md_html()
 	local docname="$(basename "$md" .md)"
 	local dir="$(dirname "$md")"
 	local html="$dir/$docname.html"
-	local tmpfile="$(maketemp)"
+	local tmpfile="$(maketemp .md)"
 
 	echo "Generating $docname.md -> $docname.html ..."
 	sed -e 's|\.md)|.html)|g' "$md" > "$tmpfile" ||\
@@ -432,7 +434,7 @@ _gendoc_rst_md()
 	local docname="$(basename "$rst" .rst)"
 	local dir="$(dirname "$rst")"
 	local md="$dir/$docname.md"
-	local tmpfile="$(maketemp)"
+	local tmpfile="$(maketemp .rst)"
 
 	echo "Generating $docname.rst -> $docname.md ..."
 	sed -e 's|\.rst>`_|.md>`_|g' "$rst" > "$tmpfile" ||\
@@ -448,7 +450,7 @@ _gendoc_rst_html()
 	local docname="$(basename "$rst" .rst)"
 	local dir="$(dirname "$rst")"
 	local html="$dir/$docname.html"
-	local tmpfile="$(maketemp)"
+	local tmpfile="$(maketemp .rst)"
 
 	echo "Generating $docname.rst -> $docname.html ..."
 	sed -e 's|\.rst>`_|.html>`_|g' "$rst" > "$tmpfile" ||\
