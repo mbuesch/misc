@@ -240,6 +240,7 @@ usage()
 	echo " -S|--screens 1|2            Number of screens. Default: 1"
 	echo " -j|--cores 1                Number of CPU cores. Default: 1"
 	echo " -H|--host-cpu               Host CPU feature passthrough (for nested virt)."
+	echo " -F|--vvfat DIR              Enable virtual VFAT drive."
 }
 
 # Global variables:
@@ -271,6 +272,7 @@ run()
 	[ -n "$opt_screens" ] || opt_screens=1
 	[ -n "$opt_cores" ] || opt_cores=1
 	[ -n "$opt_hostcpu" ] || opt_hostcpu=0
+	[ -n "$opt_vvfat" ] || opt_vvfat=
 
 	# Variable defaults
 	local spice_opt=
@@ -349,8 +351,11 @@ run()
 			opt_cores="$1"
 			;;
 		-H|--host-cpu)
-			shift
 			opt_hostcpu=1
+			;;
+		-F|--vvfat)
+			shift
+			opt_vvfat="$1"
 			;;
 		--)
 			end=1
@@ -404,6 +409,12 @@ run()
 		local cpu_opt=
 	fi
 
+	if [ -n "$opt_vvfat" ]; then
+		local vvfat_opt="-drive file=fat:rw:$opt_vvfat,format=raw"
+	else
+		local vvfat_opt=
+	fi
+
 	run_qemu \
 		-name "$(basename "$image")" \
 		$kvm_opt \
@@ -414,6 +425,7 @@ run()
 		-boot c \
 		$net0_conf \
 		$net1_conf \
+		$vvfat_opt \
 		-usb \
 		$usbdevice_opt \
 		$serial_opt \
