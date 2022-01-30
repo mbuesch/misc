@@ -135,16 +135,29 @@ kvm_init()
 	fi
 }
 
+# Convert vendor:device to bus:dev
+usb_vendor_to_dev()
+{
+	local ids="$1"
+
+	local lsusb_string="$(lsusb | grep -e "$ids" | head -n1)"
+	if [ -n "$lsusb_string" ]; then
+		local busnr="$(echo "$lsusb_string" | awk '{print $2;}')"
+		local devnr="$(echo "$lsusb_string" | awk '{print $4;}' | cut -d':' -f1)"
+
+		printf '%s:%s' "$busnr" "$devnr"
+	fi
+}
+
 # $1="vendor:device"
 host_usb_id_prepare()
 {
 	local ids="$1"
 
-	local lsusb_string="$(lsusb | grep -e "$ids" | head -n1)"
-	[ -n "$lsusb_string" ] ||\
-		die "USB device $ids not found"
-	local busnr="$(echo "$lsusb_string" | awk '{print $2;}')"
-	local devnr="$(echo "$lsusb_string" | awk '{print $4;}' | cut -d':' -f1)"
+	local bus_dev="$(usb_vendor_to_dev "$ids")"
+	[ -n "$bus_dev" ] || die "USB device $ids not found"
+	local busnr="$(printf '%s' "$bus_dev" | cut -f1 -d:)"
+	local devnr="$(printf '%s' "$bus_dev" | cut -f2 -d:)"
 	echo "Found USB device $ids on $busnr:$devnr"
 
 	echo "Changing device permissions..."
@@ -321,7 +334,11 @@ run()
 			local ids="$1"
 
 			host_usb_id_prepare "$ids"
-			usbdevice_opt="$usbdevice_opt -usbdevice host:$ids"
+			local bus_dev="$(usb_vendor_to_dev "$ids")"
+			[ -n "$bus_dev" ] || die "USB device $ids not found"
+			local busnr="$(printf '%s' "$bus_dev" | cut -f1 -d: | sed 's/^[0]*//')"
+			local devnr="$(printf '%s' "$bus_dev" | cut -f2 -d: | sed 's/^[0]*//')"
+			usbdevice_opt="$usbdevice_opt -device usb-host,hostbus=$busnr,hostaddr=$devnr"
 			;;
 		-p|--pci-id)
 			shift
