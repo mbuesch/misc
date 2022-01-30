@@ -10,7 +10,7 @@ apt install \
 	libglu-dev \
 	libgtk2.0-dev \
 	libmodbus-dev \
-	libreadline-dev \
+	libreadline-gplv2-dev \
 	libtk-img \
 	libudev-dev \
 	libusb-1.0-0-dev \
