@@ -1,8 +1,8 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
  *   74HC4094 data sniffer
  *
- *   Copyright (C) 2010 Michael Buesch <mb@bu3sch.de>
+ *   Copyright (C) 2010-2022 Michael Buesch <m@bues.ch>
  *
  *   This program is free software; you can redistribute it and/or
  *   modify it under the terms of the GNU General Public License
@@ -18,45 +18,46 @@ import getopt
 import sys
 import time
 try:
-	from serial.serialposix import *
+	from serial import *
 except ImportError:
-	print "ERROR: pyserial module not available."
-	print "On Debian Linux please do:  apt-get install python-serial"
+	print("ERROR: pyserial module not available.", file=sys.stderr)
+	print("On Debian Linux please do:  apt-get install python3-serial", file=sys.stderr)
 	sys.exit(1)
 
 
 # Serial port config
-SERIAL_BAUDRATE			= 115200
-SERIAL_BYTESIZE			= 8
-SERIAL_PARITY			= PARITY_NONE
-SERIAL_STOPBITS			= 1
+SERIAL_BAUDRATE		= 115200
+SERIAL_BYTESIZE		= 8
+SERIAL_PARITY		= PARITY_NONE
+SERIAL_STOPBITS		= 1
 
 
-class SnifferException(Exception): pass
+class SnifferException(Exception):
+	pass
 
 class Sniffer:
-	def __init__(self, tty, shiftregSize):
+	def __init__(self, tty, numShiftregs):
 		try:
 			self.serial = Serial(tty, SERIAL_BAUDRATE,
 					     SERIAL_BYTESIZE, SERIAL_PARITY,
 					     SERIAL_STOPBITS)
-			self.size = shiftregSize
+			self.size = numShiftregs
 			self.reset()
-		except (SerialException, OSError, IOError), e:
+		except (SerialException, OSError, IOError) as e:
 			raise SnifferException(str(e))
 
 	def reset(self):
 		try:
 			self.serial.read(self.serial.inWaiting())
 			self.__doRead() # Discard result
-		except (SerialException, OSError, IOError), e:
+		except (SerialException, OSError, IOError) as e:
 			raise SnifferException(str(e))
 
 	def __doRead(self):
-			msg = "%c" % self.size
-			self.serial.write(msg)
-			time.sleep(0.1)
-			return self.serial.read(self.serial.inWaiting())
+		msg = b"%c" % self.size
+		self.serial.write(msg)
+		time.sleep(0.1)
+		return self.serial.read(self.serial.inWaiting())
 
 	def read(self):
 		try:
@@ -66,46 +67,48 @@ class Sniffer:
 					"Unexpected data length. Is %d, expected %d" %\
 					(len(data), self.size))
 			return data
-		except (SerialException, OSError, IOError), e:
+		except (SerialException, OSError, IOError) as e:
 			raise SnifferException(str(e))
 
-def dumpMem(mem):
-	def toAscii(char):
-		if char >= 32 and char <= 126:
-			return chr(char)
-		return "."
+def toAscii(char):
+	assert(isinstance(char, int))
+	if char >= 32 and char <= 126:
+		return chr(char)
+	return "."
 
+def dumpMem(mem):
+	assert(isinstance(mem, (bytes, bytearray)))
 	ascii = ""
-	for i in range(0, len(mem)):
+	for i in range(len(mem)):
 		if i % 16 == 0 and i != 0:
-			sys.stdout.write("  " + ascii + "\n")
+			print("  " + ascii + "\n", end='')
 			ascii = ""
 		if i % 16 == 0:
-			sys.stdout.write("0x%04X:  " % i)
-		c = ord(mem[i])
-		sys.stdout.write("%02X" % c)
+			print("0x%04X:  " % i, end='')
+		c = mem[i]
+		print("%02X" % c, end='')
 		if (i % 2 != 0):
-			sys.stdout.write(" ")
+			print(" ", end='')
 		ascii += toAscii(c)
-	sys.stdout.write("  " + ascii + "\n\n")
+	print("  " + ascii + "\n")
 
 def usage():
-	print "Usage: %s TTY SHIFTREG_SIZE" % sys.argv[0]
+	print("Usage: %s TTY NUM_SHIFTREGS" % sys.argv[0], file=sys.stderr)
 
 def main(argv):
 	try:
 		tty = argv[1]
-		shiftregSize = int(argv[2])
-	except (IndexError, ValueError), e:
+		numShiftregs = int(argv[2])
+	except (IndexError, ValueError) as e:
 		usage()
-		sys.exit(1)
-
+		return 1
 	try:
-		s = Sniffer(tty, shiftregSize)
+		s = Sniffer(tty, numShiftregs)
 		data = s.read()
 		dumpMem(data)
-	except (SnifferException), e:
-		print e.message
+	except SnifferException as e:
+		print(str(e), file=sys.stderr)
+	return 0
 
 if __name__ == "__main__":
 	sys.exit(main(sys.argv))
