@@ -1,0 +1,4 @@
+(sym_lib_table
+  (lib (name "crystalosc")(type "Legacy")(uri "${KIPRJMOD}/crystalosc.lib")(options "")(descr ""))
+  (lib (name "atmega8")(type "Legacy")(uri "${KIPRJMOD}/atmega8.lib")(options "")(descr ""))
+)
