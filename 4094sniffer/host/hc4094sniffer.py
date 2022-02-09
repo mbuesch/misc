@@ -42,26 +42,23 @@ class Sniffer:
 					     SERIAL_BYTESIZE, SERIAL_PARITY,
 					     SERIAL_STOPBITS)
 			self.size = numShiftregs
-			self.reset()
-		except (SerialException, OSError, IOError) as e:
-			raise SnifferException(str(e))
-
-	def reset(self):
-		try:
 			self.serial.read(self.serial.inWaiting())
-			self.__doRead() # Discard result
+			self.__doRead(self.size)
 		except (SerialException, OSError, IOError) as e:
 			raise SnifferException(str(e))
 
-	def __doRead(self):
-		msg = b"%c" % self.size
-		self.serial.write(msg)
+	def clear(self):
+		self.__doRead(self.size ^ 0xFF)
+		self.__doRead(self.size)
+
+	def __doRead(self, size):
+		self.serial.write(b"%c" % size)
 		time.sleep(0.1)
 		return self.serial.read(self.serial.inWaiting())
 
 	def read(self):
 		try:
-			data = self.__doRead()
+			data = self.__doRead(self.size)
 			if len(data) != self.size:
 				raise SnifferException(
 					"Unexpected data length. Is %d, expected %d" %\
