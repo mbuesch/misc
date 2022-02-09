@@ -315,7 +315,7 @@ make_checkout()
 		local branch=master
 		[ -n "$opt_ref" ] && branch="$opt_ref"
 		export GIT_DIR="$checkout_dir/.git"
-		git clone --shared --no-checkout \
+		git clone --recursive --shared --no-checkout \
 			"$srcdir/.git" "$checkout_dir" || \
 			die "Failed to clone git repository"
 		cd "$checkout_dir" || die "Internal error: cd"
@@ -323,6 +323,10 @@ make_checkout()
 			die "git checkout failed (1)"
 		git checkout -f || \
 			die "git checkout failed (2)"
+		if [ -f "$checkout_dir/.gitmodules" ]; then
+			git submodule update --init --recursive || \
+				die "git submodule update failed."
+		fi
 		;;
 	*)
 		die "checkout: Unknown repos_type"
