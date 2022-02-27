@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=start backup
+Comment=
+Icon=system-run
+MimeType=
+Exec=/bin/sh /mnt/backup/backup.sh
+Path=/mnt/backup
+StartupNotify=true
+Terminal=true
+TerminalOptions=
