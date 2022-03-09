@@ -35,8 +35,8 @@ class PwIteratorPLZ:
 class PwIteratorBirthday:
     def __init__(self):
         now = datetime.now()
-        self.date = now
-        self.enddate = now - timedelta(days=(120 * 365))
+        self.date = datetime(year=now.year, month=now.month, day=now.day, hour=12)
+        self.enddate = self.date - timedelta(days=(120 * 365))
 
     def __iter__(self):
         return self
@@ -55,7 +55,8 @@ def testit(password):
         return password
     except pikepdf.PasswordError:
         return None
-    assert False
+    except Exception as e:
+        raise Exception(f"Error processing PDF file: {e}")
 
 infile = pathlib.Path(sys.argv[1])
 outfile = infile.with_stem(infile.stem + ".DECRYPTED")
