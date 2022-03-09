@@ -15,7 +15,8 @@
 import pikepdf
 import multiprocessing
 import sys
-import datetime
+import pathlib
+from datetime import datetime, timedelta
 
 class PwIteratorPLZ:
     def __init__(self):
@@ -33,27 +34,19 @@ class PwIteratorPLZ:
 
 class PwIteratorBirthday:
     def __init__(self):
-        now = datetime.datetime.now()
-        self.year = now.year
-        self.month = now.month
-        self.day = now.day
-        self.endyear = now.year - 120
+        now = datetime.now()
+        self.date = now
+        self.enddate = now - timedelta(days=(120 * 365))
 
     def __iter__(self):
         return self
 
     def __next__(self):
-        year, month, day = self.year, self.month, self.day
-        if year <= self.endyear and month <= 1 and day <= 1:
+        date = self.date
+        if date <= self.enddate:
             raise StopIteration()
-        self.day -= 1
-        if self.day < 1:
-            self.day = 31
-            self.month -= 1
-            if self.month < 1:
-                self.month = 12
-                self.year -= 1
-        return f"{day:02}.{month:02}.{year:04}"
+        self.date -= timedelta(days=1)
+        return f"{date.day:02}.{date.month:02}.{date.year:04}"
 
 def testit(password):
     try:
@@ -64,17 +57,23 @@ def testit(password):
         return None
     assert False
 
-infile = sys.argv[1]
-outfile = "decrypted.pdf"
-iterator = PwIteratorPLZ
+infile = pathlib.Path(sys.argv[1])
+outfile = infile.with_stem(infile.stem + ".DECRYPTED")
 
-with multiprocessing.Pool() as pool:
-    for pw in pool.imap(testit, iterator(), 128):
-        if pw is not None:
-            pool.terminate()
-            print(f"The PDF has been decrypted to: {outfile}")
-            print(f"The password is: {pw}")
-            sys.exit(0)
+iterators = (
+    PwIteratorBirthday,
+    PwIteratorPLZ,
+)
+
+for iterator in iterators:
+    with multiprocessing.Pool() as pool:
+        for pw in pool.imap(testit, iterator(), 128):
+            if pw is not None:
+                pool.terminate()
+                print(f"The PDF has been decrypted to: {outfile}")
+                print(f"The password is: {pw}")
+                sys.exit(0)
 print("Password not found :(")
+sys.exit(1)
 
 # vim: ts=4 sw=4 expandtab
