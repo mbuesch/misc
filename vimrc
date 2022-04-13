@@ -6,6 +6,7 @@ set history=100		" Command history.
 " Disable crap.
 set noerrorbells
 set novisualbell
+set belloff=all
 
 " Disable backup and swapfiles.
 set nobackup
