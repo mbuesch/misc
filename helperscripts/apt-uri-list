@@ -1,3 +1,0 @@
-#!/bin/sh
-
-exec apt-get -qq -y --print-uris "$@"
