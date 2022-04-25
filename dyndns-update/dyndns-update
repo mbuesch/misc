@@ -1,13 +1,14 @@
 #!/usr/bin/python3
 
 import argparse
-import cgi
 import configparser
 import datetime
 import hashlib
+import os
 import pathlib
 import secrets
 import sys
+import urllib.parse
 
 CHRSET_NUM	= "0123456789"
 CHRSET_alpha	= "abcdefghijklmnopqrstuvwxyz"
@@ -149,18 +150,27 @@ def main():
 
 	out("Content-type: text/plain")
 
-	form = cgi.FieldStorage()
+	qs = os.environ.get("QUERY_STRING", "")
+	if not qs:
+		return error("No query string.")
+	forms = urllib.parse.parse_qs(qs)
+
+	def getform(key, default=""):
+		values = forms.get(key, None)
+		if values:
+			return values[-1]
+		return default
 
 	ok, userIndex = checkCredentials(conf=conf,
-					 user=form.getfirst("user", ""),
-					 pw=form.getfirst("pw", ""))
+					 user=getform("user"),
+					 pw=getform("pw"))
 	if not ok:
 		return error("Invalid credentials.")
 
-	domain = form.getfirst("domain", "")
-	ip4 = form.getfirst("ip4", "")
-	ip6 = form.getfirst("ip6", "")
-	ip6pfx = form.getfirst("ip6pfx", "")
+	domain = getform("domain")
+	ip4 = getform("ip4")
+	ip6 = getform("ip6")
+	ip6pfx = getform("ip6pfx")
 
 	if (not domain or
 	    len(domain) > 128 or
