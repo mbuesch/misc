@@ -1,5 +1,7 @@
 #!/bin/sh
+exec >/dev/null 2>&1
 /usr/bin/apt update
 /usr/bin/unattended-upgrade
 [ -e /usr/bin/flatpak ] && /usr/bin/flatpak update --noninteractive
 [ -e /usr/bin/rpi-eeprom-update ] && /usr/bin/rpi-eeprom-update -a
+exit 0
