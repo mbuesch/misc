@@ -79,4 +79,9 @@ if command -v flatpak >/dev/null 2>&1; then
 	flatpak update || die "flatpak update failed"
 fi
 
+if command -v rpi-eeprom-update >/dev/null 2>&1; then
+	info "Updating Raspberry Pi EEPROMs"
+	rpi-eeprom-update -a || die "Raspberry Pi EEPROM update failed"
+fi
+
 exit 0
