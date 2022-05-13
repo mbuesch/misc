@@ -1,9 +1,5 @@
 #!/bin/sh
-echo "apt update..."
 /usr/bin/apt update
-echo "unattended-upgrade..."
 /usr/bin/unattended-upgrade
-if command -v flatpak >/dev/null 2>&1; then
-	echo "flatpak update"
-	flatpak update --noninteractive
-fi
+[ -e /usr/bin/flatpak ] && /usr/bin/flatpak update --noninteractive
+[ -e /usr/bin/rpi-eeprom-update ] && /usr/bin/rpi-eeprom-update -a
