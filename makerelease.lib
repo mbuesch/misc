@@ -96,7 +96,14 @@ default_hook_testbuild()
 		./setup.py --no-user-cfg build
 	fi
 	if [ -r ./Cargo.toml ]; then
-		cargo build && cargo build --release
+		info "Running cargo DEBUG build"
+		cargo build
+		info "Running cargo RELEASE build"
+		cargo build --release
+		info "Running cargo CLIPPY"
+		cargo clippy -- --deny warnings
+		info "Running cargo CLIPPY on tests"
+		cargo clippy --tests -- --deny warnings
 	fi
 }
 
