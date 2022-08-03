@@ -100,10 +100,16 @@ default_hook_testbuild()
 		cargo build
 		info "Running cargo RELEASE build"
 		cargo build --release
+		info "Running cargo EXAMPLES build"
+		cargo build --examples
+		info "Running cargo EXAMPLES RELEASE build"
+		cargo build --examples --release
 		info "Running cargo CLIPPY"
 		cargo clippy -- --deny warnings
 		info "Running cargo CLIPPY on tests"
 		cargo clippy --tests -- --deny warnings
+		info "Running cargo CLIPPY on examples"
+		cargo clippy --examples -- --deny warnings
 	fi
 }
 
@@ -112,6 +118,7 @@ default_hook_regression_tests()
 	cd "$1"
 	if [ -r ./Cargo.toml ]; then
 		cargo test
+		cargo test --examples
 	fi
 }
 
