@@ -78,4 +78,6 @@ map <leader>r :retab<cr>
 " colorscheme
 colorscheme industry
 hi LineNr cterm=NONE ctermfg=DarkGrey gui=NONE guifg=DarkGrey
+hi Function guifg=magenta guibg=NONE gui=bold ctermfg=magenta ctermbg=NONE cterm=bold
+hi Type guifg=white guibg=NONE gui=bold ctermfg=white ctermbg=NONE cterm=bold
 
