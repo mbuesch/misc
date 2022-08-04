@@ -12,16 +12,18 @@ usage()
 	echo
 	echo "Options:"
 	echo " --startcount XXX        Start filename count at XXX"
+	echo " --resolution XXX        Scan resolution in DPI"
 	echo " --format XXX            Set output format. Default jpg"
-	echo " --quality XX            Output quality. Default 75"
+	echo " --quality XX            Output quality. Default 90"
 	exit 1
 }
 
 [ $# -ge 1 ] || usage
 
 count=0
+resolution=
 out_format="jpg"
-out_quality="75"
+out_quality="90"
 
 while [ $# -ge 1 ]; do
 	case "$1" in
@@ -37,6 +39,10 @@ while [ $# -ge 1 ]; do
 	--format)
 		shift
 		out_format="$1"
+		;;
+	--resolution)
+		shift
+		resolution="$1"
 		;;
 	--quality)
 		shift
@@ -79,7 +85,7 @@ find_device()
 	done
 }
 
-echo "Searching scanner..."
+echo "Searching for scanner..."
 dev="$(find_device)"
 [ -n "$dev" ] || die "Did not find a scanner"
 echo "Using scanner '$dev'"
@@ -87,10 +93,13 @@ echo "Using scanner '$dev'"
 first=1
 while cont_prompt; do
 	filename="$(printf '%s-%03d.pnm' "$filename_base" "$count")"
+	opts=
+	[ -n "$resolution" ] && opts="$opts --resolution $resolution"
 	do_scanimage -d "$dev" \
-		--mode Color --depth 8 --resolution 300 \
+		--mode Color \
 		-l 0 -t 0 -x 210 -y 297 \
 		--format=pnm \
+		$opts \
 		"$@" > "$filename"
 	[ "$out_format" = "jpg" ] && {
 		jpg_filename="$(basename "$filename" .pnm).jpg"
