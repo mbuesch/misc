@@ -80,8 +80,12 @@ check_build_environment()
 	checkprog wget
 	checkprog gcc
 	checkprog make
+	checkprog tar
 	checkprog git
 	checkprog schedtool
+	checkprog sha256sum
+	checkprog python3
+	checkprog help2man # for crosstool-ng
 }
 
 prepare()
