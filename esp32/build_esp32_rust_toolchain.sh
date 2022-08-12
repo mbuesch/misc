@@ -80,6 +80,7 @@ check_build_environment()
 	checkprog wget
 	checkprog gcc
 	checkprog make
+	checkprog nproc
 	checkprog tar
 	checkprog git
 	checkprog schedtool
@@ -120,7 +121,7 @@ build_python2()
 	tar xf "Python-2.7.18.tar.xz" || die "Failed to extract Python2"
 	cd "Python-2.7.18" || die "Failed to switch to Python2 source"
 	./configure --prefix="$INSTALLDIR/python2" || die "Failed to configure Python2"
-	make || die "Failed to make Python2"
+	make -j "$(nproc)" || die "Failed to make Python2"
 	make install || die "Failed to install Python2"
 }
 
@@ -137,7 +138,7 @@ build_xtensa_crosstoolng()
 	cd "$INSTALLDIR/crosstool-ng/crosstool-NG" || die "Failed to switch to crosstool-ng src"
 	./bootstrap || die "Crosstool-ng bootstrap failed"
 	./configure --enable-local || die "Crosstool-ng configure failed"
-	make || die "Crosstool-ng make failed"
+	make -j "$(nproc)" || die "Crosstool-ng make failed"
 	cp ./samples/xtensa-esp32-elf/crosstool.config ./.config || die "Crosstool-ng config copy failed"
 	./ct-ng upgradeconfig || die "Crosstool-ng upgradeconfig failed"
 	./ct-ng oldconfig || die "Crosstool-ng oldconfig failed"
