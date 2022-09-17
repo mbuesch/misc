@@ -122,7 +122,7 @@ build_python2()
 	cd "Python-2.7.18" || die "Failed to switch to Python2 source"
 	./configure --prefix="$INSTALLDIR/python2" || die "Failed to configure Python2"
 	make -j "$(nproc)" || die "Failed to make Python2"
-	make install || die "Failed to install Python2"
+	make -j "$(nproc)" install || die "Failed to install Python2"
 }
 
 build_xtensa_crosstoolng()
@@ -142,7 +142,7 @@ build_xtensa_crosstoolng()
 	cp ./samples/xtensa-esp32-elf/crosstool.config ./.config || die "Crosstool-ng config copy failed"
 	./ct-ng upgradeconfig || die "Crosstool-ng upgradeconfig failed"
 	./ct-ng oldconfig || die "Crosstool-ng oldconfig failed"
-	./ct-ng build || die "Crosstool-ng build failed"
+	make -r -j "$(nproc)" -f ./ct-ng build || die "Crosstool-ng build failed"
 
 	export PATH="$oldpath"
 }
