@@ -38,6 +38,9 @@ if ! [ -e "$rootdir/c/bin/kfast.com" ]; then
         die "Failed to make KFAST.COM"
 fi
 
-dosbox -conf "$conf" || die "Dosbox exited with an error."
+dosbox \
+    -conf "$tooldir/dosbox.conf" \
+    -conf "$conf" ||\
+    die "Dosbox exited with an error."
 
 # vim: ts=4 sw=4 expandtab
