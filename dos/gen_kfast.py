@@ -5,7 +5,14 @@
 # to minimize keyboard repeat delay.
 #
 
-with open("KFAST.COM", "bw") as f:
+import sys
+
+if len(sys.argv) == 2:
+    target = sys.argv[1]
+else:
+    target = "KFAST.COM"
+
+with open(target, "bw") as f:
     # mov ax, 0305h
     f.write(b"\xB8\x05\x03")
     # mov bx, auto_repeat
