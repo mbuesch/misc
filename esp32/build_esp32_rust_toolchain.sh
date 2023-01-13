@@ -211,10 +211,8 @@ EOF
 			die "Failed to fetch rustup-init"
 		sh rustup-init.sh --default-toolchain nightly --no-modify-path -y || die "rustup-init.sh failed"
 		cargo install ldproxy || die "Failed to install ldproxy"
-		cargo install espflash || die "Failed to install espflash"
-		cargo install cargo-espflash || die "Failed to install cargo-espflash"
-		cargo install espmonitor || die "Failed to install espmonitor"
 		cargo install cargo-espmonitor || die "Failed to install cargo-espmonitor"
+		cargo install cargo-espflash || die "Failed to install cargo-espflash"
 		cargo install cargo-generate || die "Failed to install cargo-generate"
 	) || die
 	# Build rust esp32 compiler
