@@ -17,6 +17,11 @@
 # USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+
+XTENSA_CLANG_URL="https://github.com/espressif/llvm-project/releases/download/esp-15.0.0-20221201/llvm-esp-15.0.0-20221201-linux-amd64.tar.xz"
+XTENSA_CLANG_SHA256="839e5adfa7f44982e8a2d828680f6e4aa435dcd3d1df765e02f015b04286056f"
+
+
 die()
 {
 	echo "$*" >&2
@@ -150,14 +155,12 @@ build_xtensa_crosstoolng()
 download_xtensa_clang()
 {
 	echo "Downloading and installing xtensa clang..."
-	local url="https://github.com/espressif/llvm-project/releases/download/esp-14.0.0-20220415/xtensa-esp32-elf-llvm14_0_0-esp-14.0.0-20220415-linux-amd64.tar.xz"
-	local file="$(basename "$url")"
-
 	rm -rf "$INSTALLDIR/xtensa-clang" || die "Failed to clean xtensa-clang"
 	mkdir -p "$INSTALLDIR/xtensa-clang" || die "Failed to create xtensa-clang directory"
 	cd "$INSTALLDIR/xtensa-clang" || die "Failed to switch to xtensa-clang directory"
-	wget "$url" || die "Failed to download xtensa-clang"
-	[ "$(sha256sum -b "$file" | cut -f1 -d' ')" = "b0148627912dacf4a4cab4596ba9467cb8dd771522ca27b9526bc57b88ff366f" ] ||\
+	wget "$XTENSA_CLANG_URL" || die "Failed to download xtensa-clang"
+	local file="$(basename "$XTENSA_CLANG_URL")"
+	[ "$(sha256sum -b "$file" | cut -f1 -d' ')" = "$XTENSA_CLANG_SHA256" ] ||\
 		die "xtensa-clang checksum failed"
 	tar xf "$file" || die "Failed to extract xtensa-clang"
 }
@@ -178,7 +181,7 @@ if [ -z "\$RUST_ESP32_XTENSA_TOOLCHAIN_ACTIVE" ]; then
 	export RUSTUP_HOME="$INSTALLDIR/rust/rust-install/rustup"
 	export CARGO_HOME="$INSTALLDIR/rust/rust-install/cargo"
 	export PATH="\$CARGO_HOME/bin:$INSTALLDIR/crosstool-ng/crosstool-NG/builds/xtensa-esp32-elf/bin:\$PATH"
-	export LIBCLANG_PATH="$INSTALLDIR/xtensa-clang/xtensa-esp32-elf-clang/lib"
+	export LIBCLANG_PATH="$INSTALLDIR/xtensa-clang/esp-clang/lib"
 	PS1="rust-esp32/\$PS1"
 	export RUST_ESP32_XTENSA_TOOLCHAIN_ACTIVE=1
 fi
