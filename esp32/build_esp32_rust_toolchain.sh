@@ -116,6 +116,11 @@ prepare()
 
 build_python2()
 {
+	if [ -d "$INSTALLDIR/python2" ]; then
+		echo "Python2 is already built."
+		return
+	fi
+
 	echo "Building Python2..."
 	rm -rf "$INSTALLDIR/python2" "$INSTALLDIR/python2-src" || die "Failed to clean Python2"
 	mkdir -p "$INSTALLDIR/python2" "$INSTALLDIR/python2-src" || die "Failed to create Python2 directory"
@@ -132,6 +137,11 @@ build_python2()
 
 build_xtensa_crosstoolng()
 {
+	if [ -d "$INSTALLDIR/crosstool-ng" ]; then
+		echo "Xtensa toolchain is already built."
+		return
+	fi
+
 	echo "Building Xtensa toolchain..."
 	local oldpath="$PATH"
 	export PATH="$INSTALLDIR/python2/bin:$PATH"
@@ -154,6 +164,11 @@ build_xtensa_crosstoolng()
 
 download_xtensa_clang()
 {
+	if [ -d "$INSTALLDIR/xtensa-clang" ]; then
+		echo "Xtensa clang is already downloaded."
+		return
+	fi
+
 	echo "Downloading and installing xtensa clang..."
 	rm -rf "$INSTALLDIR/xtensa-clang" || die "Failed to clean xtensa-clang"
 	mkdir -p "$INSTALLDIR/xtensa-clang" || die "Failed to create xtensa-clang directory"
