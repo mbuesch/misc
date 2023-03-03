@@ -1,7 +1,16 @@
 #!/bin/sh
 exec >/dev/null 2>&1
-/usr/bin/apt update
-/usr/bin/unattended-upgrade
-[ -e /usr/bin/flatpak ] && /usr/bin/flatpak update --noninteractive
-[ -e /usr/bin/rpi-eeprom-update ] && /usr/bin/rpi-eeprom-update -a
+if [ -x /usr/bin/apt ]; then
+	/usr/bin/apt update
+fi
+if [ -x /usr/bin/unattended-upgrade ]; then
+	/usr/bin/unattended-upgrade
+fi
+if [ -x /usr/bin/flatpak ]; then
+	/usr/bin/flatpak update --noninteractive -y
+	/usr/bin/flatpak uninstall --unused --noninteractive -y
+fi
+if [ -x /usr/bin/rpi-eeprom-update ]; then
+	/usr/bin/rpi-eeprom-update -a
+fi
 exit 0
