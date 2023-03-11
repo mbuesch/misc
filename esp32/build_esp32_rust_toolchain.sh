@@ -112,6 +112,7 @@ prepare()
 	unset CFLAGS
 	unset CXXFLAGS
 	unset CPPFLAGS
+	unset CARGO_REGISTRIES_CRATES_IO_PROTOCOL
 }
 
 build_python2()
@@ -224,7 +225,7 @@ EOF
 		git clone --depth 1 "https://github.com/esp-rs/rust" || die "Failed to clone rust esp32"
 		cd "$INSTALLDIR/rust/rust-esp32/rust" || die "Failed to switch to rust esp32 source directory"
 		git submodule update --init --depth 1 || die "Failed to clone rust esp32 submodules"
-		./configure --experimental-targets=Xtensa || die "Failed to configure rust esp32"
+		./configure --experimental-targets=Xtensa --release-channel=nightly || die "Failed to configure rust esp32"
 		./x.py build --stage 2 || die "Failed to build rust esp32"
 		rustup toolchain link esp "$INSTALLDIR/rust/rust-esp32/rust/build/x86_64-unknown-linux-gnu/stage2" ||\
 			die "Failed to link rust esp32 toolchain"
