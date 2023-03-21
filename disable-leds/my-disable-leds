@@ -1,0 +1,7 @@
+#!/bin/sh
+for led in /sys/class/leds/*; do
+	if [ -w "$led/trigger" -a -w "$led/brightness" ]; then
+		/bin/echo gpio > "$led/trigger"
+		/bin/echo 0 > "$led/brightness"
+	fi
+done

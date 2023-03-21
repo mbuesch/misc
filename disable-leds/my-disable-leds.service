@@ -1,0 +1,13 @@
+[Unit]
+Description=Disable LEDs service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+
+ExecStart=/bin/sh /usr/local/bin/my-disable-leds
+
+[Install]
+WantedBy=multi-user.target
