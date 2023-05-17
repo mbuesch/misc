@@ -108,7 +108,7 @@ install_rust()
 
 	# Create activation script
 	cat > "$INSTALLDIR/activate" <<EOF
-if [ -z "\$RUST_ESP32_XTENSA_TOOLCHAIN_ACTIVE" ]; then
+if [ -z "\$RUST_ESP32_TOOLCHAIN_ACTIVE" ]; then
 	unset CFLAGS
 	unset CXXFLAGS
 	unset CPPFLAGS
@@ -117,7 +117,7 @@ if [ -z "\$RUST_ESP32_XTENSA_TOOLCHAIN_ACTIVE" ]; then
 	export PATH="\$CARGO_HOME/bin:\$PATH"
 	[ -f "$INSTALLDIR/rust/export-esp.sh" ] && . "$INSTALLDIR/rust/export-esp.sh"
 	PS1="rust-esp32/\$PS1"
-	export RUST_ESP32_XTENSA_TOOLCHAIN_ACTIVE=1
+	export RUST_ESP32_TOOLCHAIN_ACTIVE=1
 fi
 EOF
 	[ $? -eq 0 ] || die "Failed to create activate script"
