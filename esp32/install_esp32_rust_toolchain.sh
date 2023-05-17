@@ -76,6 +76,10 @@ checkprog()
 check_environment()
 {
 	[ "$(id -u)" = "0" ] && die "Do not run this as root!"
+	checkprog curl
+	checkprog schedtool
+	[ -e "$HOME/export-esp.sh" ] &&\
+		die "There already is a '$HOME/export-esp.sh'. This program would overwrite it."
 }
 
 prepare()
