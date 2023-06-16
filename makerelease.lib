@@ -568,7 +568,7 @@ make_archives()
 				die "Failed to create ZIP archive"
 			;;
 		7z)
-			7z -mx=9 a "$archive" "$release_name" || \
+			"$SEVENZIP" -mx=9 a "$archive" "$release_name" || \
 				die "Failed to create 7-ZIP archive"
 			;;
 		*)
@@ -844,6 +844,14 @@ makerelease()
 	local template="makerelease-$project.XXXXXXXX"
 	tmpdir="$(mktemp -d --tmpdir="$tmp_basedir" "$template")"
 	[ -d "$tmpdir" ] || die "Failed to create temporary directory"
+
+	if have_program 7z; then
+		SEVENZIP=7z
+	elif have_program 7zz; then
+		SEVENZIP=7zz
+	else
+		die "Program 7-Zip not found"
+	fi
 
 	opt_dryrun=0
 	opt_notag=0
