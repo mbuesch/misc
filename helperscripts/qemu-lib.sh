@@ -276,8 +276,11 @@ run()
 	[ -n "$rtc" ] || rtc="-rtc base=localtime,clock=host"
 
 	# Set option-defaults
+	[ -n "$opt_nokvm" ] || opt_nokvm=0
 	[ -n "$opt_ram" ] || opt_ram="1024M"
+	[ -n "$opt_vga" ] || opt_vga="qxl"
 	[ -n "$opt_netrestrict" ] || opt_netrestrict=1
+	[ -n "$opt_netdevice" ] || opt_netdevice=rtl8139
 	[ -n "$opt_dryrun" ] || opt_dryrun=0
 	[ -n "$opt_spice" ] || opt_spice=1
 	[ -n "$opt_mouse" ] || opt_mouse=usbtablet
@@ -300,7 +303,6 @@ run()
 	# Basic initialization
 	share_init
 #	serial_init
-	kvm_init
 
 	# Parse command line options
 	local end=0
@@ -310,6 +312,13 @@ run()
 			usage
 			exit 0
 			;;
+		-V|--vga)
+			shift
+			opt_vga="$1"
+			;;
+		-K|--nokvm)
+			opt_nokvm=1
+			;;
 		-m|--ram)
 			shift
 			opt_ram="$1"
@@ -317,6 +326,10 @@ run()
 		-n|--net-restrict)
 			shift
 			opt_netrestrict="$(bool_to_on_off "$1")"
+			;;
+		-N|--net-device)
+			shift
+			opt_netdevice="$1"
 			;;
 		--dry-run)
 			opt_dryrun=1
@@ -384,6 +397,8 @@ run()
 		shift
 	done
 
+	[ $opt_nokvm -eq 0 ] && kvm_init
+
 	[ $opt_spice -ne 0 ] && {
 		spice_opt="-spice addr=${spice_host},port=${spice_port},"
 		spice_opt="${spice_opt}disable-ticketing=on,"
@@ -406,11 +421,13 @@ run()
 	fi
 
 	net0_conf="-netdev user,id=net0,restrict=$(bool_to_on_off "$opt_netrestrict"),net=192.168.5.1/24,smb=${sharedir},smbserver=192.168.5.4"
-	net0_conf="$net0_conf -device rtl8139,netdev=net0,mac=00:11:22:AA:BB:CC"
+	net0_conf="$net0_conf -device $opt_netdevice,netdev=net0,mac=00:11:22:AA:BB:CC"
 	if [ "$opt_usetap" -ne 0 ]; then
 		net1_conf="-netdev tap,id=net1"
-		net1_conf="$net1_conf -device rtl8139,netdev=net1,mac=00:11:22:AA:BB:CD"
+		net1_conf="$net1_conf -device $opt_netdevice,netdev=net1,mac=00:11:22:AA:BB:CD"
 	fi
+
+	local vga_opt="-vga $opt_vga"
 
 	if [ "$opt_screens" = "1" ]; then
 		local screen_opt=
@@ -424,6 +441,12 @@ run()
 		local cpu_opt="-cpu host"
 	else
 		local cpu_opt=
+	fi
+
+	if [ "$opt_cores" = "1" ]; then
+		local smp_opt=
+	else
+		local smp_opt="-smp cores=$opt_cores"
 	fi
 
 	if [ -n "$opt_vvfat" ]; then
@@ -447,10 +470,10 @@ run()
 		$usbdevice_opt \
 		$serial_opt \
 		$pcidevice_opt \
-		-vga qxl \
+		$vga_opt \
 		$screen_opt \
 		$rtc \
-		-smp cores="$opt_cores" \
+		$smp_opt \
 		$qemu_opts \
 		"$@"
 	run_spice_client
