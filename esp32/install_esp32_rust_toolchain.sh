@@ -145,7 +145,7 @@ install_utils()
 		cargo install cargo-espmonitor || die "Failed to install cargo-espmonitor"
 		cargo install cargo-espflash || die "Failed to install cargo-espflash"
 		cargo install cargo-generate || die "Failed to install cargo-generate"
-	)
+	) || die
 }
 
 install_espup()
@@ -154,7 +154,7 @@ install_espup()
 	(
 		. "$INSTALLDIR/activate" || die "Failed to activate rust environment"
 		cargo install espup || die "Failed to install espup"
-	)
+	) || die
 }
 
 install_esp_toolchain()
@@ -164,7 +164,7 @@ install_esp_toolchain()
 		. "$INSTALLDIR/activate" || die "Failed to activate rust environment"
 		espup install || die "Failed to install esp toolchain"
 		mv "$HOME/export-esp.sh" "$INSTALLDIR/rust/" || die "Failed to move export script"
-	)
+	) || die
 }
 
 parse_args "$@"
