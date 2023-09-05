@@ -145,6 +145,10 @@ install_utils()
 		cargo install cargo-espmonitor || die "Failed to install cargo-espmonitor"
 		cargo install cargo-espflash || die "Failed to install cargo-espflash"
 		cargo install cargo-generate || die "Failed to install cargo-generate"
+		cargo install cargo-cache || die "Failed to install cargo-cache"
+		cargo install cargo-audit || die "Failed to install cargo-audit"
+		cargo install bacon || die "Failed to install bacon"
+		cargo cache -a || die "Failed to autoclean the cargo cache"
 	) || die
 }
 
