@@ -1,2 +1,3 @@
-/       /mnt/backup/root        none   auto,bind,private   0 0
-/boot   /mnt/backup/root/boot   none   auto,bind,private   0 0
+/          /mnt/backup/root           none  auto,bind,private  0 0
+/boot      /mnt/backup/root/boot      none  auto,bind,private  0 0
+/boot/efi  /mnt/backup/root/boot/efi  none  auto,bind,private  0 0
