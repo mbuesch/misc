@@ -148,7 +148,6 @@ install_utils()
 		cargo install cargo-cache || die "Failed to install cargo-cache"
 		cargo install cargo-audit || die "Failed to install cargo-audit"
 		cargo install bacon || die "Failed to install bacon"
-		cargo cache -a || die "Failed to autoclean the cargo cache"
 	) || die
 }
 
@@ -171,6 +170,15 @@ install_esp_toolchain()
 	) || die
 }
 
+cargo_clean()
+{
+	echo "Cleaning up..."
+	(
+		. "$INSTALLDIR/activate" || die "Failed to activate rust environment"
+		cargo cache -a || die "Failed to autoclean the cargo cache"
+	) || die
+}
+
 parse_args "$@"
 check_environment
 prepare
@@ -178,6 +186,7 @@ install_rust
 install_utils
 install_espup
 install_esp_toolchain
+cargo_clean
 
 echo
 echo
