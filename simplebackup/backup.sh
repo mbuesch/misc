@@ -3,6 +3,8 @@
 targetnode="/dev/disk/by-uuid/MY-UUID"
 targetmp="/mnt/backup/target"
 targetsub="datensicherung"
+sourcepath="/mnt/backup/snapshots/root"
+btrfs=1
 
 die()
 {
@@ -45,8 +47,18 @@ fi
 cleanup()
 {
 	umount -f "$targetmp" >/dev/null 2>&1
+	if [ $btrfs -ne 0 ]; then
+		btrfs subvolume delete "$sourcepath" >/dev/null 2>&1
+	fi
 }
 trap cleanup EXIT
+
+# Create the snapshot
+if [ $btrfs -ne 0 ]; then
+	btrfs subvolume delete "$sourcepath" >/dev/null 2>&1
+	btrfs subvolume snapshot -r / "$sourcepath" ||\
+		die "btrfs snapshot failed"
+fi
 
 # Mount the backup drive.
 mkdir -p "$targetmp" || die "mkdir target failed."
@@ -61,14 +73,29 @@ mount "$targetnode" "$targetmp" || die "target mount failed"
 mkdir -p "$targetmp/$targetsub" || die
 while true; do
 	rsync -aHAX --inplace --delete-before --progress \
-		/mnt/backup/root/ \
+		"$sourcepath"/ \
 		"$targetmp/$targetsub"
 	res=$?
 	[ $res -eq 24 ] && continue
 	[ $res -ne 0 ] && die
 	break
 done
+if [ $btrfs -ne 0 ]; then
+	while true; do
+		rsync -aHAX --inplace --delete-before --progress \
+			/boot/ \
+			"$targetmp/$targetsub"_boot
+		res=$?
+		[ $res -eq 24 ] && continue
+		[ $res -ne 0 ] && die
+		break
+	done
+fi
 umount "$targetmp" || die "umount failed"
+if [ $btrfs -ne 0 ]; then
+	btrfs subvolume delete "$sourcepath" ||\
+		die "btrfs snapshot delete failed"
+fi
 
 echo
 echo
