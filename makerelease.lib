@@ -281,6 +281,16 @@ assert_program()
 	have_program "$bin" || die "$bin not found. Please install $desc."
 }
 
+# $1=path_to_git_repo
+git_main_branch()
+{
+	if GIT_DIR="$1" git branch | grep -qE '^\*? ?main$'; then
+		echo "main"
+	else
+		echo "master"
+	fi
+}
+
 # $1=hook_name, $2+=hook_parameters
 execute_hook()
 {
@@ -326,7 +336,7 @@ make_checkout()
 	git)
 		info "Creating git checkout"
 		assert_program git
-		local branch=master
+		local branch="$(git_main_branch "$srcdir/.git")"
 		[ -n "$opt_ref" ] && branch="$opt_ref"
 		export GIT_DIR="$checkout_dir/.git"
 		git clone --recursive --shared --no-checkout \
@@ -763,7 +773,7 @@ make_tag()
 		} || {
 			opts="$opts -a" # unsigned
 		}
-		local branch=master
+		local branch="$(git_main_branch "$srcdir/.git")"
 		[ -n "$opt_ref" ] && branch="$opt_ref"
 		export GIT_DIR="$srcdir/.git"
 		dry_run git tag $opts -m "$tag_message" "$tag_name" "$branch"
