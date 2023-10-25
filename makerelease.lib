@@ -83,33 +83,47 @@ default_hook_post_doc_archives()
 default_hook_testbuild()
 {
 	cd "$1"
-	if [ -x ./configure ]; then
+	if ! echo "$conf_testbuild" | grep -q no-configure &&\
+	   [ -x ./configure ]; then
 		./configure
 	fi
-	if [ -r ./CMakeLists.txt ]; then
+	if ! echo "$conf_testbuild" | grep -q no-cmake &&\
+	   [ -r ./CMakeLists.txt ]; then
 		cmake .
 	fi
-	if [ -r ./GNUmakefile -o -r ./makefile -o -r ./Makefile ]; then
+	if ! echo "$conf_testbuild" | grep -q no-make &&\
+	   [ -r ./GNUmakefile -o -r ./makefile -o -r ./Makefile ]; then
 		make
 	fi
-	if [ -x ./setup.py ]; then
+	if ! echo "$conf_testbuild" | grep -q no-setuppy &&\
+	   [ -x ./setup.py ]; then
 		./setup.py --no-user-cfg build
 	fi
 	if [ -r ./Cargo.toml ]; then
-		info "Running cargo DEBUG build"
-		cargo build
-		info "Running cargo RELEASE build"
-		cargo build --release
-		info "Running cargo EXAMPLES build"
-		cargo build --examples
-		info "Running cargo EXAMPLES RELEASE build"
-		cargo build --examples --release
-		info "Running cargo CLIPPY"
-		cargo clippy -- --deny warnings
-		info "Running cargo CLIPPY on tests"
-		cargo clippy --tests -- --deny warnings
-		info "Running cargo CLIPPY on examples"
-		cargo clippy --examples -- --deny warnings
+		if ! echo "$conf_testbuild" | grep -q no-cargo-build; then
+			info "Running cargo DEBUG build"
+			cargo build
+			info "Running cargo RELEASE build"
+			cargo build --release
+		fi
+		if ! echo "$conf_testbuild" | grep -q no-cargo-examples; then
+			info "Running cargo EXAMPLES build"
+			cargo build --examples
+			info "Running cargo EXAMPLES RELEASE build"
+			cargo build --examples --release
+		fi
+		if ! echo "$conf_testbuild" | grep -q no-cargo-clippy; then
+			info "Running cargo CLIPPY"
+			cargo clippy -- --deny warnings
+			if ! echo "$conf_testbuild" | grep -q no-cargo-tests; then
+				info "Running cargo CLIPPY on tests"
+				cargo clippy --tests -- --deny warnings
+			fi
+			if ! echo "$conf_testbuild" | grep -q no-cargo-examples; then
+				info "Running cargo CLIPPY on examples"
+				cargo clippy --examples -- --deny warnings
+			fi
+		fi
 	fi
 }
 
@@ -847,6 +861,7 @@ makerelease()
 	[ -n "$srcsubdir" ] || srcsubdir=""
 	[ -n "$tmp_basedir" ] || tmp_basedir="/tmp"
 	[ -n "$default_archives" ] || default_archives="tar.xz"
+	[ -n "$conf_testbuild" ] || conf_testbuild=""
 
 	trap terminating_signal TERM INT
 	trap cleanup EXIT
