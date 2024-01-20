@@ -1,10 +1,19 @@
 #!/bin/sh
 
-which cargo >/dev/null 2>&1 || { echo "Error: cargo not found." >&2; exit 1; }
+if ! which cargo >/dev/null 2>&1; then
+	echo "Error: cargo not found." >&2
+	exit 1
+fi
 
 for pkg in $(cargo install --list | grep '^[^[:space:]]' | awk '{print $1}'); do
 	printf '\nUpdating %s\n' "$pkg"
-	cargo install "$@" "$pkg" || exit 1
+
+	locked=
+	if [ "$pkg" = "bacon" ]; then
+		locked="--locked"
+	fi
+
+	cargo install $locked "$@" "$pkg" || exit 1
 done
 
 exit 0
