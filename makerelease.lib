@@ -124,6 +124,10 @@ default_hook_testbuild()
 				cargo clippy --examples -- --deny warnings
 			fi
 		fi
+		if ! echo "$conf_testbuild" | grep -q no-cargo-audit; then
+			info "Running cargo AUDIT"
+			cargo audit --deny warnings
+		fi
 	fi
 }
 
