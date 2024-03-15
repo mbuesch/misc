@@ -102,31 +102,31 @@ default_hook_testbuild()
 	if [ -r ./Cargo.toml ]; then
 		if ! echo "$conf_testbuild" | grep -q no-cargo-build; then
 			info "Running cargo DEBUG build"
-			cargo build
+			do_cargo build
 			info "Running cargo RELEASE build"
-			cargo build --release
+			do_cargo build --release
 		fi
 		if ! echo "$conf_testbuild" | grep -q no-cargo-examples; then
 			info "Running cargo EXAMPLES build"
-			cargo build --examples
+			do_cargo build --examples
 			info "Running cargo EXAMPLES RELEASE build"
-			cargo build --examples --release
+			do_cargo build --examples --release
 		fi
 		if ! echo "$conf_testbuild" | grep -q no-cargo-clippy; then
 			info "Running cargo CLIPPY"
-			cargo clippy -- --deny warnings
+			do_cargo clippy -- --deny warnings
 			if ! echo "$conf_testbuild" | grep -q no-cargo-tests; then
 				info "Running cargo CLIPPY on tests"
-				cargo clippy --tests -- --deny warnings
+				do_cargo clippy --tests -- --deny warnings
 			fi
 			if ! echo "$conf_testbuild" | grep -q no-cargo-examples; then
 				info "Running cargo CLIPPY on examples"
-				cargo clippy --examples -- --deny warnings
+				do_cargo clippy --examples -- --deny warnings
 			fi
 		fi
 		if ! echo "$conf_testbuild" | grep -q no-cargo-audit; then
 			info "Running cargo AUDIT"
-			cargo audit --deny warnings
+			do_cargo audit --deny warnings
 		fi
 	fi
 }
@@ -135,8 +135,8 @@ default_hook_regression_tests()
 {
 	cd "$1"
 	if [ -r ./Cargo.toml ]; then
-		cargo test
-		cargo test --examples
+		do_cargo test
+		do_cargo test --examples
 	fi
 }
 
@@ -173,8 +173,8 @@ default_hook_post_move_files()
 default_hook_version()
 {
 	cd "$1"
-	if [ -r ./Cargo.toml ]; then
-		version="$(grep -Ee '^version\s+=\s+' ./Cargo.toml | head -n1 | cut -d'"' -f2)"
+	if [ -r "./$srcpackage/Cargo.toml" ]; then
+		version="$(grep -Ee '^version\s+=\s+' "./$srcpackage/Cargo.toml" | head -n1 | cut -d'"' -f2)"
 	else
 		die "ERROR: Must supply hook_version()"
 	fi
@@ -338,6 +338,22 @@ detect_repos_type()
 		none|git) ;; # ok
 		*) die "Invalid \$repos_type=$repos_type" ;;
 	esac
+}
+
+do_cargo()
+{
+	local command="$1"
+	shift
+
+	local opt_package=
+	if [ "$command" != "audit" ]; then
+		if [ -n "$srcpackage" ]; then
+			local opt_package="--package $srcpackage"
+		fi
+	fi
+
+	info cargo "$command" $opt_package "$@"
+	cargo "$command" $opt_package "$@"
 }
 
 make_checkout()
@@ -708,7 +724,7 @@ make_upload()
 		execute_hook pre_upload "$checkout_dir"
 		local dry=
 		is_dry_run && dry="--dry-run"
-		cargo publish $dry || die "cargo publish failed."
+		do_cargo publish $dry || die "cargo publish failed."
 		execute_hook post_upload "$checkout_dir"
 	else
 		die "upload: Unknown package format."
@@ -863,6 +879,7 @@ makerelease()
 	[ -n "$project" ] || die "\$project variable not set"
 	[ -n "$srcdir" ] || die "\$srcdir variable not set"
 	[ -n "$srcsubdir" ] || srcsubdir=""
+	[ -n "$srcpackage" ] || srcpackage=""
 	[ -n "$tmp_basedir" ] || tmp_basedir="/tmp"
 	[ -n "$default_archives" ] || default_archives="tar.xz"
 	[ -n "$conf_testbuild" ] || conf_testbuild=""
