@@ -173,8 +173,8 @@ default_hook_post_move_files()
 default_hook_version()
 {
 	cd "$1"
-	if [ -r "./$srcpackage/Cargo.toml" ]; then
-		version="$(grep -Ee '^version\s+=\s+' "./$srcpackage/Cargo.toml" | head -n1 | cut -d'"' -f2)"
+	if [ -r "./$conf_package/Cargo.toml" ]; then
+		version="$(grep -Ee '^version\s+=\s+' "./$conf_package/Cargo.toml" | head -n1 | cut -d'"' -f2)"
 	else
 		die "ERROR: Must supply hook_version()"
 	fi
@@ -347,8 +347,8 @@ do_cargo()
 
 	local opt_package=
 	if [ "$command" != "audit" ]; then
-		if [ -n "$srcpackage" ]; then
-			local opt_package="--package $srcpackage"
+		if [ -n "$conf_package" ]; then
+			local opt_package="--package $conf_package"
 		fi
 	fi
 
@@ -787,6 +787,7 @@ make_archive_signatures()
 
 make_tag()
 {
+	[ $conf_notag -ne 0 ] && return
 	[ $opt_notag -ne 0 ] && return
 	[ "$repos_type" = "none" ] && return
 	info "Tagging repository"
@@ -879,10 +880,11 @@ makerelease()
 	[ -n "$project" ] || die "\$project variable not set"
 	[ -n "$srcdir" ] || die "\$srcdir variable not set"
 	[ -n "$srcsubdir" ] || srcsubdir=""
-	[ -n "$srcpackage" ] || srcpackage=""
+	[ -n "$conf_package" ] || conf_package=""
 	[ -n "$tmp_basedir" ] || tmp_basedir="/tmp"
 	[ -n "$default_archives" ] || default_archives="tar.xz"
 	[ -n "$conf_testbuild" ] || conf_testbuild=""
+	[ -n "$conf_notag" ] || conf_notag=0
 
 	trap terminating_signal TERM INT
 	trap cleanup EXIT
