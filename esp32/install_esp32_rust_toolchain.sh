@@ -147,6 +147,7 @@ install_utils()
 		cargo install cargo-generate || die "Failed to install cargo-generate"
 		cargo install cargo-cache || die "Failed to install cargo-cache"
 		cargo install cargo-audit || die "Failed to install cargo-audit"
+		cargo install cargo-edit || die "Failed to install cargo-edit"
 		cargo install --locked bacon || die "Failed to install bacon"
 	) || die
 }
