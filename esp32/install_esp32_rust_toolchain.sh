@@ -166,6 +166,7 @@ install_esp_toolchain()
 	echo "Installing ESP toolchain..."
 	(
 		. "$INSTALLDIR/activate" || die "Failed to activate rust environment"
+		rm -rf "$HOME/.espup"
 		espup install || die "Failed to install esp toolchain"
 		mv "$HOME/export-esp.sh" "$INSTALLDIR/rust/" || die "Failed to move export script"
 	) || die
