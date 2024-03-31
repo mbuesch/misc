@@ -588,6 +588,10 @@ make_archives()
 			opts="$opts -J"
 			archive="$release_name.tar.xz"
 			;;
+		tar.zst)
+			opts="$opts --zstd"
+			archive="$release_name.tar.zst"
+			;;
 		zip)
 			archive="$release_name.zip"
 			;;
@@ -856,7 +860,7 @@ help()
 	echo "  -D|--no-doc           Do not build documentation"
 	echo "  -r|--ref REF          Checkout version control reference REF"
 	echo "  -a|--archives TYPE,TYPE,...   Archive type list. Default: $default_archives"
-	echo "                        Possible types: tar, tar.bz2, tar.gz, tar.xz, zip, 7z"
+	echo "                        Possible types: tar, tar.bz2, tar.gz, tar.xz, tar.zst, zip, 7z"
 	echo "                        For Python programs: py-sdist,"
 	echo "                                             py-sdist-gz, py-sdist-bz2, py-sdist-xz, py-dist-zip,"
 	echo "                                             py-bdist, py-bdist-wininst,"
@@ -985,7 +989,7 @@ makerelease()
 	opt_archives="$(echo "$opt_archives" | tr ',' ' ')"
 	for artype in $opt_archives; do
 		case "$artype" in
-			tar|tar.bz2|tar.gz|tar.xz|zip|7z|py-sdist|py-sdist-gz|py-sdist-bz2|py-sdist-xz|py-sdist-zip|py-bdist|py-bdist-wininst|py-bdist-dump|py-bdist-rpm) ;; # ok
+			tar|tar.bz2|tar.gz|tar.xz|tar.zst|zip|7z|py-sdist|py-sdist-gz|py-sdist-bz2|py-sdist-xz|py-sdist-zip|py-bdist|py-bdist-wininst|py-bdist-dump|py-bdist-rpm) ;; # ok
 			*) die "Invalid archiving method: $artype" ;;
 		esac
 	done
