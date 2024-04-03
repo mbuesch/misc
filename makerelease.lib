@@ -481,11 +481,7 @@ _gendoc_md_html()
 	echo "Generating $docname.md -> $docname.html ..."
 	sed -e 's|\.md)|.html)|g' "$md" > "$tmpfile" ||\
 		die "Failed to update links during markdown -> html"
-	echo "<!DOCTYPE html><html><head><meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\"></head><body>" > "$html" ||\
-		die "Failed to convert markdown -> html"
-	markdown "$tmpfile" >> "$html" ||\
-		die "Failed to convert markdown -> html"
-	echo "</body></html>" >> "$html" ||\
+	pandoc -s -M "title=$docname" -o "$html" "$tmpfile" ||\
 		die "Failed to convert markdown -> html"
 }
 
@@ -501,7 +497,7 @@ _gendoc_rst_md()
 	echo "Generating $docname.rst -> $docname.md ..."
 	sed -e 's|\.rst>`_|.md>`_|g' "$rst" > "$tmpfile" ||\
 		die "Failed to update links during reStructuredText -> markdown"
-	pandoc -s -o "$md" "$tmpfile" ||\
+	pandoc -s -M "title=$docname" -o "$md" "$tmpfile" ||\
 		die "Failed to convert reStructuredText -> markdown"
 }
 
@@ -517,7 +513,7 @@ _gendoc_rst_html()
 	echo "Generating $docname.rst -> $docname.html ..."
 	sed -e 's|\.rst>`_|.html>`_|g' "$rst" > "$tmpfile" ||\
 		die "Failed to update links during reStructuredText -> html"
-	python3 -m readme_renderer -o "$html" "$tmpfile" ||\
+	pandoc -s -M "title=$docname" -o "$html" "$tmpfile" ||\
 		die "Failed to convert reStructuredText -> html"
 }
 
@@ -527,10 +523,7 @@ make_documentation()
 
 	info "Creating documentation"
 
-	assert_program markdown "markdown to HTML converter"
 	assert_program pandoc "pandoc converter"
-	python3 -m readme_renderer -h >/dev/null 2>&1 ||\
-		die "'python3 -m readme_renderer' is not installed."
 
 	execute_hook pre_documentation "$checkout_dir"
 
