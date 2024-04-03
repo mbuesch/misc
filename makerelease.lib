@@ -908,6 +908,9 @@ makerelease()
 	trap terminating_signal TERM INT
 	trap cleanup EXIT
 
+	# Make Python hashing reproducible.
+	export PYTHONHASHSEED=1
+
 	local template="makerelease-$project.XXXXXXXX"
 	tmpdir="$(mktemp -d --tmpdir="$tmp_basedir" "$template")"
 	[ -d "$tmpdir" ] || die "Failed to create temporary directory"
