@@ -608,9 +608,6 @@ make_archives()
 			;;
 		esac
 
-		#FIXME we should use stable build:
-		#	find "$release_name" -print0 | LC_ALL=C sort -z | tar --mtime='1970-01-01 00:00Z' --null -T - --no-recursion -c
-
 		info "Creating $archive"
 		cd "$tmpdir" || die "Internal error: cd"
 		case "$artype" in
@@ -623,12 +620,20 @@ make_archives()
 				die "Failed to create 7-ZIP archive"
 			;;
 		tar)
-			tar --owner=root --group=root -c "$release_name" \
+			tar \
+				--numeric-owner --owner=0 --group=0 \
+				--mtime='1970-01-01 00:00Z' \
+				--sort=name \
+				-c "$release_name" \
 				> "$archive" || \
 				die "Failed to create tarball"
 			;;
 		tar.*)
-			tar --owner=root --group=root -c "$release_name" \
+			tar \
+				--numeric-owner --owner=0 --group=0 \
+				--mtime='1970-01-01 00:00Z' \
+				--sort=name \
+				-c "$release_name" \
 				| $compressor \
 				> "$archive" || \
 				die "Failed to create tarball"
