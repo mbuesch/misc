@@ -908,8 +908,9 @@ makerelease()
 	trap terminating_signal TERM INT
 	trap cleanup EXIT
 
-	# Make Python hashing reproducible.
+	# Reproducible builds.
 	export PYTHONHASHSEED=1
+	export SOURCE_DATE_EPOCH=0
 
 	local template="makerelease-$project.XXXXXXXX"
 	tmpdir="$(mktemp -d --tmpdir="$tmp_basedir" "$template")"
