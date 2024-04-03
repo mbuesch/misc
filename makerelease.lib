@@ -571,25 +571,25 @@ make_archives()
 
 	for artype in $opt_archives; do
 		local archive=
-		local opts=
+		local compressor=
 		case "$artype" in
 		tar)
 			archive="$release_name.tar"
 			;;
 		tar.bz2)
-			opts="$opts -j"
+			compressor="bzip2 -9"
 			archive="$release_name.tar.bz2"
 			;;
 		tar.gz)
-			opts="$opts -z"
+			compressor="gzip -9"
 			archive="$release_name.tar.gz"
 			;;
 		tar.xz)
-			opts="$opts -J"
+			compressor="xz -9"
 			archive="$release_name.tar.xz"
 			;;
 		tar.zst)
-			opts="$opts --zstd"
+			compressor="zstd -T0 -19"
 			archive="$release_name.tar.zst"
 			;;
 		zip)
@@ -608,6 +608,9 @@ make_archives()
 			;;
 		esac
 
+		#FIXME we should use stable build:
+		#	find "$release_name" -print0 | LC_ALL=C sort -z | tar --mtime='1970-01-01 00:00Z' --null -T - --no-recursion -c
+
 		info "Creating $archive"
 		cd "$tmpdir" || die "Internal error: cd"
 		case "$artype" in
@@ -619,12 +622,19 @@ make_archives()
 			"$SEVENZIP" -mx=9 a "$archive" "$release_name" || \
 				die "Failed to create 7-ZIP archive"
 			;;
-		*)
-			#FIXME we should use stable build:
-			#	find "$release_name" -print0 | LC_ALL=C sort -z | tar --mtime='1970-01-01 00:00Z' --null -T - --no-recursion -c $opts -f "$archive"
-			tar --owner=root --group=root \
-			    -c $opts -f "$archive" "$release_name" || \
+		tar)
+			tar --owner=root --group=root -c "$release_name" \
+				> "$archive" || \
 				die "Failed to create tarball"
+			;;
+		tar.*)
+			tar --owner=root --group=root -c "$release_name" \
+				| $compressor \
+				> "$archive" || \
+				die "Failed to create tarball"
+			;;
+		*)
+			die "Internal error: Archive type"
 			;;
 		esac
 		mv "$archive" "$archive_dir"/ || die "Failed to move archive"
