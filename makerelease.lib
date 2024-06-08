@@ -228,13 +228,13 @@ hook_post_debian_packages()	{ default_hook_post_debian_packages "$@"; }
 
 cleanup()
 {
-	[ -d "$tmpdir" ] && {
+	if [ -d "$tmpdir" ]; then
 		if [ $opt_keeptmp -eq 0 ]; then
 			rm -rf "$tmpdir"
 		else
 			info "Keeping temporary directory '$tmpdir' in place."
 		fi
-	}
+	fi
 }
 
 # $1=code
@@ -318,9 +318,9 @@ execute_hook()
 	set -e
 	eval $hook_name "$@"
 	set +e
-	[ "$(pwd)" != "$oldpwd" ] && {
+	if [ "$(pwd)" != "$oldpwd" ]; then
 		cd "$oldpwd" || die "execute_hook: Failed to switch back to old PWD '$oldpwd'"
-	}
+	fi
 }
 
 maketemp()
@@ -422,10 +422,10 @@ make_debian_packages()
 	[ -d "$checkout_dir/debian" ] || return
 
 	info "Creating Debian packages"
-	have_program debuild || {
+	if ! have_program debuild; then
 		warn "No 'debuild' available. Skipping Debian build."
 		return
-	}
+	fi
 	grep -qe quilt "$checkout_dir/debian/source/format" &&\
 		die "Debian package format 'quilt' is not supported."
 
@@ -768,10 +768,10 @@ gpg_sign_dir_recursive()
 
 	local path=
 	for path in "$dir"/*; do
-		[ -d "$path" ] && {
+		if [ -d "$path" ]; then
 			gpg_sign_dir_recursive "$path"
 			continue
-		}
+		fi
 		[ -r "$path" ] || die "Sign: File not readable: $path"
 
 		local filename="$(basename "$path")"
@@ -811,15 +811,15 @@ make_tag()
 	git)
 		assert_program git
 		local opts=
-		[ $opt_nosign -eq 0 ] && {
-			[ -n "$GPG_KEY_RELEASE" ] && {
+		if [ $opt_nosign -eq 0 ]; then
+			if [ -n "$GPG_KEY_RELEASE" ]; then
 				opts="$opts -u $GPG_KEY_RELEASE"
-			} || {
+			else
 				opts="$opts -s" # default key
-			}
-		} || {
+			fi
+		else
 			opts="$opts -a" # unsigned
-		}
+		fi
 		local branch="$(git_main_branch "$srcdir/.git")"
 		[ -n "$opt_ref" ] && branch="$opt_ref"
 		export GIT_DIR="$srcdir/.git"
