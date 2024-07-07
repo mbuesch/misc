@@ -173,8 +173,8 @@ default_hook_post_move_files()
 default_hook_version()
 {
 	cd "$1"
-	if [ -r "./$conf_package/Cargo.toml" ]; then
-		version="$(grep -Ee '^version\s+=\s+' "./$conf_package/Cargo.toml" | head -n1 | cut -d'"' -f2)"
+	if [ -r "./Cargo.toml" ]; then
+		version="$(cargo pkgid --offline --package "$conf_package" "$conf_package" | cut -d'#' -f2)"
 	else
 		die "ERROR: Must supply hook_version()"
 	fi
@@ -736,7 +736,7 @@ make_upload()
 		execute_hook pre_upload "$checkout_dir"
 		local dry=
 		is_dry_run && dry="--dry-run"
-		do_cargo publish $dry || die "cargo publish failed."
+		do_cargo publish --allow-dirty $dry || die "cargo publish failed."
 		execute_hook post_upload "$checkout_dir"
 	else
 		die "upload: Unknown package format."
