@@ -9,7 +9,8 @@ for pkg in $(cargo install --list | grep '^[^[:space:]]' | awk '{print $1}'); do
 	printf '\nUpdating %s\n' "$pkg"
 
 	locked=
-	if [ "$pkg" = "bacon" ]; then
+	if [ "$pkg" = "bacon" -o \
+	     "$pkg" = "cargo-vet" ]; then
 		locked="--locked"
 	fi
 
