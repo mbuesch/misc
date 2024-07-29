@@ -1,22 +1,11 @@
 #
 # Release script library
 #
-# Copyright (c) 2012-2022 Michael Buesch <m@bues.ch>
+# Copyright (c) 2012-2024 Michael Buesch <m@bues.ch>
 #
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along
-# with this program; if not, write to the Free Software Foundation, Inc.,
-# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-#
+# Licensed under the Apache License version 2.0
+# or the MIT license, at your option.
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 
 
 default_hook_pre_checkout()
@@ -170,14 +159,9 @@ default_hook_post_move_files()
 	true
 }
 
-default_hook_version()
+default_hook_get_version()
 {
-	cd "$1"
-	if [ -r "./Cargo.toml" ]; then
-		version="$(cargo pkgid --offline --package "$conf_package" "$conf_package" | cut -d'#' -f2)"
-	else
-		die "ERROR: Must supply hook_version()"
-	fi
+	die "ERROR: Must supply hook_get_version()"
 }
 
 default_hook_pre_upload()
@@ -220,7 +204,7 @@ hook_pre_tag()			{ default_hook_pre_tag "$@"; }
 hook_post_tag()			{ default_hook_post_tag "$@"; }
 hook_pre_move_files()		{ default_hook_pre_move_files "$@"; }
 hook_post_move_files()		{ default_hook_post_move_files "$@"; }
-hook_get_version()		{ default_hook_version "$@"; }
+hook_get_version()		{ default_hook_get_version "$@"; }
 hook_pre_upload()		{ default_hook_pre_upload "$@"; }
 hook_post_upload()		{ default_hook_post_upload "$@"; }
 hook_pre_debian_packages()	{ default_hook_pre_debian_packages "$@"; }
@@ -346,14 +330,21 @@ do_cargo()
 	shift
 
 	local opt_package=
-	if [ "$command" != "audit" ]; then
-		if [ -n "$conf_package" ]; then
-			local opt_package="--package $conf_package"
-		fi
-	fi
+	[ "$command" != "audit" -a -n "$conf_package" ] &&\
+		opt_package="--package $conf_package"
 
 	info cargo "$command" $opt_package "$@"
 	cargo "$command" $opt_package "$@"
+}
+
+cargo_local_pkg_version()
+{
+	local package="$1"
+
+	local opt_package=
+	[ -n "$package" ] && opt_package="--package $package"
+
+	cargo pkgid --offline $opt_package | cut -d'#' -f2
 }
 
 make_checkout()
@@ -709,6 +700,43 @@ make_documentation_archives()
 	execute_hook post_doc_archives "$archive_dir" "$checkout_dir"
 }
 
+cratesio_has_version()
+{
+	local package="$1"
+	local ver="$2"
+
+	local package_opt="$package"
+	[ -z "$package_opt" ] && package_opt="$project"
+
+	curl -s "https://crates.io/api/v1/crates/$package/$ver" |\
+		grep -qe 'created_at'
+}
+
+do_cargo_publish()
+{
+	local package="$1"
+
+	local package_opt=
+	[ -n "$package" ] && package_opt="--package $package"
+
+	local dry=
+	is_dry_run && dry="--dry-run"
+
+	local ver="$(cargo_local_pkg_version "$package")"
+	[ -n "$ver" ] || die "Failed to get local version"
+
+	if cratesio_has_version "$package" "$ver"; then
+		info "crates.io already has $package-$ver. Not uploading."
+		return
+	fi
+
+	info "Uploading $package version $ver"
+
+	execute_hook pre_upload "$checkout_dir" "$package"
+	cargo publish --allow-dirty $dry $package_opt || die "cargo publish failed."
+	execute_hook post_upload "$checkout_dir" "$package"
+}
+
 make_upload()
 {
 	[ $opt_upload -eq 0 ] && return
@@ -733,11 +761,13 @@ make_upload()
 		assert_program cargo
 
 		cd "$checkout_dir" || die "Internal error: cd"
-		execute_hook pre_upload "$checkout_dir"
-		local dry=
-		is_dry_run && dry="--dry-run"
-		do_cargo publish --allow-dirty $dry || die "cargo publish failed."
-		execute_hook post_upload "$checkout_dir"
+		if [ -n "$conf_upload_packages" ]; then
+			for package in $conf_upload_packages; do
+				do_cargo_publish "$package"
+			done
+		else
+			do_cargo_publish ""
+		fi
 	else
 		die "upload: Unknown package format."
 	fi
@@ -797,14 +827,18 @@ make_archive_signatures()
 	execute_hook post_archive_signatures "$archive_dir"
 }
 
+#TODO do this for each upload-package
 make_tag()
 {
 	[ $conf_notag -ne 0 ] && return
 	[ $opt_notag -ne 0 ] && return
 	[ "$repos_type" = "none" ] && return
+
 	info "Tagging repository"
-	tag_name="$project-$version"
-	tag_message="$project-$version release"
+
+	local tag_name="$project-$version"
+	local tag_message="$project-$version release"
+
 	execute_hook pre_tag "$srcdir"
 	cd "$srcdir" || die "Internal error: cd"
 	case "$repos_type" in
@@ -893,6 +927,7 @@ makerelease()
 	[ -n "$srcdir" ] || die "\$srcdir variable not set"
 	[ -n "$srcsubdir" ] || srcsubdir=""
 	[ -n "$conf_package" ] || conf_package=""
+	[ -n "$conf_upload_packages" ] || conf_upload_packages="$conf_package"
 	[ -n "$tmp_basedir" ] || tmp_basedir="/tmp"
 	[ -n "$default_archives" ] || default_archives="tar.xz"
 	[ -n "$conf_testbuild" ] || conf_testbuild=""
@@ -916,6 +951,7 @@ makerelease()
 	else
 		die "Program 7-Zip not found"
 	fi
+	assert_program curl
 
 	opt_dryrun=0
 	opt_notag=0
