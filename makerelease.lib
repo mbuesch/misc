@@ -859,9 +859,13 @@ do_git_tag()
 
 	export GIT_DIR="$srcdir/.git"
 
-	execute_hook pre_tag "$srcdir" "$tag_name"
-	dry_run git tag $opts -m "$tag_message" "$tag_name" "$branch"
-	execute_hook post_tag "$srcdir" "$tag_name"
+	if git tag --list | grep -qe "^$tag_name\$"; then
+		warn "Tag '$tag_name' does already exist. Skipping..."
+	else
+		execute_hook pre_tag "$srcdir" "$tag_name"
+		dry_run git tag $opts -m "$tag_message" "$tag_name" "$branch"
+		execute_hook post_tag "$srcdir" "$tag_name"
+	fi
 }
 
 make_tag()
