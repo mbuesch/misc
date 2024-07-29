@@ -827,7 +827,34 @@ make_archive_signatures()
 	execute_hook post_archive_signatures "$archive_dir"
 }
 
-#TODO do this for each upload-package
+do_git_tag()
+{
+	local tag_name="$1"
+	local tag_message="$2"
+
+	assert_program git
+
+	local opts=
+	if [ $opt_nosign -eq 0 ]; then
+		if [ -n "$GPG_KEY_RELEASE" ]; then
+			opts="$opts -u $GPG_KEY_RELEASE"
+		else
+			opts="$opts -s" # default key
+		fi
+	else
+		opts="$opts -a" # unsigned
+	fi
+
+	local branch="$(git_main_branch "$srcdir/.git")"
+	[ -n "$opt_ref" ] && branch="$opt_ref"
+
+	export GIT_DIR="$srcdir/.git"
+
+	execute_hook pre_tag "$srcdir" "$tag_name"
+	dry_run git tag $opts -m "$tag_message" "$tag_name" "$branch"
+	execute_hook post_tag "$srcdir" "$tag_name"
+}
+
 make_tag()
 {
 	[ $conf_notag -ne 0 ] && return
@@ -836,34 +863,28 @@ make_tag()
 
 	info "Tagging repository"
 
-	local tag_name="$project-$version"
-	local tag_message="$project-$version release"
-
-	execute_hook pre_tag "$srcdir"
 	cd "$srcdir" || die "Internal error: cd"
-	case "$repos_type" in
-	git)
-		assert_program git
-		local opts=
-		if [ $opt_nosign -eq 0 ]; then
-			if [ -n "$GPG_KEY_RELEASE" ]; then
-				opts="$opts -u $GPG_KEY_RELEASE"
-			else
-				opts="$opts -s" # default key
-			fi
-		else
-			opts="$opts -a" # unsigned
-		fi
-		local branch="$(git_main_branch "$srcdir/.git")"
-		[ -n "$opt_ref" ] && branch="$opt_ref"
-		export GIT_DIR="$srcdir/.git"
-		dry_run git tag $opts -m "$tag_message" "$tag_name" "$branch"
-		;;
-	*)
-		die "tagging: Unknown repos_type"
-		;;
-	esac
-	execute_hook post_tag "$srcdir"
+
+	if [ -n "$conf_upload_packages" ]; then
+		local tag_bases="$conf_upload_packages"
+	else
+		local tag_bases="$project"
+	fi
+
+	for tag_base in $tag_bases; do
+		#TODO: Get the version number of each sub-package instead.
+		local tag_name="$tag_base-$version"
+		local tag_message="$tag_base-$version release"
+
+		case "$repos_type" in
+		git)
+			do_git_tag "$tag_name" "$tag_message"
+			;;
+		*)
+			die "tagging: Unknown repos_type"
+			;;
+		esac
+	done
 }
 
 move_files()
