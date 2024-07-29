@@ -342,9 +342,18 @@ cargo_local_pkg_version()
 	local package="$1"
 
 	local opt_package=
-	[ -n "$package" ] && opt_package="--package $package"
+	[ -n "$package" ] && opt_package="--package $package $package"
 
 	cargo pkgid --offline $opt_package | cut -d'#' -f2
+}
+
+local_pkg_version()
+{
+	if [ -e "$srcdir/$srcsubdir/Cargo.toml" ]; then
+		cargo_local_pkg_version "$@"
+	else
+		die "local_pkg_version() is currently only supported in cargo projects."
+	fi
 }
 
 make_checkout()
@@ -722,7 +731,7 @@ do_cargo_publish()
 	local dry=
 	is_dry_run && dry="--dry-run"
 
-	local ver="$(cargo_local_pkg_version "$package")"
+	local ver="$(local_pkg_version "$package")"
 	[ -n "$ver" ] || die "Failed to get local version"
 
 	if cratesio_has_version "$package" "$ver"; then
@@ -872,9 +881,14 @@ make_tag()
 	fi
 
 	for tag_base in $tag_bases; do
-		#TODO: Get the version number of each sub-package instead.
-		local tag_name="$tag_base-$version"
-		local tag_message="$tag_base-$version release"
+		if [ -n "$conf_upload_packages" ]; then
+			local ver="$(local_pkg_version "$tag_base")"
+		else
+			local ver="$version"
+		fi
+
+		local tag_name="$tag_base-$ver"
+		local tag_message="$tag_base-$ver release"
 
 		case "$repos_type" in
 		git)
