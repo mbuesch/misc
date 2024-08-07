@@ -134,6 +134,12 @@ EOF
 			die "Failed to fetch rustup-init"
 		sh rustup-init.sh --default-toolchain nightly --no-modify-path -y || die "rustup-init.sh failed"
 	) || die
+
+	# Install stable
+	(
+		. "$INSTALLDIR/activate" || die "Failed to activate rust environment"
+		rustup toolchain install stable || die "Failed to install rust-stable"
+	) || die
 }
 
 install_utils()
@@ -141,14 +147,14 @@ install_utils()
 	echo "Installing utilities..."
 	(
 		. "$INSTALLDIR/activate" || die "Failed to activate rust environment"
-		cargo install ldproxy || die "Failed to install ldproxy"
-		cargo install cargo-espmonitor || die "Failed to install cargo-espmonitor"
-		cargo install cargo-espflash || die "Failed to install cargo-espflash"
-		cargo install cargo-generate || die "Failed to install cargo-generate"
-		cargo install cargo-cache || die "Failed to install cargo-cache"
-		cargo install cargo-audit || die "Failed to install cargo-audit"
-		cargo install cargo-edit || die "Failed to install cargo-edit"
-		cargo install --locked bacon || die "Failed to install bacon"
+		cargo +stable install ldproxy || die "Failed to install ldproxy"
+		cargo +stable install cargo-espmonitor || die "Failed to install cargo-espmonitor"
+		cargo +stable install --locked --git https://github.com/esp-rs/espflash.git --rev 233490736646ca7bc29463a98df98d7ccf53439d cargo-espflash || die "Failed to install cargo-espflash"
+		cargo +stable install cargo-generate || die "Failed to install cargo-generate"
+		cargo +stable install cargo-cache || die "Failed to install cargo-cache"
+		cargo +stable install cargo-audit || die "Failed to install cargo-audit"
+		cargo +stable install cargo-edit || die "Failed to install cargo-edit"
+		cargo +stable install --locked bacon || die "Failed to install bacon"
 	) || die
 }
 
@@ -157,7 +163,7 @@ install_espup()
 	echo "Installing espup..."
 	(
 		. "$INSTALLDIR/activate" || die "Failed to activate rust environment"
-		cargo install espup || die "Failed to install espup"
+		cargo +stable install espup || die "Failed to install espup"
 	) || die
 }
 
