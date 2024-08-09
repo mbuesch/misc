@@ -126,19 +126,19 @@ fi
 EOF
 	[ $? -eq 0 ] || die "Failed to create activate script"
 
-	# Install nightly
+	# Install stable
 	(
 		. "$INSTALLDIR/activate" || die "Failed to activate rust environment"
 		cd "$INSTALLDIR/rust" || die "Failed to switch to rust directory"
 		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup-init.sh ||\
 			die "Failed to fetch rustup-init"
-		sh rustup-init.sh --default-toolchain nightly --no-modify-path -y || die "rustup-init.sh failed"
+		sh rustup-init.sh --default-toolchain stable --no-modify-path -y || die "rustup-init.sh failed"
 	) || die
 
-	# Install stable
+	# Install nightly
 	(
 		. "$INSTALLDIR/activate" || die "Failed to activate rust environment"
-		rustup toolchain install stable || die "Failed to install rust-stable"
+		rustup toolchain install nightly || die "Failed to install rust-nightly"
 	) || die
 }
 
