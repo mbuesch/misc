@@ -344,7 +344,12 @@ cargo_local_pkg_version()
 	local opt_package=
 	[ -n "$package" ] && opt_package="--package $package $package"
 
-	cargo pkgid --offline $opt_package | cut -d'#' -f2
+	local pkgid="$(cargo pkgid --offline $opt_package | cut -d'#' -f2)"
+	if echo "$pkgid" | grep -qe '@'; then
+		echo "$pkgid" | cut -d'@' -f2
+	else
+		echo "$pkgid" | cut -d'#' -f2
+	fi
 }
 
 local_pkg_version()
