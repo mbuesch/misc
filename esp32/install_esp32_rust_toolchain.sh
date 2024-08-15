@@ -149,7 +149,7 @@ install_utils()
 		. "$INSTALLDIR/activate" || die "Failed to activate rust environment"
 		cargo +stable install ldproxy || die "Failed to install ldproxy"
 		cargo +stable install cargo-espmonitor || die "Failed to install cargo-espmonitor"
-		cargo +stable install --locked --git https://github.com/esp-rs/espflash.git --rev 233490736646ca7bc29463a98df98d7ccf53439d cargo-espflash || die "Failed to install cargo-espflash"
+		cargo +stable install --locked cargo-espflash || die "Failed to install cargo-espflash"
 		cargo +stable install cargo-generate || die "Failed to install cargo-generate"
 		cargo +stable install cargo-cache || die "Failed to install cargo-cache"
 		cargo +stable install cargo-audit || die "Failed to install cargo-audit"
