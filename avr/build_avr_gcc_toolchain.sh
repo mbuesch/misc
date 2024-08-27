@@ -35,8 +35,8 @@ GDB_SHA256="38254eacd4572134bca9c5a5aa4d4ca564cbbd30c369d881f733fb6b903354f2"
 AVRA_URL="https://github.com/Ro5bert/avra/archive/refs/tags/1.4.2.tar.gz"
 AVRA_SHA256="cc56837be973d1a102dc6936a0b7235a1d716c0f7cd053bf77e0620577cff986"
 
-SIMAVR_URL="https://github.com/buserror/simavr/archive/refs/tags/v1.7.tar.gz"
-SIMAVR_SHA256="e7b3d5f0946e84fbe76a37519d0f146d162bbf88641ee91883b3970b02c77093"
+SIMAVR_URL="https://github.com/buserror/simavr/archive/d51f593d8959fd5b5e7c1b90b46fa3a4b8529465.tar.gz"
+SIMAVR_SHA256="9fd43f2dc5cacc35b8f2c47ea9633698f46e66ee814b9582ec86f7ddb572dcaf"
 
 die()
 {
@@ -53,7 +53,7 @@ show_help()
 	echo " -k|--keep-tmp                 Keep temporary build files."
 	echo
 	echo
-	echo "Install toolchain to $HOME/usr/avr-gcc"
+	echo "Install toolchain to $HOME/usr/avr"
 	echo "  ./build_avr_gcc_toolchain.sh"
 	echo
 	echo "Install toolchain to another destination"
@@ -63,7 +63,7 @@ show_help()
 parse_args()
 {
 	# Defaults:
-	PREFIX="$HOME/usr/avr-gcc"
+	PREFIX="$HOME/usr/avr"
 	KEEP_TMP=0
 
 	# Parse command line options
@@ -163,6 +163,11 @@ download_and_extract()
 	tar xf "$DOWNLOAD_FILE" || die "Failed to extract"
 	if ! [ -d "$EXTRACT_DIR" ]; then
 		# Workaround for github tag tarballs.
+
+		# Remove leading "v".
+		EXTRACT_DIR="$(printf '%s' "$EXTRACT_DIR" | sed -e 's/^v\(.*\)/\1/')"
+
+		# Find dir-prefix.
 		for d in *-"$EXTRACT_DIR"; do
 			if [ -d "$d" ]; then
 				EXTRACT_DIR="$d"
@@ -215,6 +220,7 @@ prepare()
 
 build_binutils()
 {
+	printf '\nbinutils:\n'
 	if [ -e "$PREFIX/bin/avr-ld" ]; then
 		echo "binutils are already installed."
 		return
@@ -244,6 +250,7 @@ build_binutils()
 
 build_gcc()
 {
+	printf '\ngcc:\n'
 	if [ -e "$PREFIX/bin/avr-gcc" ]; then
 		echo "gcc is already installed."
 		return
@@ -276,6 +283,7 @@ build_gcc()
 
 build_avrlibc()
 {
+	printf '\navr-libc:\n'
 	if [ -e "$PREFIX/avr/include/stdlib.h" ]; then
 		echo "avr-libc is already installed."
 		return
@@ -303,6 +311,7 @@ build_avrlibc()
 
 build_avrdude()
 {
+	printf '\navrdude:\n'
 	if [ -e "$PREFIX/bin/avrdude" ]; then
 		echo "avrdude is already installed."
 		return
@@ -330,6 +339,7 @@ build_avrdude()
 
 build_gdb()
 {
+	printf '\ngdb:\n'
 	if [ -e "$PREFIX/bin/avr-gdb" ]; then
 		echo "avr-gdb is already installed."
 		return
@@ -358,6 +368,7 @@ build_gdb()
 
 build_avra()
 {
+	printf '\navra:\n'
 	if [ -e "$PREFIX/bin/avra" ]; then
 		echo "avra is already installed."
 		return
@@ -379,7 +390,28 @@ build_avra()
 
 build_simavr()
 {
-	true #TODO
+	printf '\nsimavr:\n'
+	if [ -e "$PREFIX/bin/simavr" ]; then
+		echo "simavr is already installed."
+		return
+	fi
+
+	(
+		mkdir -p "$PREFIX/src/simavr" || die "mkdir failed"
+		cd "$PREFIX/src/simavr" || "cd failed"
+		download_and_extract "$SIMAVR_URL" "$SIMAVR_SHA256" || die "download failed"
+		cd "$EXTRACT_DIR" || die "cd failed"
+		local log="$PREFIX/src/simavr/build.log"
+		rm -f "$log"
+		echo "Building..."
+		make -j "$(nproc)" RELEASE=1 PREFIX="$PREFIX" DESTDIR="$PREFIX" \
+			>>"$log" 2>&1 ||\
+			die "make failed"
+		make RELEASE=1 PREFIX="$PREFIX" DESTDIR="$PREFIX" install \
+			>>"$log" 2>&1 ||\
+			die "make install failed"
+		remove_build_tmp "$PREFIX/src/simavr/$EXTRACT_DIR" "$log"
+	) || die
 }
 
 parse_args "$@"
