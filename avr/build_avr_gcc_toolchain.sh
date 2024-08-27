@@ -161,7 +161,16 @@ download_and_extract()
 	echo "Extracting $DOWNLOAD_FILE ..."
 	rm -rf "$EXTRACT_DIR"
 	tar xf "$DOWNLOAD_FILE" || die "Failed to extract"
-	[ -d "$EXTRACT_DIR" ] || die "Extracted directory not present"
+	if ! [ -d "$EXTRACT_DIR" ]; then
+		# Workaround for github tag tarballs.
+		for d in *-"$EXTRACT_DIR"; do
+			if [ -d "$d" ]; then
+				EXTRACT_DIR="$d"
+			fi
+			break
+		done
+	fi
+	[ -d "$EXTRACT_DIR" ] || die "Extracted directory $EXTRACT_DIR not present"
 }
 
 remove_build_tmp()
@@ -349,7 +358,23 @@ build_gdb()
 
 build_avra()
 {
-	true #TODO
+	if [ -e "$PREFIX/bin/avra" ]; then
+		echo "avra is already installed."
+		return
+	fi
+
+	(
+		mkdir -p "$PREFIX/src/avra" || die "mkdir failed"
+		cd "$PREFIX/src/avra" || "cd failed"
+		download_and_extract "$AVRA_URL" "$AVRA_SHA256" || die "download failed"
+		cd "$EXTRACT_DIR" || die "cd failed"
+		local log="$PREFIX/src/avra/build.log"
+		rm -f "$log"
+		echo "Building..."
+		make -j "$(nproc)" PREFIX="$PREFIX" >>"$log" 2>&1 || die "make failed"
+		make PREFIX="$PREFIX" install >>"$log" 2>&1 || die "make install failed"
+		remove_build_tmp "$PREFIX/src/avra/$EXTRACT_DIR" "$log"
+	) || die
 }
 
 build_simavr()
