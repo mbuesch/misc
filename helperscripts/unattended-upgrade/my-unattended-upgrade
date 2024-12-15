@@ -13,4 +13,7 @@ fi
 if [ -x /usr/bin/rpi-eeprom-update ]; then
 	/usr/bin/rpi-eeprom-update -a
 fi
+if [ -x /usr/bin/podman -a -x /usr/bin/systemctl ]; then
+	/usr/bin/systemctl start podman-auto-update.service
+fi
 exit 0
