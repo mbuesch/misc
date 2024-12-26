@@ -6,6 +6,8 @@ targetsub="datensicherung"
 sourcepath="/mnt/backup/snapshots/root"
 btrfs=1
 
+####
+
 die()
 {
 	local msg1="$1"
@@ -63,14 +65,14 @@ fi
 # Mount the backup drive.
 mkdir -p "$targetmp" || die "mkdir target failed."
 if ! [ -b "$targetnode" ]; then
-	die "dev node not present" "The Backup-Festplatte ist nicht angeschlossen!"
+	die "dev node not present" "Die Backup-Festplatte ist nicht angeschlossen!"
 fi
 umount -f "$targetnode" >/dev/null 2>&1
 umount -f "$targetmp" >/dev/null 2>&1
 mount "$targetnode" "$targetmp" || die "target mount failed"
 
 # Sync the backup drive with the source drive.
-mkdir -p "$targetmp/$targetsub" || die
+mkdir -p "$targetmp/$targetsub" || die "mkdir target sub failed"
 while true; do
 	rsync -aHAX --inplace --delete-before --progress \
 		"$sourcepath"/ \
@@ -81,6 +83,7 @@ while true; do
 	break
 done
 if [ $btrfs -ne 0 ]; then
+	mkdir -p "$targetmp/$targetsub"_boot || die "mkdir target sub (boot) failed"
 	while true; do
 		rsync -aHAX --inplace --delete-before --progress \
 			/boot/ \
@@ -97,6 +100,10 @@ if [ $btrfs -ne 0 ]; then
 		die "btrfs snapshot delete failed"
 fi
 
+# Create time stamp.
+mkdir -p /var/lib/simplebackup || die "mkdir /var/lib/simplebackup failed"
+date --utc '+%s' > /var/lib/simplebackup/stamp || die "Failed to create time stamp"
+
 echo
 echo
 echo
@@ -105,3 +112,4 @@ echo "###   Alles Ok!                                      ###"
 echo "###   Die Festplatte kann jetzt abgesteckt werden.   ###"
 echo "########################################################"
 read -p "" x
+exit 0
