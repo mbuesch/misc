@@ -35,8 +35,13 @@ GDB_SHA256="83350ccd35b5b5a0cba6b334c41294ea968158c573940904f00b92f76345314d"
 AVRA_URL="https://github.com/Ro5bert/avra/archive/refs/tags/1.4.2.tar.gz"
 AVRA_SHA256="cc56837be973d1a102dc6936a0b7235a1d716c0f7cd053bf77e0620577cff986"
 
-SIMAVR_URL="https://github.com/buserror/simavr/archive/ae75edec3f4068f3d1a6c30130abef7ef8e83155.tar.gz"
+SIMAVR_COMMIT="ae75edec3f4068f3d1a6c30130abef7ef8e83155"
+SIMAVR_URL="https://github.com/buserror/simavr/archive/$SIMAVR_COMMIT.tar.gz"
 SIMAVR_SHA256="ae4e4d01cc87f9a483555dc023a7fb7f5bbf996cad95acbd60893798fcefc188"
+
+DWDEBUG_COMMIT="a2830d578cce5d11c77cf0c7a3c8cbb6dbb1864a"
+DWDEBUG_URL="https://github.com/dcwbrown/dwire-debug/archive/$DWDEBUG_COMMIT.tar.gz"
+DWDEBUG_SHA256="988b568c9c2f5c3d493005f2f08461cd5cefcf7994f4d4c585e80c61970ddeae"
 
 die()
 {
@@ -101,17 +106,18 @@ checkprog()
 
 check_build_environment()
 {
-	checkprog wget
-	checkprog gcc
-	checkprog make
-	checkprog cmake
-	checkprog nproc
-	checkprog tar
-	checkprog xz
-	checkprog gunzip
 	checkprog bunzip2
+	checkprog cmake
+	checkprog gcc
+	checkprog gunzip
+	checkprog make
+	checkprog nproc
+	checkprog patch
 	checkprog schedtool
 	checkprog sha256sum
+	checkprog tar
+	checkprog wget
+	checkprog xz
 }
 
 check_shasum()
@@ -414,6 +420,36 @@ build_simavr()
 	) || die
 }
 
+build_dwdebug()
+{
+	printf '\ndwdebug:\n'
+	if [ -e "$PREFIX/bin/dwdebug" ]; then
+		echo "dwdebug is already installed."
+		return
+	fi
+
+	(
+		mkdir -p "$PREFIX/src/dwdebug" || die "mkdir failed"
+		cd "$PREFIX/src/dwdebug" || "cd failed"
+		download_and_extract "$DWDEBUG_URL" "$DWDEBUG_SHA256" || die "download failed"
+		cd "$EXTRACT_DIR" || die "cd failed"
+		local log="$PREFIX/src/dwdebug/build.log"
+		rm -f "$log"
+		echo "Building..."
+		patch -p1 < "$basedir/dwdebug.patch" \
+			>>"$log" 2>&1 ||\
+			die "patch failed"
+		make -j1 dwdebug \
+			>>"$log" 2>&1 ||\
+			die "make failed"
+		install -m755 ./dwdebug "$PREFIX/bin/"
+			>>"$log" 2>&1 ||\
+			die "install failed"
+		remove_build_tmp "$PREFIX/src/dwdebug/$EXTRACT_DIR" "$log"
+	) || die
+}
+
+basedir="$(realpath "$0" | xargs dirname)"
 parse_args "$@"
 check_build_environment
 prepare
@@ -424,6 +460,7 @@ build_avrdude
 build_gdb
 build_avra
 build_simavr
+build_dwdebug
 
 echo
 echo
