@@ -39,9 +39,9 @@ SIMAVR_COMMIT="ae75edec3f4068f3d1a6c30130abef7ef8e83155"
 SIMAVR_URL="https://github.com/buserror/simavr/archive/$SIMAVR_COMMIT.tar.gz"
 SIMAVR_SHA256="ae4e4d01cc87f9a483555dc023a7fb7f5bbf996cad95acbd60893798fcefc188"
 
-DWDEBUG_COMMIT="a2830d578cce5d11c77cf0c7a3c8cbb6dbb1864a"
-DWDEBUG_URL="https://github.com/dcwbrown/dwire-debug/archive/$DWDEBUG_COMMIT.tar.gz"
-DWDEBUG_SHA256="988b568c9c2f5c3d493005f2f08461cd5cefcf7994f4d4c585e80c61970ddeae"
+DWDEBUG_COMMIT="a51e9cc342d2437052103169d9a5c81c4cf480cf"
+DWDEBUG_URL="https://github.com/mbuesch/dwire-debug/archive/$DWDEBUG_COMMIT.tar.gz"
+DWDEBUG_SHA256="54d617de19272cae1b86330f56bb04b01b90df9810b26fca4aa6e4576d2c33e6"
 
 die()
 {
@@ -112,7 +112,6 @@ check_build_environment()
 	checkprog gunzip
 	checkprog make
 	checkprog nproc
-	checkprog patch
 	checkprog schedtool
 	checkprog sha256sum
 	checkprog tar
@@ -436,9 +435,6 @@ build_dwdebug()
 		local log="$PREFIX/src/dwdebug/build.log"
 		rm -f "$log"
 		echo "Building..."
-		patch -p1 < "$basedir/dwdebug.patch" \
-			>>"$log" 2>&1 ||\
-			die "patch failed"
 		make -j1 dwdebug \
 			>>"$log" 2>&1 ||\
 			die "make failed"
