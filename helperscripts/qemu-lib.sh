@@ -294,6 +294,7 @@ run()
 	local spice_opt=
 	local usbdevice_opt=
 	local pcidevice_opt=
+	local rngdevice_opt=
 	local net0_conf=
 	local net1_conf=
 	local screen_opt=
@@ -420,6 +421,8 @@ run()
 		die "Invalid mouse selection"
 	fi
 
+	rngdevice_opt="-device virtio-rng-pci"
+
 	net0_conf="-netdev user,id=net0,restrict=$(bool_to_on_off "$opt_netrestrict"),net=192.168.5.1/24,smb=${sharedir},smbserver=192.168.5.4"
 	net0_conf="$net0_conf -device $opt_netdevice,netdev=net0,mac=00:11:22:AA:BB:CC"
 	if [ "$opt_usetap" -ne 0 ]; then
@@ -470,6 +473,7 @@ run()
 		$usbdevice_opt \
 		$serial_opt \
 		$pcidevice_opt \
+		$rngdevice_opt \
 		$vga_opt \
 		$screen_opt \
 		$rtc \
