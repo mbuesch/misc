@@ -17,11 +17,11 @@
 # USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
-BINUTILS_URL="https://ftp-stud.hs-esslingen.de/pub/Mirrors/ftp.gnu.org/binutils/binutils-2.43.1.tar.xz"
-BINUTILS_SHA256="13f74202a3c4c51118b797a39ea4200d3f6cfbe224da6d1d95bb938480132dfd"
+BINUTILS_URL="https://ftp-stud.hs-esslingen.de/pub/Mirrors/ftp.gnu.org/binutils/binutils-2.44.tar.xz"
+BINUTILS_SHA256="ce2017e059d63e67ddb9240e9d4ec49c2893605035cd60e92ad53177f4377237"
 
-GCC_URL="https://ftp-stud.hs-esslingen.de/pub/Mirrors/ftp.gnu.org/gcc/gcc-14.2.0/gcc-14.2.0.tar.xz"
-GCC_SHA256="a7b39bc69cbf9e25826c5a60ab26477001f7c08d85cec04bc0e29cabed6f3cc9"
+GCC_URL="https://ftp-stud.hs-esslingen.de/pub/Mirrors/ftp.gnu.org/gcc/gcc-15.1.0/gcc-15.1.0.tar.xz"
+GCC_SHA256="e2b09ec21660f01fecffb715e0120265216943f038d0e48a9868713e54f06cea"
 
 AVRLIBC_URL="https://github.com/avrdudes/avr-libc/releases/download/avr-libc-2_2_1-release/avr-libc-2.2.1.tar.bz2"
 AVRLIBC_SHA256="006a6306cbbc938c3bdb583ac54f93fe7d7c8cf97f9cde91f91c6fb0273ab465"
@@ -29,15 +29,15 @@ AVRLIBC_SHA256="006a6306cbbc938c3bdb583ac54f93fe7d7c8cf97f9cde91f91c6fb0273ab465
 AVRDUDE_URL="https://github.com/avrdudes/avrdude/releases/download/v8.0/avrdude-8.0.tar.gz"
 AVRDUDE_SHA256="a689d70a826e2aa91538342c46c77be1987ba5feb9f7dab2606b8dae5d2a52d5"
 
-GDB_URL="https://ftp-stud.hs-esslingen.de/pub/Mirrors/ftp.gnu.org/gdb/gdb-15.2.tar.xz"
-GDB_SHA256="83350ccd35b5b5a0cba6b334c41294ea968158c573940904f00b92f76345314d"
+GDB_URL="https://ftp-stud.hs-esslingen.de/pub/Mirrors/ftp.gnu.org/gdb/gdb-16.3.tar.xz"
+GDB_SHA256="bcfcd095528a987917acf9fff3f1672181694926cc18d609c99d0042c00224c5"
 
 AVRA_URL="https://github.com/Ro5bert/avra/archive/refs/tags/1.4.2.tar.gz"
 AVRA_SHA256="cc56837be973d1a102dc6936a0b7235a1d716c0f7cd053bf77e0620577cff986"
 
-SIMAVR_COMMIT="ae75edec3f4068f3d1a6c30130abef7ef8e83155"
+SIMAVR_COMMIT="4437fe896c2c8aa6e3f3e732561b30bfec5a0043"
 SIMAVR_URL="https://github.com/buserror/simavr/archive/$SIMAVR_COMMIT.tar.gz"
-SIMAVR_SHA256="ae4e4d01cc87f9a483555dc023a7fb7f5bbf996cad95acbd60893798fcefc188"
+SIMAVR_SHA256="a8b973cb4b517703f28e3deac9e8d1cbb7092a6764918db6824add80d24ee899"
 
 DWDEBUG_COMMIT="a51e9cc342d2437052103169d9a5c81c4cf480cf"
 DWDEBUG_URL="https://github.com/mbuesch/dwire-debug/archive/$DWDEBUG_COMMIT.tar.gz"
