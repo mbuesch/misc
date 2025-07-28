@@ -19,6 +19,8 @@ let g:mapleader = ","
 
 " Automatically re-read the file, if it has been changed externally.
 set autoread
+autocmd FocusGained,BufEnter,CursorHold,CursorHoldI,InsertEnter * checktime
+set updatetime=300
 
 " Appearance
 syntax enable		" Syntax highlighting.
