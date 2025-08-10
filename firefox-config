@@ -1,6 +1,7 @@
 Firefox about:config settings:
 
 browser.download.improvements_to_download_panel		;false
+browser.ml.chat.enabled					;false
 browser.newtabpage.enabled				;false
 browser.pocket.enabled					;false
 browser.privatebrowsing.autostart			;false
@@ -9,6 +10,7 @@ browser.safebrowsing.downloads.remote.enabled		;false
 browser.safebrowsing.enabled				;false
 browser.safebrowsing.malware.enabled			;false
 browser.tabs.animate					;false
+browser.tabs.groups.smart.enabled			;false
 browser.tabs.warnOnClose				;false
 browser.urlbar.autocomplete.enabled			;false
 browser.urlbar.suggest.bookmark				;false
