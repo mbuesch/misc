@@ -2,6 +2,7 @@ Firefox about:config settings:
 
 browser.download.improvements_to_download_panel		;false
 browser.ml.chat.enabled					;false
+browser.ml.linkPreview.enabled				;false
 browser.newtabpage.enabled				;false
 browser.pocket.enabled					;false
 browser.privatebrowsing.autostart			;false
