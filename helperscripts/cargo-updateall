@@ -11,6 +11,7 @@ for pkg in $(cargo install --list | grep '^[^[:space:]]' | awk '{print $1}'); do
 	if [ "$pkg" = "atdf2svd" -o \
 	     "$pkg" = "svd2rust" -o \
 	     "$pkg" = "svdtools" -o \
+	     "$pkg" = "avr-postprocess" -o \
 	     "$pkg" = "dioxus-cli" -o ]; then
 		echo "Skipped."
 		continue
