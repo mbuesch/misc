@@ -355,7 +355,10 @@ cargo_local_pkg_version()
 local_pkg_version()
 {
 	if [ -e "$srcdir/$srcsubdir/Cargo.toml" ]; then
+		local prevdir="$(pwd)"
+		cd "$srcdir/$srcsubdir" || die "Internal error: cd"
 		cargo_local_pkg_version "$@"
+		cd "$prevdir" || die "Internal error: cd"
 	else
 		die "local_pkg_version() is currently only supported in cargo projects."
 	fi
