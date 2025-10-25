@@ -535,6 +535,8 @@ make_documentation()
 
 	execute_hook pre_documentation "$checkout_dir"
 
+	cd "$checkout_dir" || die "Internal error: cd"
+
 	local old_IFS="$IFS"
 	IFS='
 '
