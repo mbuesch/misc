@@ -464,7 +464,7 @@ run()
 		$cpu_opt \
 		$spice_opt \
 		-m "$opt_ram" \
-		-drive file="$image",index=0,format="$image_format",discard=on,media=disk \
+		-drive file="$image",index=0,format="$image_format",discard=on,aio=native,cache=none,detect-zeroes=on,media=disk \
 		-boot c \
 		$net0_conf \
 		$net1_conf \
