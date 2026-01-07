@@ -23,21 +23,21 @@ BINUTILS_SHA256="c50c0e7f9cb188980e2cc97e4537626b1672441815587f1eab69d2a1bfbef5d
 GCC_URL="https://ftp-stud.hs-esslingen.de/pub/Mirrors/ftp.gnu.org/gcc/gcc-15.2.0/gcc-15.2.0.tar.xz"
 GCC_SHA256="438fd996826b0c82485a29da03a72d71d6e3541a83ec702df4271f6fe025d24e"
 
-AVRLIBC_URL="https://github.com/avrdudes/avr-libc/releases/download/avr-libc-2_2_1-release/avr-libc-2.2.1.tar.bz2"
-AVRLIBC_SHA256="006a6306cbbc938c3bdb583ac54f93fe7d7c8cf97f9cde91f91c6fb0273ab465"
+AVRLIBC_URL="https://github.com/avrdudes/avr-libc/releases/download/avr-libc-2_3_0-release/avr-libc-2.3.0.tar.bz2"
+AVRLIBC_SHA256="d7c146fec5d7704ff46bebc476f6c81e0d46c8a32a4f6c2183342d217f0825b4"
 
 AVRDUDE_URL="https://github.com/avrdudes/avrdude/releases/download/v8.1/avrdude-8.1.tar.gz"
 AVRDUDE_SHA256="2d3016edd5281ea09627c20b865e605d4f5354fe98f269ce20522a5b910ab399"
 
-GDB_URL="https://ftp-stud.hs-esslingen.de/pub/Mirrors/ftp.gnu.org/gdb/gdb-16.3.tar.xz"
-GDB_SHA256="bcfcd095528a987917acf9fff3f1672181694926cc18d609c99d0042c00224c5"
+GDB_URL="https://ftp-stud.hs-esslingen.de/pub/Mirrors/ftp.gnu.org/gdb/gdb-17.1.tar.xz"
+GDB_SHA256="14996f5f74c9f68f5a543fdc45bca7800207f91f92aeea6c2e791822c7c6d876"
 
 AVRA_URL="https://github.com/Ro5bert/avra/archive/refs/tags/1.4.2.tar.gz"
 AVRA_SHA256="cc56837be973d1a102dc6936a0b7235a1d716c0f7cd053bf77e0620577cff986"
 
-SIMAVR_COMMIT="f7546e61d48769eac5b329042e502e1695d3d0c6"
+SIMAVR_COMMIT="a6fc4cc754ebf4ffb1e615ba7c2ab8a6d6f8b967"
 SIMAVR_URL="https://github.com/buserror/simavr/archive/$SIMAVR_COMMIT.tar.gz"
-SIMAVR_SHA256="a063df47fd7bebd7f9dfee5a8c85201620ffde164cc2d244b3aaa103664b1d1c"
+SIMAVR_SHA256="af8044ce14f5ef51eed16207628e467029dcef0fc452d4aa40533754789ac505"
 
 DWDEBUG_COMMIT="a51e9cc342d2437052103169d9a5c81c4cf480cf"
 DWDEBUG_URL="https://github.com/mbuesch/dwire-debug/archive/$DWDEBUG_COMMIT.tar.gz"
