@@ -5,20 +5,13 @@ if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-# Get the list of installed packages
-$packages = cargo install --list | ForEach-Object {
-    # Split the line and take the first element (package name)
-    $parts = $_.Split(' ', [System.StringSplitOptions]::RemoveEmptyEntries)
-    if ($parts.Length -gt 0 -and $_ -match '^[^\s]') {
-        $parts[0]
-    }
-}
+# Get the list of installed packages (lines starting with non-whitespace, first token)
+$packages = cargo install --list |
+    Where-Object { $_ -match '^[^\s]' } |
+    ForEach-Object { ($_ -split '\s+',2)[0] }
 
 # Packages to skip
 $skippedPackages = @(
-    "atdf2svd",
-    "svd2rust",
-    "svdtools",
     "avr-postprocess",
     "dioxus-cli"
 )
@@ -37,20 +30,21 @@ foreach ($pkg in $packages) {
         continue
     }
 
-    $installArgs = New-Object System.Collections.ArrayList
+    $installArgs = @()
     if ($lockedPackages -contains $pkg) {
-        $installArgs.Add("--locked") | Out-Null
+        $installArgs += "--locked"
     }
 
-    # Add any additional arguments passed to the script
+    # Preserve additional args passed to the script
     if ($args) {
-        $installArgs.AddRange($args)
+        $installArgs += $args
     }
 
-    $installArgs.Add($pkg) | Out-Null
+    $installArgs += $pkg
 
-    # Run cargo install
-    cargo install @installArgs
+    $cmdArgs = @("install") + $installArgs
+
+    & cargo @cmdArgs
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Failed to update $pkg"
         Read-Host -Prompt "Press Enter to exit"
