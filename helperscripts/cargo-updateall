@@ -5,11 +5,17 @@ if ! which cargo >/dev/null 2>&1; then
 	exit 1
 fi
 
+if ! which schedtool >/dev/null 2>&1; then
+	echo "Error: schedtool not found." >&2
+	exit 1
+fi
+
+schedtool -D -n19 $$ || die "Failed to reduce process priority"
+
 for pkg in $(cargo install --list | grep '^[^[:space:]]' | awk '{print $1}'); do
 	printf '\nUpdating %s\n' "$pkg"
 
-	if [ "$pkg" = "avr-postprocess" -o \
-	     "$pkg" = "dioxus-cli" -o ]; then
+	if [ "$pkg" = "avr-postprocess" ]; then
 		echo "Skipped."
 		continue
 	fi
