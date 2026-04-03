@@ -12,8 +12,7 @@ $packages = cargo install --list |
 
 # Packages to skip
 $skippedPackages = @(
-    "avr-postprocess",
-    "dioxus-cli"
+    "avr-postprocess"
 )
 
 # Packages to install with --locked
