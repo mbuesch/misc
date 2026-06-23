@@ -13,9 +13,13 @@ die()
 }
 
 rootdir=
+use_dosbox_x=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
+        -x)
+            use_dosbox_x=1
+            ;;
         *)
             [ -z "$rootdir" ] || die "Unknown option: $*"
             rootdir="$*"
@@ -38,7 +42,12 @@ if ! [ -e "$rootdir/c/bin/kfast.com" ]; then
         die "Failed to make KFAST.COM"
 fi
 
-dosbox \
+if [ $use_dosbox_x -eq 0 ]; then
+    dosbox=dosbox
+else
+    dosbox=dosbox-x
+fi
+$dosbox \
     -conf "$tooldir/dosbox.conf" \
     -conf "$conf" ||\
     die "Dosbox exited with an error."
