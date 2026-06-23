@@ -22,7 +22,8 @@ for pkg in $(cargo install --list | grep '^[^[:space:]]' | awk '{print $1}'); do
 
 	locked=
 	if [ "$pkg" = "bacon" -o \
-	     "$pkg" = "cargo-vet" ]; then
+	     "$pkg" = "cargo-vet" -o \
+	     "$pkg" = "dioxus-cli" ]; then
 		locked="--locked"
 	fi
 

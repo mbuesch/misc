@@ -18,7 +18,8 @@ $skippedPackages = @(
 # Packages to install with --locked
 $lockedPackages = @(
     "bacon",
-    "cargo-vet"
+    "cargo-vet",
+    "dioxus-cli"
 )
 
 foreach ($pkg in $packages) {
