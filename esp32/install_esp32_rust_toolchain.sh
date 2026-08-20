@@ -134,12 +134,6 @@ EOF
 			die "Failed to fetch rustup-init"
 		sh rustup-init.sh --default-toolchain stable --no-modify-path -y || die "rustup-init.sh failed"
 	) || die
-
-	# Install nightly
-	(
-		. "$INSTALLDIR/activate" || die "Failed to activate rust environment"
-		rustup toolchain install nightly || die "Failed to install rust-nightly"
-	) || die
 }
 
 install_utils()
@@ -151,7 +145,6 @@ install_utils()
 		cargo +stable install cargo-espmonitor || die "Failed to install cargo-espmonitor"
 		cargo +stable install --locked cargo-espflash || die "Failed to install cargo-espflash"
 		cargo +stable install cargo-generate || die "Failed to install cargo-generate"
-		cargo +stable install cargo-cache || die "Failed to install cargo-cache"
 		cargo +stable install cargo-audit || die "Failed to install cargo-audit"
 		cargo +stable install cargo-edit || die "Failed to install cargo-edit"
 		cargo +stable install --locked bacon || die "Failed to install bacon"
@@ -178,15 +171,6 @@ install_esp_toolchain()
 	) || die
 }
 
-cargo_clean()
-{
-	echo "Cleaning up..."
-	(
-		. "$INSTALLDIR/activate" || die "Failed to activate rust environment"
-		cargo cache -a || die "Failed to autoclean the cargo cache"
-	) || die
-}
-
 parse_args "$@"
 check_environment
 prepare
@@ -194,7 +178,6 @@ install_rust
 install_utils
 install_espup
 install_esp_toolchain
-cargo_clean
 
 echo
 echo
