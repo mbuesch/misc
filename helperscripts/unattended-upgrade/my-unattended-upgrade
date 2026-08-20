@@ -7,7 +7,7 @@ if [ -x /usr/bin/unattended-upgrade ]; then
 	/usr/bin/unattended-upgrade
 fi
 if [ -x /usr/bin/flatpak ]; then
-	/usr/bin/flatpak update --noninteractive -y
+	/usr/bin/flatpak update --no-static-deltas --noninteractive -y
 	/usr/bin/flatpak uninstall --unused --noninteractive -y
 fi
 if [ -x /usr/bin/rpi-eeprom-update ]; then

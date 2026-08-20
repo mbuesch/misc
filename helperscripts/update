@@ -76,7 +76,7 @@ apt-get clean || die "Clean failed"
 
 if command -v flatpak >/dev/null 2>&1; then
 	info "Updating flatpaks"
-	flatpak update || die "flatpak update failed"
+	flatpak update --no-static-deltas || die "flatpak update failed"
 	flatpak uninstall --unused || die "flatpak uninstall --unused failed"
 fi
 
