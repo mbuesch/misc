@@ -1,7 +1,7 @@
 #
 # Release script library
 #
-# Copyright (c) 2012-2024 Michael Buesch <m@bues.ch>
+# Copyright (c) 2012-2026 Michael Buesch <m@bues.ch>
 #
 # Licensed under the Apache License version 2.0
 # or the MIT license, at your option.
@@ -84,10 +84,17 @@ default_hook_testbuild()
 	   [ -r ./GNUmakefile -o -r ./makefile -o -r ./Makefile ]; then
 		make
 	fi
-	if ! echo "$conf_testbuild" | grep -q no-setuppy &&\
-	   [ -x ./setup.py ]; then
+
+	if ! echo "$conf_testbuild" | grep -q no-pyproject &&\
+	   [ -r ./pyproject.toml ]; then
+		info "Running python -m build"
+		python3 -m build
+	elif ! echo "$conf_testbuild" | grep -q no-setuppy &&\
+	    [ -x ./setup.py ]; then
+		info "Running ./setup.py build"
 		./setup.py --no-user-cfg build
 	fi
+
 	if [ -r ./Cargo.toml ]; then
 		if ! echo "$conf_testbuild" | grep -q no-cargo-build; then
 			info "Running cargo DEBUG build"
@@ -566,7 +573,7 @@ make_archives()
 	archive_dir="$tmpdir/$project-archives"
 	mkdir -p "$archive_dir" || die "Failed to create archive directory"
 
-	setup_py_targets=
+	py_targets=
 
 	info "Creating archives"
 
@@ -603,7 +610,7 @@ make_archives()
 			;;
 		py-*)
 			local target="$(echo "$artype" | sed -e 's/py-//' | tr '-' '_')"
-			setup_py_targets="$setup_py_targets $target"
+			py_targets="$py_targets $target"
 			continue # Python archives are handled later
 			;;
 		*)
@@ -649,60 +656,115 @@ make_archives()
 	done
 
 	# Handle Python build targets
-	[ -f "./setup.py" ] && [ $opt_upload -ne 0 ] && setup_py_targets="$setup_py_targets sdist_gz"
-	if [ -n "$setup_py_targets" ]; then
+	if [ -f "$checkout_dir/setup.py" -a\
+	     ! -f "$checkout_dir/pyproject.toml" -a\
+	     $opt_upload -ne 0 ]; then
+		py_targets="$py_targets sdist_gz"
+	fi
+	if [ -n "$py_targets" ]; then
 		cd "$checkout_dir" || die "Internal error: cd"
-		[ -x "./setup.py" ] ||\
-			die "Used Python archive target, but no executable setup.py found"
-		rm -rf ./dist/ || die "Failed to delete ./dist/"
 		mkdir "$archive_dir/python" || die "Failed to create Python archive subdir"
-		local have_bdist_wininst=0
-		local have_sdist=0
-		local have_sdist_bz2=0
-		local have_sdist_xz=0
-		local have_sdist_zip=0
-		for target in $setup_py_targets; do
-			info "Building Python $target-package"
-			local opts=
-			local setup_target="$target"
-			local doit=0
-			if [ "$target" = "bdist_wininst" ]; then
-				[ $have_bdist_wininst -ne 0 ] && continue
-				local have_bdist_wininst=1
-				local opts="--plat-name win32"
-				local doit=1
-			elif [ "$target" = "sdist" -o "$target" = "sdist_gz" ]; then
-				[ $have_sdist -ne 0 ] && continue
-				local have_sdist=1
-				local setup_target="sdist"
-				local opts="--formats=gztar --owner=root --group=root"
-				local doit=1
-			elif [ "$target" = "sdist_bz2" ]; then
-				[ $have_sdist_bz2 -ne 0 ] && continue
-				local have_sdist_bz2=1
-				local setup_target="sdist"
-				local opts="--formats=bztar --owner=root --group=root"
-				local doit=1
-			elif [ "$target" = "sdist_xz" ]; then
-				[ $have_sdist_xz -ne 0 ] && continue
-				local have_sdist_xz=1
-				local setup_target="sdist"
-				local opts="--formats=xztar --owner=root --group=root"
-				local doit=1
-			elif [ "$target" = "sdist_zip" ]; then
-				[ $have_sdist_zip -ne 0 ] && continue
-				local have_sdist_zip=1
-				local setup_target="sdist"
-				local opts="--formats=zip"
-				local doit=1
-			fi
-			if [ $doit -ne 0 ]; then
-				./setup.py --no-user-cfg "$setup_target" $opts ||\
-					die "Failed to build Python archive"
-			fi
-		done
-		mv ./dist/* "$archive_dir/python/" || die "Failed to move Python archives"
-		rmdir ./dist/ || die "Failed to delete ./dist/"
+		rm -rf ./dist/ || die "Failed to delete ./dist/"
+		if [ -f "./pyproject.toml" ]; then
+			# pyproject.toml based build
+			info "Building Python pyproject packages"
+			python3 -m build || die "Failed to build Python archives"
+			local sdist_gz=
+			local wheel=
+			for f in ./dist/*; do
+				case "$f" in
+				*.tar.gz)
+					sdist_gz="$f"
+					;;
+				*.whl)
+					wheel="$f"
+					;;
+				esac
+			done
+			[ -n "$sdist_gz" ] || die "No Python sdist archive built"
+			local have_sdist=0
+			local have_sdist_bz2=0
+			local have_sdist_xz=0
+			local have_sdist_zip=0
+			local have_bdist=0
+			for target in $py_targets; do
+				case "$target" in
+				sdist|sdist_gz)
+					[ $have_sdist -ne 0 ] && continue
+					have_sdist=1
+					cp "$sdist_gz" "$archive_dir/python/" || die "Failed to copy Python sdist"
+					;;
+				sdist_xz)
+					[ $have_sdist_xz -ne 0 ] && continue
+					have_sdist_xz=1
+					local name="$(basename "$sdist_gz" .tar.gz).tar.xz"
+					gunzip -c "$sdist_gz" | xz -9 > "$archive_dir/python/$name" || \
+						die "Failed to recompress Python sdist to xz"
+					;;
+				bdist)
+					[ $have_bdist -ne 0 ] && continue
+					have_bdist=1
+					[ -n "$wheel" ] || die "No Python wheel built"
+					cp "$wheel" "$archive_dir/python/" || die "Failed to copy Python wheel"
+					;;
+				sdist_bz2|sdist_zip|bdist_wininst|bdist_dumb|bdist_rpm)
+					die "Python archive target '$target' is not supported for pyproject.toml projects"
+					;;
+				esac
+			done
+			rm -rf ./dist/ || die "Failed to delete ./dist/"
+		elif [ -x "./setup.py" ]; then
+			# setup.py based build
+			local have_bdist_wininst=0
+			local have_sdist=0
+			local have_sdist_bz2=0
+			local have_sdist_xz=0
+			local have_sdist_zip=0
+			for target in $py_targets; do
+				info "Building Python $target-package"
+				local opts=
+				local setup_target="$target"
+				local doit=0
+				if [ "$target" = "bdist_wininst" ]; then
+					[ $have_bdist_wininst -ne 0 ] && continue
+					local have_bdist_wininst=1
+					local opts="--plat-name win32"
+					local doit=1
+				elif [ "$target" = "sdist" -o "$target" = "sdist_gz" ]; then
+					[ $have_sdist -ne 0 ] && continue
+					local have_sdist=1
+					local setup_target="sdist"
+					local opts="--formats=gztar --owner=root --group=root"
+					local doit=1
+				elif [ "$target" = "sdist_bz2" ]; then
+					[ $have_sdist_bz2 -ne 0 ] && continue
+					local have_sdist_bz2=1
+					local setup_target="sdist"
+					local opts="--formats=bztar --owner=root --group=root"
+					local doit=1
+				elif [ "$target" = "sdist_xz" ]; then
+					[ $have_sdist_xz -ne 0 ] && continue
+					local have_sdist_xz=1
+					local setup_target="sdist"
+					local opts="--formats=xztar --owner=root --group=root"
+					local doit=1
+				elif [ "$target" = "sdist_zip" ]; then
+					[ $have_sdist_zip -ne 0 ] && continue
+					local have_sdist_zip=1
+					local setup_target="sdist"
+					local opts="--formats=zip"
+					local doit=1
+				fi
+				if [ $doit -ne 0 ]; then
+					./setup.py --no-user-cfg "$setup_target" $opts ||\
+						die "Failed to build Python archive"
+				fi
+			done
+			mv ./dist/* "$archive_dir/python/" || die "Failed to move Python archives"
+			rmdir ./dist/ || die "Failed to delete ./dist/"
+		else
+			die "Used Python archive target, but neither setup.py nor pyproject.toml found"
+		fi
 	fi
 
 	execute_hook post_archives "$archive_dir" "$checkout_dir"
@@ -760,11 +822,12 @@ make_upload()
 {
 	[ $opt_upload -eq 0 ] && return
 
-	if [ -f "$checkout_dir/setup.py" ]; then
+	if [ -f "$checkout_dir/pyproject.toml" -o\
+	     -f "$checkout_dir/setup.py" ]; then
 		# This is is a Python package.
-		[ -n "$setup_py_targets" ] ||\
+		[ -n "$py_targets" ] ||\
 			die "PyPi-upload requested, but no Python packages have been built."
-		info "Uploading $setup_py_targets archives to PyPi"
+		info "Uploading $py_targets archives to PyPi"
 		assert_program twine
 
 		local py_archive_dir="$archive_dir/python"
