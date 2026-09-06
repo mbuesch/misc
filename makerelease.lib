@@ -656,9 +656,9 @@ make_archives()
 	done
 
 	# Handle Python build targets
-	if [ -f "$checkout_dir/setup.py" -a\
-	     ! -f "$checkout_dir/pyproject.toml" -a\
-	     $opt_upload -ne 0 ]; then
+	if [ -f "$checkout_dir/setup.py" -o \
+	     -f "$checkout_dir/pyproject.toml" ] && \
+	   [ $opt_upload -ne 0 ]; then
 		py_targets="$py_targets sdist_gz"
 	fi
 	if [ -n "$py_targets" ]; then
@@ -827,7 +827,7 @@ make_upload()
 		# This is is a Python package.
 		[ -n "$py_targets" ] ||\
 			die "PyPi-upload requested, but no Python packages have been built."
-		info "Uploading $py_targets archives to PyPi"
+		info "Uploading archives to PyPi"
 		assert_program twine
 
 		local py_archive_dir="$archive_dir/python"
