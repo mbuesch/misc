@@ -821,6 +821,7 @@ do_cargo_publish()
 make_upload()
 {
 	[ $opt_upload -eq 0 ] && return
+	[ $conf_noupload -ne 0 ] && die "Upload not allowed! (conf_noupload)"
 
 	if [ -f "$checkout_dir/pyproject.toml" -o\
 	     -f "$checkout_dir/setup.py" ]; then
@@ -1044,6 +1045,7 @@ makerelease()
 	[ -n "$default_archives" ] || default_archives="tar.xz"
 	[ -n "$conf_testbuild" ] || conf_testbuild=""
 	[ -n "$conf_notag" ] || conf_notag=0
+	[ -n "$conf_noupload" ] || conf_noupload=0
 
 	trap terminating_signal TERM INT
 	trap cleanup EXIT
