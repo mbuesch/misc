@@ -74,14 +74,17 @@ default_hook_testbuild()
 	cd "$1"
 	if ! echo "$conf_testbuild" | grep -q no-configure &&\
 	   [ -x ./configure ]; then
+		info "Running ./configure"
 		./configure
 	fi
 	if ! echo "$conf_testbuild" | grep -q no-cmake &&\
 	   [ -r ./CMakeLists.txt ]; then
+		info "Running cmake"
 		cmake .
 	fi
 	if ! echo "$conf_testbuild" | grep -q no-make &&\
 	   [ -r ./GNUmakefile -o -r ./makefile -o -r ./Makefile ]; then
+		info "Running make"
 		make
 	fi
 
@@ -124,6 +127,12 @@ default_hook_testbuild()
 			info "Running cargo AUDIT"
 			do_cargo audit --deny warnings
 		fi
+	fi
+
+	if ! echo "$conf_testbuild" | grep -q no-build-sh &&\
+	   [ -x ./build.sh ]; then
+		info "Running build.sh"
+		./build.sh
 	fi
 }
 
